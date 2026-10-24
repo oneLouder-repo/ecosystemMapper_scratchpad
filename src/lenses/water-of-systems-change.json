@@ -1,0 +1,44 @@
+{
+  "id": "water-of-systems-change",
+  "name": "Water of Systems Change",
+  "description": "Six conditions of systems change after Kania, Kramer and Senge (2018), as an inverted triangle: explicit structural change at the top, implicit transformative change at the point.",
+  "layout": "triangle",
+  "triangle": {
+    "centerX": 0,
+    "top": -760,
+    "bottom": 860,
+    "halfWidth": 1050
+  },
+  "regions": [
+    {
+      "id": "structural",
+      "label": "Structural change",
+      "hint": "Policies · Practices · Resource flows (explicit)",
+      "depth": [
+        0,
+        0.333
+      ],
+      "tint": "#e6f2f8"
+    },
+    {
+      "id": "relational",
+      "label": "Relational change",
+      "hint": "Relationships & connections · Power dynamics (semi-explicit)",
+      "depth": [
+        0.333,
+        0.667
+      ],
+      "tint": "#d9ecf4"
+    },
+    {
+      "id": "transformative",
+      "label": "Transformative change",
+      "hint": "Mental models (implicit)",
+      "depth": [
+        0.667,
+        1
+      ],
+      "tint": "#cbe3ef"
+    }
+  ]
+}

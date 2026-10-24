@@ -1,0 +1,20 @@
+{
+  "id": "theory-of-system-change",
+  "name": "Theory of System Change (ToSC)",
+  "description": "Collaborative Impact's Theory of System Change pairs depth of change (the iceberg, rows) with breadth of change (adopt, adapt, expand, respond, columns). Left to right is how far a change has spread.",
+  "layout": "grid",
+  "width": 1600,
+  "bandHeight": 230,
+  "columns": [
+    { "id": "adopt", "label": "Adopt" },
+    { "id": "adapt", "label": "Adapt" },
+    { "id": "expand", "label": "Expand" },
+    { "id": "respond", "label": "Respond" }
+  ],
+  "regions": [
+    { "id": "events", "label": "Events & behaviours", "hint": "What we see happening", "depth": [0, 0.25], "tint": "#eef1f6" },
+    { "id": "patterns", "label": "Patterns & trends", "hint": "What keeps happening over time", "depth": [0.25, 0.5], "tint": "#e6f2f8" },
+    { "id": "structures", "label": "Structures, values & rules", "hint": "What shapes the patterns", "depth": [0.5, 0.75], "tint": "#d9ecf4" },
+    { "id": "mental-models", "label": "Beliefs & mental models", "hint": "What holds the structures in place", "depth": [0.75, 1], "tint": "#cbe3ef" }
+  ]
+}

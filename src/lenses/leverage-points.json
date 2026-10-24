@@ -1,0 +1,23 @@
+{
+  "id": "leverage-points",
+  "name": "Twelve Leverage Points (Meadows)",
+  "description": "Donella Meadows' places to intervene in a system, from shallow (numbers) at the top to deep (paradigms) at the bottom, grouped as parameters, feedbacks, design and intent (Abson et al. 2017).",
+  "layout": "bands",
+  "width": 1500,
+  "bandHeight": 84,
+  "labelSize": "small",
+  "regions": [
+    { "id": "lp12", "label": "12 · Constants, parameters, numbers", "group": "Parameters", "depth": [0, 0.083], "tint": "#eef1f6" },
+    { "id": "lp11", "label": "11 · Sizes of buffers and stocks", "group": "Parameters", "depth": [0.083, 0.167], "tint": "#e8ecf3" },
+    { "id": "lp10", "label": "10 · Structure of material stocks and flows", "group": "Parameters", "depth": [0.167, 0.25], "tint": "#eef1f6" },
+    { "id": "lp9", "label": "9 · Lengths of delays", "group": "Feedbacks", "depth": [0.25, 0.333], "tint": "#e6f2ea" },
+    { "id": "lp8", "label": "8 · Strength of balancing feedback loops", "group": "Feedbacks", "depth": [0.333, 0.417], "tint": "#eef6f0" },
+    { "id": "lp7", "label": "7 · Gain of reinforcing feedback loops", "group": "Feedbacks", "depth": [0.417, 0.5], "tint": "#e6f2ea" },
+    { "id": "lp6", "label": "6 · Structure of information flows", "group": "Design", "depth": [0.5, 0.583], "tint": "#e6f2f8" },
+    { "id": "lp5", "label": "5 · Rules of the system", "group": "Design", "depth": [0.583, 0.667], "tint": "#d9ecf4" },
+    { "id": "lp4", "label": "4 · Power to change system structure", "group": "Design", "depth": [0.667, 0.75], "tint": "#e6f2f8" },
+    { "id": "lp3", "label": "3 · Goals of the system", "group": "Intent", "depth": [0.75, 0.833], "tint": "#fdf3e7" },
+    { "id": "lp2", "label": "2 · Mindset or paradigm", "group": "Intent", "depth": [0.833, 0.917], "tint": "#fbeedd" },
+    { "id": "lp1", "label": "1 · Power to transcend paradigms", "group": "Intent", "depth": [0.917, 1], "tint": "#fdf3e7" }
+  ]
+}

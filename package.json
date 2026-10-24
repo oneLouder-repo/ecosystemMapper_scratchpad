@@ -1,0 +1,15 @@
+{
+  "name": "ecosystem-mapper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A playful board for mapping a change ecosystem.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
