@@ -194,3 +194,27 @@ Small Node server (Express or Fastify, plus `ws`): serves the static client, sto
 - No framework, no bundler, no TypeScript for now. JSDoc type hints where they help.
 - SVG for the canvas (crisp, inspectable, easy hit-testing). Can swap to canvas later if maps get very large.
 - Tests: a handful of plain Node tests for `Store` and ops, since that is the part that must stay correct.
+
+---
+
+## 8. The toolbox (round 3)
+
+The mapper is now one tool in a toolbox for a small nonprofit: planning, data and knowledge, ecosystem mapping, strategy, operations, and monitoring and evaluation under one model.
+
+**Pages, not a single-page app.** Each tool is its own HTML page with its own module (`mapper.html`, `strategy.html`, `org.html`) plus the dashboard (`index.html`). They share `src/core` (display list, Store, ops), `src/ui` (Shell header, `h()` helper, icons) and `src/platform` (data models and storage). This keeps each tool small enough to read in one sitting, and a new tool is a page plus an entry in `src/toolbox.js`.
+
+**Documents.** Each tool works on one JSON document held in a `Store`:
+
+| Document | Shape | Ops |
+| --- | --- | --- |
+| `map` | actors, connectors, groups, layers, lensId | the mapper's own (`core/ops.js`) |
+| `org` | name, mission, staff, teams, sites | generic collection ops (`core/collections.js`) |
+| `strategy` | `nodes`: one tree of framework → plan(s) → objective → goal → workplan → task | collection ops + `platform/strategy.js` helpers |
+
+Every change is still a small JSON op with an inverse, so undo works everywhere and the same ops can travel to a server later.
+
+**How the pieces join up (next).**
+- *Measures → dashboards.* Objectives and goals already carry measures. A dashboard tool would read those, plus values recorded against them, and render KPI tiles and charts.
+- *Public views.* Sites in the org document carry a visibility. A public dashboard is a saved view of chosen measures, published to a site; the server serves only what a view names.
+- *Accounts, roles, sandboxes.* Staff already have roles (admin, lead, staff, viewer). With a server, a sign-in maps to a staff record; roles gate which ops a person may send; a sandbox is a copy of a document that can be merged back as ops.
+- *Cross-links.* Mapper actors, strategy nodes and staff can reference each other by id (e.g. a workplan "tends" a set of ecosystem actors), which is where the umbrella model starts paying off.

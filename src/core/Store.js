@@ -2,7 +2,9 @@ import { EventDispatcher } from './EventDispatcher.js';
 import { applyOp } from './ops.js';
 
 /**
- * Holds the current map and is the only thing that changes it.
+ * Holds one document (a map, an org, a strategy) and is the only thing
+ * that changes it. Pass a different `applyOp` to use another op vocabulary
+ * (see core/collections.js); the ecosystem map's ops are the default.
  *
  *   store.apply(ops.moveActor(id, x, y));
  *   store.addEventListener('change', e => e.op);
@@ -12,15 +14,16 @@ import { applyOp } from './ops.js';
  * passes { inverse } so undo returns to where the drag started.
  */
 export class Store extends EventDispatcher {
-  constructor(map) {
+  constructor(map, apply = applyOp) {
     super();
     this.map = map;
+    this.applyOp = apply;
     this.undoStack = [];
     this.redoStack = [];
   }
 
   apply(op, { history = true, inverse } = {}) {
-    const inv = applyOp(this.map, op);
+    const inv = this.applyOp(this.map, op);
     if (history) {
       this.undoStack.push(inverse ?? inv);
       this.redoStack.length = 0;
@@ -32,15 +35,20 @@ export class Store extends EventDispatcher {
   undo() {
     const op = this.undoStack.pop();
     if (!op) return;
-    this.redoStack.push(applyOp(this.map, op));
+    this.redoStack.push(this.applyOp(this.map, op));
     this.dispatchEvent({ type: 'change', op });
   }
 
   redo() {
     const op = this.redoStack.pop();
     if (!op) return;
-    this.undoStack.push(applyOp(this.map, op));
+    this.undoStack.push(this.applyOp(this.map, op));
     this.dispatchEvent({ type: 'change', op });
+  }
+
+  /** The document, by its general name. */
+  get doc() {
+    return this.map;
   }
 
   /** Replace the whole map (open, import, new). Clears history. */

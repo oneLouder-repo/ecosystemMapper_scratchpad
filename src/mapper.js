@@ -15,6 +15,11 @@ import { LayersPanel } from './ui/LayersPanel.js';
 import { LabelEditor } from './ui/LabelEditor.js';
 import { autosave, loadLocal } from './persistence/local.js';
 import { seedMap, migrateMap } from './seed.js';
+import { Shell } from './ui/Shell.js';
+import { loadOrSeed } from './platform/storage.js';
+import { seedOrg } from './platform/org.js';
+
+Shell(document.querySelector('#shell'), { current: 'mapper', org: loadOrSeed('org', seedOrg) });
 
 const lenses = await loadLenses();
 const store = new Store(migrateMap(loadLocal(), lenses) ?? seedMap());

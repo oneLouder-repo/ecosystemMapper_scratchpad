@@ -1,19 +1,41 @@
-# Ecosystem Mapper (scratchpad)
+# Org Toolbox (scratchpad)
+
+A small, cohesive toolbox for a nonprofit's planning, knowledge and learning work. Open `index.html` (via `npm start`) for the dashboard, then choose a tool:
+
+| Tool | Page | What it does |
+| --- | --- | --- |
+| Ecosystem Mapper | `mapper.html` | Map actors, agents, relationships and loops through five systems lenses (below) |
+| Strategy & Work | `strategy.html` | Framework → plans (nested, dated, themed) → objectives → goals → workplans → tasks, with Gantt charts and task lifetime timelines |
+| Org Overview | `org.html` | Staff, teams, roles and public sites |
+
+Every tool shares the same small framework (`src/core`), header (`src/ui/Shell.js`) and data layer (`src/platform`). To add a tool: make a page and its module, then add an entry to `src/toolbox.js`; it appears on the dashboard and in the header. Each tool's data autosaves to the browser for now; **Example** buttons reload the shared example data.
+
+### Strategy & Work, quickly
+
+- The left side is the whole strategy as a tree. Click to open, **+** to add the next level down.
+- Plans, objectives, goals and workplans show a Gantt chart of the workplans beneath them. Drag a task bar to move it, drag its ends to change dates, click it to open the task. Weeks / Months / Quarters zooms.
+- A task shows its lifetime as a timeline: status over time, notes, milestones and today. Changing status records itself on the timeline.
+- Objectives and goals carry **measures** (name, target, unit), which future dashboards will read.
+- The URL holds the selected item (`strategy.html#<id>`), so links can point straight at a task.
+
+---
+
+## Ecosystem Mapper
 
 A playful board for mapping a change ecosystem: actors and agents, the connections and groups between them, and the feedback and learning loops that run through it, drawn over a swappable "systems lens". Five lenses ship: Micro / Meso / Macro, the Water of Systems Change, NPC's Spheres of Systems Change, Meadows' Twelve Leverage Points and the Theory of System Change.
 
 Plain ES modules, HTML, CSS and SVG. No framework, no bundler, no dependencies. See [ARCHITECTURE.md](ARCHITECTURE.md) for the design.
 
-## Run it
+### Run it
 
 ```sh
-npm start        # http://localhost:5173
+npm start        # http://localhost:5173 (dashboard); the mapper is /mapper.html
 npm test         # store and op tests (Node 20+)
 ```
 
 Any static server works too; `npm start` is a tiny one in `server.js`.
 
-## Using the board
+### Using the board
 
 | Do this | How |
 | --- | --- |
@@ -33,7 +55,7 @@ Any static server works too; `npm start` is a tiny one in `server.js`.
 
 Maps autosave to the browser. **Example** reloads the shared test map (28 actors, 33 relationships, 3 groups; see `src/seed.js`). **Export** downloads the map as JSON and **Open…** loads one back.
 
-## Layout
+### Layout
 
 ```
 src/
@@ -43,11 +65,15 @@ src/
   ui/           top bar, toolbar, inspector, layers panel, inline label editor
   lenses/       one JSON file per lens + the registry
   persistence/  local storage and JSON file import/export
-  main.js       wires it all together
-test/           node:test tests for the store and ops
+  mapper.js     wires the mapper together
+  platform/     org and strategy data models, example data, storage (shared by all tools)
+  strategy/     the Strategy & Work tool: tree, detail, Gantt, timeline
+  pages/        the dashboard and org overview
+  toolbox.js    the list of tools
+test/           node:test tests for the stores, ops, lenses and strategy model
 ```
 
-## Adding a tool
+### Adding a board tool
 
 Copy `src/tools/PanTool.js`, change `id`, `label`, `icon` and `key`, fill in the handlers you need, then register it in `src/main.js`:
 
@@ -57,7 +83,7 @@ ctx.tools.register(MyTool);
 
 Handlers get a stage event (`worldX`, `worldY`, `view`, `handle`, `shiftKey`, …) and the shared `ctx` (`stage`, `store`, `ops`, `mapView`, `tools`, `ui`, `actions`). Change map data only through `ctx.store.apply(ctx.ops.something(...))` so it can be undone and, later, shared live.
 
-## Adding a lens
+### Adding a lens
 
 Add a JSON file to `src/lenses/` (copy `micro-meso-macro.json`) and list its name in `LENS_FILES` in `src/lenses/index.js`. A lens picks a `layout`: `rings` (concentric circles), `triangle` (inverted triangle), `bands` (horizontal tiers) or `grid` (bands with named columns). A new layout is a geometry entry in `src/lenses/index.js` plus a renderer in `src/display/LensView.js`.
 
@@ -65,11 +91,11 @@ Every region gives a `depth` range on one shared scale, 0 (explicit, structural,
 
 Actor categories and connector types are shared by all lenses, in `src/lenses/taxonomy.json`. Lenses never change map data; actors whose category a lens doesn't define show as "unmapped" until recategorised.
 
-## Icons
+### Icons
 
 Tool and panel icons are monochrome line drawings in `src/ui/icons.js`. A tool's `icon` can name one of them or be raw SVG path data on a 24×24 grid.
 
-## Making things move
+### Making things move
 
 Any display object can listen for `enterFrame`, AS3-style:
 
@@ -81,7 +107,7 @@ view.addEventListener('enterFrame', (e) => {
 
 Selected actors use this for their breathing outline (`ActorView.js`).
 
-## Status
+### Status
 
 Working now: actors and agents, groups, sticky tools with custom cursors, marquee and multi-select with group moves, connectors with docking and re-docking, connector types, layers (show, hide, lock, assign), five lenses on a shared depth scale with live switching and region highlighting while dragging, undo and redo, autosave, JSON export and import.
 
