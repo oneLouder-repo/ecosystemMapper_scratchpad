@@ -1,5 +1,6 @@
 import { col } from '../core/collections.js';
 import { uid } from '../core/ops.js';
+import { today } from '../strategy/dates.js';
 
 /**
  * The strategy document: one tree of nodes, from the strategic framework
@@ -9,8 +10,12 @@ import { uid } from '../core/ops.js';
  *   plan       start, end, theme; plans can nest inside plans (a master plan)
  *   objective  measures (KPIs to track later on dashboards)
  *   goal       measures
- *   workplan   start, end, staffIds, teamIds          (shows as a Gantt chart)
- *   task       start, end, status, assigneeIds, events (its lifetime timeline)
+ *   workplan   start, end, staffIds, teamIds, assets  (shows as a Gantt chart)
+ *   task       start, end, status, assigneeIds, events (its lifetime timeline), assets
+ *
+ * Measures on objectives and goals have ids; program data (platform/data.js)
+ * and dashboards refer to them by id. Assets (platform/assets.js) can point
+ * at anything in any tool: map actors, staff, plans, documents, links...
  *
  * Every node: { id, type, parentId, order, title, notes, ... }.
  * Stored as doc.nodes[id]; changes use the collection ops (core/collections.js).
@@ -37,8 +42,8 @@ const DEFAULTS = {
   plan: { start: null, end: null, theme: '' },
   objective: { measures: [] },
   goal: { measures: [] },
-  workplan: { start: null, end: null, staffIds: [], teamIds: [] },
-  task: { start: null, end: null, status: 'planned', assigneeIds: [], events: [] },
+  workplan: { start: null, end: null, staffIds: [], teamIds: [], assets: [] },
+  task: { start: null, end: null, status: 'planned', assigneeIds: [], events: [], assets: [] },
 };
 
 export function childrenOf(doc, parentId) {
@@ -131,4 +136,35 @@ export function taskSummary(doc, id) {
   const counts = Object.fromEntries(TASK_STATUSES.map((s) => [s.id, 0]));
   for (const t of tasks) counts[t.status] = (counts[t.status] ?? 0) + 1;
   return { total: tasks.length, ...counts };
+}
+
+/** Every measure in the strategy, by id, with the objective or goal it belongs to. */
+export function measureIndex(doc) {
+  const index = {};
+  for (const node of Object.values(doc.nodes)) {
+    for (const m of node.measures ?? []) index[m.id] = { ...m, nodeId: node.id, nodeTitle: node.title, nodeType: node.type };
+  }
+  return index;
+}
+
+/** Measures on a node and everything under it. */
+export function measuresUnder(doc, id) {
+  return [doc.nodes[id], ...descendants(doc, id)].flatMap((n) => (n.measures ?? []).map((m) => ({ ...m, nodeId: n.id, nodeTitle: n.title })));
+}
+
+/** Bring an older saved strategy up to the current shape. */
+export function migrateStrategy(doc) {
+  for (const n of Object.values(doc.nodes)) {
+    if (n.measures) for (const m of n.measures) m.id ??= uid('m');
+    if (n.type === 'task' || n.type === 'workplan') n.assets ??= [];
+  }
+  return doc;
+}
+
+/** A task's status on a date, read from its status history. */
+export function statusAt(task, date, now = today()) {
+  const changes = (task.events ?? []).filter((e) => e.kind === 'status' && e.date <= date);
+  if (changes.length) return changes.at(-1).text;
+  if (date >= now) return task.status;
+  return 'planned';
 }

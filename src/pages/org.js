@@ -2,10 +2,11 @@ import { h, options } from '../ui/dom.js';
 import { Shell } from '../ui/Shell.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp, col } from '../core/collections.js';
-import { autosaveDoc, loadOrSeed } from '../platform/storage.js';
-import { ROLES, seedOrg, staffList, teamList, membersOf } from '../platform/org.js';
+import { autosaveDoc } from '../platform/storage.js';
+import { loadOrg } from '../platform/docs.js';
+import { ROLES, staffList, teamList, membersOf } from '../platform/org.js';
 
-const store = new Store(loadOrSeed('org', seedOrg), applyCollectionOp);
+const store = new Store(loadOrg(), applyCollectionOp);
 autosaveDoc('org', store);
 const app = document.querySelector('#app');
 
@@ -84,7 +85,7 @@ function render() {
         h('tbody', {},
           sites.map((site) =>
             h('tr', {},
-              h('td', {}, h('strong', {}, site.name), h('div', { class: 'muted' }, site.url)),
+              h('td', {}, h('strong', {}, site.name), h('div', { class: 'muted' }, site.url), h('a', { href: `site.html?site=${site.id}`, target: '_blank' }, 'Open site ↗')),
               h('td', {}, h('input', { value: site.shows ?? '', placeholder: 'What this site shows', style: 'width:100%',
                 onchange: (e) => store.apply(col.update('sites', site.id, { shows: e.target.value })) })),
               h('td', {},

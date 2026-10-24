@@ -2,10 +2,10 @@ import { h } from '../ui/dom.js';
 import { Shell } from '../ui/Shell.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp } from '../core/collections.js';
-import { autosaveDoc, loadOrSeed, saveDoc } from '../platform/storage.js';
-import { seedOrg } from '../platform/org.js';
+import { autosaveDoc, saveDoc } from '../platform/storage.js';
+import { loadOrg, loadStrategy, loadMap } from '../platform/docs.js';
 import { seedStrategy } from '../platform/strategySeed.js';
-import { childrenOf, rootOf, strategyOps } from '../platform/strategy.js';
+import { childrenOf, rootOf, migrateStrategy, strategyOps } from '../platform/strategy.js';
 import { Tree } from './Tree.js';
 import { Detail } from './Detail.js';
 
@@ -14,14 +14,16 @@ import { Detail } from './Detail.js';
  * side shows the selected item. The selection lives in the URL (#id) so a
  * link can point straight at a plan or task.
  */
-const org = loadOrSeed('org', seedOrg);
-const store = new Store(loadOrSeed('strategy', seedStrategy), applyCollectionOp);
+const org = loadOrg();
+const store = new Store(loadStrategy(), applyCollectionOp);
 autosaveDoc('strategy', store);
 Shell(document.querySelector('#shell'), { current: 'strategy', org });
 
 const ctx = {
   store,
   org,
+  // Other tools' documents, for assets that point into them.
+  docs: { org, map: loadMap() },
   collapsed: new Set(),
   get selectedId() {
     const id = decodeURIComponent(location.hash.slice(1));
@@ -54,7 +56,7 @@ app.replaceChildren(
     h('button', { class: 'secondary', onclick: () => store.redo() }, 'Redo'),
     h('button', { class: 'secondary', title: 'Replace with the example strategy', onclick: () => {
       if (!confirm('Load the example strategy? Your current strategy is replaced.')) return;
-      store.load(seedStrategy());
+      store.load(migrateStrategy(seedStrategy()));
       saveDoc('strategy', store.doc);
       ctx.select(rootOf(store.doc).id);
     } }, 'Example'),
