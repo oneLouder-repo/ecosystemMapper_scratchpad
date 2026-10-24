@@ -3,25 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Ecosystem Mapper</title>
+    <title>Dashboard · Org Toolbox</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="app.css" />
   </head>
-  <body>
-    <header id="topbar"></header>
-    <nav id="toolbar" aria-label="Tools"></nav>
-    <main>
-      <svg id="board" role="application" aria-label="Ecosystem map board">
-        <defs>
-          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" />
-          </marker>
-        </defs>
-      </svg>
-    </main>
-    <aside id="sidebar">
-      <section id="inspector"></section>
-      <section id="layers"></section>
-    </aside>
-    <script type="module" src="src/main.js"></script>
+  <body class="">
+    <header id="shell"></header>
+    <main id="app"></main>
+    <script type="module" src="src/pages/dashboard.js"></script>
   </body>
 </html>
