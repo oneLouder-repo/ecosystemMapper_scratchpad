@@ -2,16 +2,12 @@ import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { Shell } from '../ui/Shell.js';
 import { TOOLBOX } from '../toolbox.js';
-import { loadOrSeed } from '../platform/storage.js';
-import { seedOrg } from '../platform/org.js';
-import { seedStrategy } from '../platform/strategySeed.js';
+import { loadAll } from '../platform/docs.js';
 import { statusById } from '../platform/strategy.js';
-import { loadLocal } from '../persistence/local.js';
 import { addDays, short, today } from '../strategy/dates.js';
 
-const org = loadOrSeed('org', seedOrg);
-const strategy = loadOrSeed('strategy', seedStrategy);
-const map = loadLocal();
+const docs = loadAll();
+const { org, strategy, dashboards } = docs;
 
 Shell(document.querySelector('#shell'), { current: 'home', org });
 
@@ -33,7 +29,7 @@ document.querySelector('#app').replaceChildren(
         h('a', { class: 'card', href: tool.href },
           h('h3', {}, icon(tool.icon, 26), tool.name),
           h('p', {}, tool.blurb),
-          h('div', { class: 'stat-line' }, tool.stats({ org, strategy, map })),
+          h('div', { class: 'stat-line' }, tool.stats(docs)),
         ),
       ),
     ),
@@ -50,7 +46,17 @@ document.querySelector('#app').replaceChildren(
           ),
         )
       : h('p', { class: 'muted' }, 'Nothing due soon.'),
+    h('h2', {}, 'Your public sites'),
+    h('div', { class: 'cards' },
+      Object.values(org.sites).map((s) => {
+        const shown = Object.values(dashboards.dashboards).filter((d) => d.siteId === s.id && d.visibility === 'public');
+        return h('a', { class: 'card', href: `site.html?site=${s.id}`, target: '_blank' },
+          h('h3', {}, icon('globe', 22), s.name),
+          h('p', {}, s.shows || s.url),
+          h('div', { class: 'stat-line' }, h('span', { class: `badge ${s.visibility}` }, s.visibility), ' ',
+            shown.length ? `${shown.length} live dashboard${shown.length > 1 ? 's' : ''}` : 'No dashboards yet'));
+      })),
     h('p', { class: 'note' },
-      'Coming next: dashboards built from the measures on your objectives and goals, public views you choose to share, and staff accounts with roles and sandboxes.'),
+      'Coming next: staff accounts with roles and sandboxes, feedback forms on public dashboards, and program data fed straight from your systems.'),
   ),
 );

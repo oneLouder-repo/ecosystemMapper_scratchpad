@@ -90,7 +90,8 @@ export function seedMap() {
   const layerId = map.layers[0].id;
   const ids = {};
   for (const [key, label, category, depth, spread, kind = 'actor'] of ACTORS) {
-    const op = ops.addActor({ label, category, kind, place: { depth, spread }, layerId });
+    // Stable ids so other tools (e.g. task assets) can point at example actors.
+    const op = ops.addActor({ id: `actor-${key}`, label, category, kind, place: { depth, spread }, layerId });
     applyOp(map, op);
     ids[key] = op.id;
   }

@@ -6,7 +6,9 @@ A small, cohesive toolbox for a nonprofit's planning, knowledge and learning wor
 | --- | --- | --- |
 | Ecosystem Mapper | `mapper.html` | Map actors, agents, relationships and loops through five systems lenses (below) |
 | Strategy & Work | `strategy.html` | Framework → plans (nested, dated, themed) → objectives → goals → workplans → tasks, with Gantt charts and task lifetime timelines |
+| Creative Palette | `palette.html` | Mini-tools for the data dialogue: design dashboards, keep program data current, publish to sites |
 | Org Overview | `org.html` | Staff, teams, roles and public sites |
+| Sample public site | `site.html?site=<id>` | What the public sees: published dashboards with live data and a timeline player |
 
 Every tool shares the same small framework (`src/core`), header (`src/ui/Shell.js`) and data layer (`src/platform`). To add a tool: make a page and its module, then add an entry to `src/toolbox.js`; it appears on the dashboard and in the header. Each tool's data autosaves to the browser for now; **Example** buttons reload the shared example data.
 
@@ -15,8 +17,16 @@ Every tool shares the same small framework (`src/core`), header (`src/ui/Shell.j
 - The left side is the whole strategy as a tree. Click to open, **+** to add the next level down.
 - Plans, objectives, goals and workplans show a Gantt chart of the workplans beneath them. Drag a task bar to move it, drag its ends to change dates, click it to open the task. Weeks / Months / Quarters zooms.
 - A task shows its lifetime as a timeline: status over time, notes, milestones and today. Changing status records itself on the timeline.
-- Objectives and goals carry **measures** (name, target, unit), which future dashboards will read.
+- Objectives and goals carry **measures** (name, target, unit). **Create dashboard** on an objective or goal builds an accessible dashboard from every measure on it and below, and opens it in the Creative Palette.
+- Every task (and workplan) has a **toolbox of assets**: ecosystem-map actors, staff, outside people, other strategy items, documents, links, literature and media, picked from one pop-up. Workplans, goals, objectives and plans gather the assets used beneath them, showing which tasks use each one.
 - The URL holds the selected item (`strategy.html#<id>`), so links can point straight at a task.
+
+### Creative Palette and public sites, quickly
+
+- **Dashboards**: start from an objective or goal, or blank. Each widget (headline number, line, monthly columns, work progress, text) has controls beneath it in the editor. Set visibility to Public and choose a site to publish.
+- **Play** steps a dashboard month by month through its data, in the editor and on public sites.
+- **Program data**: edit the monthly values behind each measure. Public sites open in another tab update as you type.
+- **Publishing**: which dashboards each site shows. Private sites show a sign-in message.
 
 ---
 

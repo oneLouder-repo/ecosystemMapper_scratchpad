@@ -6,7 +6,8 @@ import { strategyOps } from './strategy.js';
  * A master plan holding a dated Year 1 plan, three objectives, goals,
  * workplans and twenty-odd tasks around October 2026.
  */
-const T = (title, start, end, status, assigneeIds, events = []) => ({ type: 'task', title, start, end, status, assigneeIds, events });
+const T = (title, start, end, status, assigneeIds, events = [], assets = []) => ({ type: 'task', title, start, end, status, assigneeIds, events, assets });
+const asset = (id, kind, label, more = {}) => ({ id, kind, label, ...more });
 
 const TREE = {
   type: 'framework',
@@ -33,12 +34,15 @@ const TREE = {
             {
               type: 'objective',
               title: 'Deepen equity and inclusion in every program',
-              measures: [{ name: 'Youth from equity-deserving groups', target: '60', unit: '%' }],
+              measures: [
+                { id: 'm-reach', name: 'Youth reached', target: '500000', unit: 'youth / yr' },
+                { id: 'm-equity', name: 'Youth from equity-deserving groups', target: '60', unit: '%' },
+              ],
               children: [
                 {
                   type: 'goal',
                   title: 'Instructors are trained in culturally responsive practice',
-                  measures: [{ name: 'Instructors completing training', target: '1000', unit: 'people' }],
+                  measures: [{ id: 'm-trained', name: 'Instructors trained in culturally responsive practice', target: '1000', unit: 'people' }],
                   children: [
                     {
                       type: 'workplan',
@@ -56,6 +60,12 @@ const TREE = {
                         T('Co-design sessions with Indigenous partners', '2026-10-01', '2026-11-30', 'active', ['s-indig', 's-train'], [
                           { id: 'e4', date: '2026-10-01', kind: 'status', text: 'active' },
                           { id: 'e5', date: '2026-10-15', kind: 'milestone', text: 'First session held in Treaty 6' },
+                        ], [
+                          asset('as1', 'actor', 'Indigenous communities', { ref: 'actor-indig-comm' }),
+                          asset('as2', 'actor', 'Indigenous governments & organisations', { ref: 'actor-indig-gov' }),
+                          asset('as3', 'staff', 'Tanis Cardinal', { ref: 's-indig' }),
+                          asset('as4', 'literature', 'Battiste, M. (2013). Decolonizing Education: Nourishing the Learning Spirit. Purich.', { year: '2013' }),
+                          asset('as5', 'person', 'Elder advisor (name withheld)', { detail: 'Treaty 6 knowledge keeper' }),
                         ]),
                         T('Draft new modules', '2026-11-01', '2026-12-20', 'planned', ['s-train']),
                         T('Pilot with three network members', '2027-01-06', '2027-02-14', 'planned', ['s-train', 's-pc1', 's-pc2']),
@@ -67,7 +77,7 @@ const TREE = {
                 {
                   type: 'goal',
                   title: 'Programs reach more girls and gender-diverse youth',
-                  measures: [{ name: 'Girls & gender-diverse participants', target: '50', unit: '%' }],
+                  measures: [{ id: 'm-girls', name: 'Girls & gender-diverse participants', target: '50', unit: '%' }],
                   children: [
                     {
                       type: 'workplan',
@@ -93,11 +103,12 @@ const TREE = {
             {
               type: 'objective',
               title: 'Strengthen the ecosystem we steward',
-              measures: [{ name: 'Active partnerships', target: '120', unit: 'orgs' }],
+              measures: [{ id: 'm-partners', name: 'Active partnerships', target: '120', unit: 'orgs' }],
               children: [
                 {
                   type: 'goal',
                   title: 'Map and tend our change ecosystem',
+                  measures: [{ id: 'm-checkins', name: 'Partner check-ins completed', target: '80', unit: 'conversations' }],
                   children: [
                     {
                       type: 'workplan',
@@ -109,7 +120,12 @@ const TREE = {
                       children: [
                         T('Ecosystem mapping workshop', '2026-08-15', '2026-08-30', 'done', ['s-ed', 's-eval']),
                         T('Publish ecosystem map internally', '2026-09-01', '2026-10-10', 'done', ['s-eval']),
-                        T('Partner check-in conversations', '2026-10-01', '2026-12-31', 'active', ['s-part', 's-indig']),
+                        T('Partner check-in conversations', '2026-10-01', '2026-12-31', 'active', ['s-part', 's-indig'], [], [
+                          asset('as6', 'actor', 'University & college partners', { ref: 'actor-universities' }),
+                          asset('as7', 'actor', 'Community organisations', { ref: 'actor-community-orgs' }),
+                          asset('as8', 'actor', 'Industry volunteers & mentors', { ref: 'actor-mentors' }),
+                          asset('as9', 'document', 'Partner check-in guide.pdf', { detail: 'PDF · 240 KB' }),
+                        ]),
                         T('Refresh map with partner feedback', '2027-01-05', '2027-01-31', 'planned', ['s-eval', 's-part']),
                       ],
                     },
@@ -118,6 +134,7 @@ const TREE = {
                 {
                   type: 'goal',
                   title: 'Advocate for STEM equity in federal policy',
+                  measures: [{ id: 'm-meetings', name: 'Policy meetings held', target: '40', unit: 'meetings' }],
                   children: [
                     {
                       type: 'workplan',
@@ -129,7 +146,12 @@ const TREE = {
                       children: [
                         T('Pre-budget submission', '2026-07-01', '2026-08-01', 'done', ['s-ed', 's-part']),
                         T('Hill meetings', '2026-10-20', '2026-11-30', 'active', ['s-ed']),
-                        T('Policy brief on systems change', '2026-11-01', '2027-01-15', 'planned', ['s-eval', 's-comms']),
+                        T('Policy brief on systems change', '2026-11-01', '2027-01-15', 'planned', ['s-eval', 's-comms'], [], [
+                          asset('as10', 'literature', 'Meadows, D. (1999). Leverage Points: Places to Intervene in a System. Sustainability Institute.', { year: '1999' }),
+                          asset('as11', 'literature', 'Kania, J., Kramer, M., & Senge, P. (2018). The Water of Systems Change. FSG.', { year: '2018', url: 'https://www.fsg.org/resource/water_of_systems_change/' }),
+                          asset('as12', 'link', 'Pipelines to Systems discussion paper', { url: 'https://actua.ca/wp-content/uploads/2026/07/Science-Report-Pipelines-to-Systems-Actua.pdf' }),
+                          asset('as13', 'actor', 'National STEM policy network', { ref: 'actor-policy-net' }),
+                        ]),
                         T('Coalition sign-on letter', '2027-01-15', '2027-02-28', 'planned', ['s-part']),
                       ],
                     },
@@ -140,11 +162,12 @@ const TREE = {
             {
               type: 'objective',
               title: 'Learn in public with shared data',
-              measures: [{ name: 'Public dashboard views', target: '5000', unit: 'per year' }],
+              measures: [{ id: 'm-views', name: 'Public dashboard views', target: '600', unit: 'views / month' }],
               children: [
                 {
                   type: 'goal',
                   title: 'One MEL framework across all programs',
+                  measures: [{ id: 'm-reporting', name: 'Programs reporting core indicators', target: '100', unit: '%' }],
                   children: [
                     {
                       type: 'workplan',
@@ -156,7 +179,9 @@ const TREE = {
                       children: [
                         T('Agree core indicators', '2026-06-01', '2026-07-15', 'done', ['s-eval']),
                         T('Data sharing agreements', '2026-07-15', '2026-10-31', 'active', ['s-ops', 's-indig']),
-                        T('Build internal dashboard', '2026-09-01', '2026-12-15', 'active', ['s-data']),
+                        T('Build internal dashboard', '2026-09-01', '2026-12-15', 'active', ['s-data'], [], [
+                          asset('as14', 'media', 'Dashboard walkthrough (video)', { url: 'https://example.org/media/walkthrough.mp4', detail: 'Video' }),
+                        ]),
                         T('Public impact dashboard', '2027-01-05', '2027-03-15', 'planned', ['s-data', 's-comms']),
                         T('Annual learning review', '2027-03-01', '2027-03-31', 'planned', ['s-eval', 's-ed']),
                       ],

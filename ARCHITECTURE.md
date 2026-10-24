@@ -218,3 +218,24 @@ Every change is still a small JSON op with an inverse, so undo works everywhere 
 - *Public views.* Sites in the org document carry a visibility. A public dashboard is a saved view of chosen measures, published to a site; the server serves only what a view names.
 - *Accounts, roles, sandboxes.* Staff already have roles (admin, lead, staff, viewer). With a server, a sign-in maps to a staff record; roles gate which ops a person may send; a sandbox is a copy of a document that can be merged back as ops.
 - *Cross-links.* Mapper actors, strategy nodes and staff can reference each other by id (e.g. a workplan "tends" a set of ecosystem actors), which is where the umbrella model starts paying off.
+
+## 9. Dashboards, public sites and assets (round 4)
+
+**Two new documents.**
+
+| Document | Shape | Ops |
+| --- | --- | --- |
+| `data` | `series`: `{ [measureId]: { points: [{ date: 'YYYY-MM-01', value }] } }` | collection ops |
+| `dashboards` | `dashboards`: `{ [id]: { title, description, visibility, siteId, sourceNodeId, widgets } }` | collection ops |
+
+Measures on objectives and goals now have stable ids (`migrateStrategy` adds any missing). Program data and dashboard widgets point at a measure by id, so renaming a measure renames it everywhere.
+
+**One loader.** `platform/docs.js` loads (or seeds) every document, so any tool can read any other: the Strategy tool shows map actors as assets, dashboards read strategy measures and program data, the public site reads all of them. `storage.onDocChange(name, fn)` fires when another tab saves a document, which is how public sites update live.
+
+**Charts** (`src/charts`). `renderWidget(widget, { strategy, data, asOf, months })` draws one widget as it stood at month `asOf`. `DashboardView` puts a `Player` above the grid; the player only changes `asOf` and redraws, so every widget type gets time travel for free. To add a widget type, add a renderer in `charts/widgets.js` and an entry in `WIDGET_TYPES`.
+
+**Creative Palette** (`src/palette`). A page with a list of mini-tools; each is a function `(ctx) → element` in `MINI_TOOLS`. Add a mini-tool by writing one function and one entry.
+
+**Assets.** Tasks and workplans hold `assets: [{ id, kind, label, ref?, url?, detail?, year?, dataUrl? }]`. `ref` points into another document (map actor, staff, strategy node); `label` is kept as a fallback if that item is deleted. `assetsUnder(strategy, id)` gathers assets from any level down; `groupAssets` merges repeats. To add an asset kind for a future tool: add it to `ASSET_KINDS`, a resolver in `resolveAsset`, and a picker in `ui/AssetChooser.js`.
+
+**Later, with the server.** Public sites become pages (or HubSpot modules) served from a published snapshot holding only public dashboards and the series they name. Program data arrives from program systems instead of being typed in. Uploaded documents move from data URLs to file storage.

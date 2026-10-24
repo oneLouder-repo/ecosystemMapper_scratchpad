@@ -5,6 +5,10 @@ import { staffList, teamList } from '../platform/org.js';
 import { range, today } from './dates.js';
 import { Gantt } from './Gantt.js';
 import { Timeline } from './Timeline.js';
+import { AssetsPanel } from './Assets.js';
+import { loadDashboards, saveDoc } from '../platform/docs.js';
+import { dashboardFromNode } from '../platform/dashboards.js';
+import { uid } from '../core/ops.js';
 
 /** The selected node: its fields, its people, and its Gantt chart or timeline. */
 export function Detail(ctx) {
@@ -31,7 +35,7 @@ export function Detail(ctx) {
           p.name))), true);
 
   const measures = () =>
-    field('Measures (feed future dashboards)', h('div', { class: 'measures' },
+    field('Measures (feed dashboards in the Creative Palette)', h('div', { class: 'measures' },
       n.measures.map((m, i) =>
         h('div', { class: 'measure' },
           ['name', 'target', 'unit'].map((k) =>
@@ -86,5 +90,33 @@ export function Detail(ctx) {
     ),
     showsGantt && h('section', { class: 'panel' }, h('h2', {}, n.type === 'workplan' ? 'Schedule' : 'Workplans under this'), Gantt(ctx, n.id)),
     n.type === 'task' && h('section', { class: 'panel' }, h('h2', {}, 'Lifetime'), Timeline(ctx, n)),
+    (n.type === 'objective' || n.type === 'goal') && DashboardsPanel(ctx, n),
+    n.type !== 'framework' && AssetsPanel(ctx, n),
   );
+}
+
+/** Dashboards made from this objective or goal, and a button to make one. */
+function DashboardsPanel(ctx, n) {
+  const doc = loadDashboards();
+  const made = Object.values(doc.dashboards).filter((d) => d.sourceNodeId === n.id);
+  const create = () => {
+    const id = uid('dashboard');
+    doc.dashboards[id] = { ...dashboardFromNode(ctx.store.doc, n.id), id };
+    saveDoc('dashboards', doc);
+    saveDoc('strategy', ctx.store.doc);
+    location.href = `palette.html#${id}`;
+  };
+  return h('section', { class: 'panel' },
+    h('div', { class: 'panel-head' },
+      h('h2', {}, 'Dashboards'),
+      h('button', { onclick: create }, icon('chart', 16), 'Create dashboard')),
+    h('p', { class: 'muted' }, n.measures.length
+      ? `Makes an accessible dashboard from the ${n.measures.length} measure${n.measures.length > 1 ? 's' : ''} here and below, fed by live program data. You can edit it and publish it to a public site.`
+      : 'Add a measure above to put numbers on the dashboard. It will still show the progress of the work.'),
+    made.length > 0 && h('ul', { class: 'asset-list' }, made.map((d) =>
+      h('li', { class: 'asset' },
+        icon('chart', 18),
+        h('div', { class: 'asset-text' }, h('a', { href: `palette.html#${d.id}` }, d.title), h('small', {}, `${d.widgets.length} widgets`)),
+        h('span', { class: `badge ${d.visibility}` }, d.visibility),
+        d.siteId && h('a', { href: `site.html?site=${d.siteId}#${d.id}`, target: '_blank' }, 'View on site ↗')))));
 }
