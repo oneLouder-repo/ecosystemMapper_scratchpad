@@ -1,19 +1,27 @@
 import { EventDispatcher } from '../core/EventDispatcher.js';
+import { project } from '../lenses/index.js';
 import { ActorView } from './ActorView.js';
 import { ConnectorView } from './ConnectorView.js';
+import { GroupView } from './GroupView.js';
 import { LensView } from './LensView.js';
 
 /**
- * Keeps the display list in step with the store: one ActorView per actor,
- * one ConnectorView per connector, and the lens backdrop. Also owns the
- * selection, which is view state rather than map data.
+ * Keeps the display list in step with the store: one view per actor,
+ * connector and group, plus the lens backdrop. Also owns the selection,
+ * which is view state rather than map data.
+ *
+ * Actors are stored by place ({ depth, spread }); `world` holds them
+ * projected through the active lens, with x and y filled in. Anything that
+ * needs board positions reads `mapView.world`, never the raw map.
  *
  * Events: 'selection' when the selection changes.
  */
 export class MapView extends EventDispatcher {
   selection = new Set();
+  world = { actors: {}, connectors: {}, groups: {} };
   #actors = new Map();
   #connectors = new Map();
+  #groups = new Map();
 
   constructor(stage, store, lenses) {
     super();
@@ -29,13 +37,17 @@ export class MapView extends EventDispatcher {
   }
 
   viewFor(id) {
-    return this.#actors.get(id) ?? this.#connectors.get(id) ?? null;
+    return this.#actors.get(id) ?? this.#connectors.get(id) ?? this.#groups.get(id) ?? null;
   }
 
   sync() {
     const { map } = this.store;
     const lens = this.lens;
     if (this.lensView.lensId !== lens.id) this.lensView.render(lens);
+
+    const actors = {};
+    for (const a of Object.values(map.actors)) actors[a.id] = { ...a, ...project(lens, a.place) };
+    this.world = { actors, connectors: map.connectors, groups: map.groups ?? {} };
 
     const layers = new Map(map.layers.map((l) => [l.id, l]));
     const place = (view, item) => {
@@ -44,12 +56,16 @@ export class MapView extends EventDispatcher {
       view.node.classList.toggle('locked', Boolean(layer?.locked));
     };
 
-    syncViews(this.#actors, map.actors, ActorView, this.stage.actorLayer, (view, actor) => {
+    syncViews(this.#groups, this.world.groups, GroupView, this.stage.groupLayer, (view, group) => {
+      view.update(group, this.world);
+      place(view, group);
+    });
+    syncViews(this.#actors, actors, ActorView, this.stage.actorLayer, (view, actor) => {
       view.update(actor, lens);
       place(view, actor);
     });
     syncViews(this.#connectors, map.connectors, ConnectorView, this.stage.connectorLayer, (view, conn) => {
-      view.update(conn, map, lens);
+      view.update(conn, this.world, lens);
       place(view, conn);
     });
 
@@ -89,6 +105,7 @@ export class MapView extends EventDispatcher {
     return {
       actorIds: [...this.selection].filter((id) => map.actors[id]),
       connectorIds: [...this.selection].filter((id) => map.connectors[id]),
+      groupIds: [...this.selection].filter((id) => map.groups?.[id]),
     };
   }
 }

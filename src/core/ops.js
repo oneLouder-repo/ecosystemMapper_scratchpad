@@ -21,19 +21,34 @@ export function createMap({ name = 'Untitled map', lensId = 'micro-meso-macro' }
     layers: [{ id: uid('layer'), name: 'Layer 1', visible: true, locked: false }],
     actors: {},
     connectors: {},
+    groups: {},
   };
 }
 
-export const ACTOR_SIZE = { w: 160, h: 64 };
+export const ACTOR_SIZE = { w: 150, h: 58 };
 
 export const ops = {
+  /**
+   * An actor's `place` is { depth, spread } on the shared lens scale (see
+   * lenses/index.js), not x/y, so it lands in the matching region of every
+   * lens. `kind` is 'actor' or 'agent'.
+   */
   addActor: ({ id = uid('actor'), ...data }) => ({
     op: 'addActor',
     id,
-    data: { label: '', category: 'other', x: 0, y: 0, ...ACTOR_SIZE, layerId: null, meta: {}, ...data },
+    data: {
+      label: '',
+      kind: 'actor',
+      category: 'other',
+      place: { depth: 0.5, spread: 0 },
+      ...ACTOR_SIZE,
+      layerId: null,
+      meta: {},
+      ...data,
+    },
   }),
   updateActor: (id, patch) => ({ op: 'updateActor', id, patch }),
-  moveActor: (id, x, y) => ({ op: 'moveActor', id, x, y }),
+  moveActor: (id, place) => ({ op: 'moveActor', id, place }),
   removeActor: (id) => ({ op: 'removeActor', id }),
 
   /** A dock is { actorId } (attached) or { x, y } (a floating end). */
@@ -45,6 +60,15 @@ export const ops = {
   updateConnector: (id, patch) => ({ op: 'updateConnector', id, patch }),
   dockConnector: (id, end, dock) => ({ op: 'dockConnector', id, end, dock }),
   removeConnector: (id) => ({ op: 'removeConnector', id }),
+
+  /** A soft container: a labelled frame drawn around its member actors. */
+  addGroup: ({ id = uid('group'), ...data }) => ({
+    op: 'addGroup',
+    id,
+    data: { label: 'Group', memberIds: [], layerId: null, ...data },
+  }),
+  updateGroup: (id, patch) => ({ op: 'updateGroup', id, patch }),
+  removeGroup: (id) => ({ op: 'removeGroup', id }),
 
   setLens: (lensId) => ({ op: 'setLens', lensId }),
   renameMap: (name) => ({ op: 'renameMap', name }),
@@ -59,14 +83,23 @@ export const ops = {
 
   batch: (list) => ({ op: 'batch', ops: list }),
 
-  /** Remove actors and connectors together, including connectors docked to removed actors. */
-  removeItems(map, { actorIds = [], connectorIds = [] }) {
+  /**
+   * Remove actors, connectors and groups together, including connectors
+   * docked to removed actors. Removed actors also leave their groups.
+   */
+  removeItems(map, { actorIds = [], connectorIds = [], groupIds = [] }) {
     const actors = new Set(actorIds);
     const conns = new Set(connectorIds);
     for (const c of Object.values(map.connectors)) {
       if (actors.has(c.from?.actorId) || actors.has(c.to?.actorId)) conns.add(c.id);
     }
+    const groups = new Set(groupIds);
+    const regroup = Object.values(map.groups ?? {})
+      .filter((g) => !groups.has(g.id) && g.memberIds.some((m) => actors.has(m)))
+      .map((g) => ops.updateGroup(g.id, { memberIds: g.memberIds.filter((m) => !actors.has(m)) }));
     return ops.batch([
+      ...[...groups].filter((id) => map.groups?.[id]).map(ops.removeGroup),
+      ...regroup,
       ...[...conns].filter((id) => map.connectors[id]).map(ops.removeConnector),
       ...[...actors].filter((id) => map.actors[id]).map(ops.removeActor),
     ]);
@@ -98,11 +131,10 @@ export const reducers = {
   updateActor(map, { id, patch }) {
     return ops.updateActor(id, patchInPlace(must(map.actors[id], 'Actor', id), patch));
   },
-  moveActor(map, { id, x, y }) {
+  moveActor(map, { id, place }) {
     const a = must(map.actors[id], 'Actor', id);
-    const inverse = ops.moveActor(id, a.x, a.y);
-    a.x = x;
-    a.y = y;
+    const inverse = ops.moveActor(id, a.place);
+    a.place = { depth: place.depth, spread: place.spread };
     return inverse;
   },
 
@@ -123,6 +155,20 @@ export const reducers = {
     const inverse = ops.dockConnector(id, end, c[end]);
     c[end] = structuredClone(dock);
     return inverse;
+  },
+
+  addGroup(map, { id, data }) {
+    map.groups ??= {};
+    map.groups[id] = { ...structuredClone(data), id };
+    return ops.removeGroup(id);
+  },
+  removeGroup(map, { id }) {
+    const { id: _, ...data } = must(map.groups?.[id], 'Group', id);
+    delete map.groups[id];
+    return { op: 'addGroup', id, data };
+  },
+  updateGroup(map, { id, patch }) {
+    return ops.updateGroup(id, patchInPlace(must(map.groups?.[id], 'Group', id), patch));
   },
 
   setLens(map, { lensId }) {

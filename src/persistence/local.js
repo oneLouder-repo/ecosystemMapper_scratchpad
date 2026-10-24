@@ -1,4 +1,5 @@
-const KEY = 'ecosystem-mapper:current-map';
+// Bump the version when the saved shape changes enough that old maps should not load by default.
+const KEY = 'ecosystem-mapper:v2:current-map';
 
 export function loadLocal() {
   try {

@@ -3,78 +3,43 @@
   "name": "Micro / Meso / Macro",
   "description": "Three tiers of change after van Wijk et al. (2019), drawn as rings: individual practice at the centre, negotiated collaboration around it, structural change at the edge.",
   "layout": "rings",
+  "center": {
+    "x": 0,
+    "y": 0
+  },
   "regions": [
     {
       "id": "micro",
       "label": "Micro / Me",
       "hint": "Your own practice",
-      "radius": 230,
+      "depth": [
+        0.667,
+        1
+      ],
+      "radius": 320,
       "tint": "#fdf3e7"
     },
     {
       "id": "meso",
       "label": "Meso / We",
       "hint": "Norms, relationships, shared values",
-      "radius": 470,
+      "depth": [
+        0.333,
+        0.667
+      ],
+      "radius": 600,
       "tint": "#eef6f0"
     },
     {
       "id": "macro",
       "label": "Macro / Us",
       "hint": "Structural change: policy, budgets, strategic alignment",
-      "radius": 720,
+      "depth": [
+        0,
+        0.333
+      ],
+      "radius": 880,
       "tint": "#e8eefc"
     }
-  ],
-  "actorCategories": [
-    {
-      "id": "ally",
-      "label": "Key ally",
-      "color": "#9fd8cb"
-    },
-    {
-      "id": "resource",
-      "label": "Resource provider",
-      "color": "#f6d98b"
-    },
-    {
-      "id": "problem",
-      "label": "Problem maker",
-      "color": "#f4a993"
-    },
-    {
-      "id": "other",
-      "label": "Other",
-      "color": "#cfd5e2"
-    }
-  ],
-  "defaultCategory": "other",
-  "connectorTypes": [
-    {
-      "id": "relationship",
-      "label": "Relationship"
-    },
-    {
-      "id": "resource-flow",
-      "label": "Resource flow",
-      "color": "#b8860b"
-    },
-    {
-      "id": "feedback",
-      "label": "Feedback loop",
-      "dash": "8 5",
-      "color": "#2f6fb5"
-    },
-    {
-      "id": "learning",
-      "label": "Learning loop",
-      "dash": "2 5",
-      "color": "#7a4fb5"
-    }
-  ],
-  "defaultConnectorType": "relationship",
-  "center": {
-    "x": 0,
-    "y": 0
-  }
+  ]
 }

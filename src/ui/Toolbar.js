@@ -12,7 +12,7 @@ export function Toolbar(el, tools) {
             class: `tool${tool === tools.active ? ' active' : ''}`,
             title: `${tool.label}${tool.key ? ` (${tool.key.toUpperCase()})` : ''}`,
             'aria-pressed': String(tool === tools.active),
-            onclick: () => tools.use(tool.id),
+            onclick: () => tools.toggle(tool.id),
           },
           h('span', { class: 'tool-icon' }, icon(tool.icon)),
           h('span', { class: 'tool-label' }, tool.label),

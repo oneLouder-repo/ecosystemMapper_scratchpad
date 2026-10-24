@@ -1,7 +1,8 @@
 /**
  * Drag from an actor (or anywhere) to another actor (or anywhere) to draw
  * a connector. Ends dropped on an actor dock to it; ends dropped on the
- * board float and can be docked later with the select tool.
+ * board float and can be docked later with the select tool. The tool
+ * stays on so several connectors can be drawn in a row.
  */
 let pending = null;
 
@@ -10,7 +11,7 @@ export default {
   label: 'Connect',
   icon: 'connect',
   key: 'c',
-  cursor: 'crosshair',
+  cursor: 'connect',
 
   onPointerDown(e, ctx) {
     const from = e.view?.kind === 'actor' ? { actorId: e.view.id } : { x: e.worldX, y: e.worldY };
@@ -44,7 +45,6 @@ export default {
 
     store.apply({ ...op, data: { ...op.data, to } });
     ctx.mapView.select([op.id]);
-    ctx.tools.use('select');
   },
 
   deactivate(ctx) {

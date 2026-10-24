@@ -11,6 +11,7 @@ export class ActorView extends Sprite {
     this.id = id;
     this.node.classList.add('actor');
     this.box = this.draw('rect');
+    this.mark = this.draw('path', { class: 'agent-mark' });
     this.text = this.draw('text', { class: 'actor-label', 'text-anchor': 'middle' });
     this.badge = this.draw('text', { class: 'actor-badge', 'text-anchor': 'middle' });
   }
@@ -24,11 +25,16 @@ export class ActorView extends Sprite {
     this.box.setAttribute('height', h);
 
     const category = lens.categoryById[actor.category];
+    const agent = actor.kind === 'agent';
     this.node.classList.toggle('unmapped', !category);
+    this.node.classList.toggle('agent', agent);
+    // Agents carry a solid corner notch, a placeholder mark for agency.
+    this.mark.setAttribute('d', agent ? `M ${-w / 2} ${-h / 2} h 16 L ${-w / 2} ${-h / 2 + 16} Z` : '');
     this.box.style.fill = category?.color ?? '';
     this.#setLabel(actor.label || 'Untitled', w, h);
     this.badge.setAttribute('y', h / 2 - 9);
-    this.badge.textContent = category ? category.label : `unmapped: ${actor.category}`;
+    const categoryLabel = category ? category.label : `unmapped: ${actor.category}`;
+    this.badge.textContent = agent ? `Agent · ${categoryLabel}` : categoryLabel;
   }
 
   // Wrap the label onto up to two lines that fit the card.

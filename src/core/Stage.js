@@ -29,6 +29,7 @@ export class Stage extends DisplayObject {
 
     // Fixed layers, back to front.
     this.lensLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-lens' })));
+    this.groupLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-groups' })));
     this.connectorLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-connectors' })));
     this.actorLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-actors' })));
     this.overlayLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-overlay' })));

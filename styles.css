@@ -156,3 +156,26 @@ main { grid-area: board; position: relative; min-width: 0; }
   #sidebar { display: none; }
   .brand { display: none; }
 }
+
+/* Round 2: groups, agents, more lens styles */
+.layer-lens .small-labels .lens-label { font-size: 16px; }
+.layer-lens .small-labels .lens-hint { font-size: 11px; }
+.lens-group, .lens-column { font-size: 15px; font-weight: 650; fill: #7d869b; text-transform: uppercase; letter-spacing: 0.08em; pointer-events: none; }
+.lens-axis { font-size: 12px; fill: #9aa2b5; pointer-events: none; }
+
+.group-frame { fill: rgb(29 34 48 / 0.03); stroke: #4a5167; stroke-width: 1.2; stroke-dasharray: 2 4; pointer-events: stroke; }
+.group-tab { fill: #4a5167; cursor: grab; }
+.group-label { font-size: 12px; font-weight: 600; fill: #fff; pointer-events: none; }
+.group { cursor: grab; }
+.group.selected .group-frame { stroke: var(--accent); stroke-width: 2; stroke-dasharray: none; }
+.group.selected .group-tab { fill: var(--accent); }
+
+.agent-mark { fill: var(--ink); pointer-events: none; }
+.actor.agent rect { stroke: var(--ink); stroke-opacity: 0.9; stroke-width: 2.2; }
+.actor.agent.selected rect { stroke: var(--accent); }
+
+.segmented { display: flex; margin-bottom: 14px; }
+.segmented button { flex: 1; background: var(--panel); color: var(--ink); border: 1px solid var(--line); padding: 6px 10px; }
+.segmented button + button { border-left: none; }
+.segmented button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+#inspector > button { margin-bottom: 12px; }

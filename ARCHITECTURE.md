@@ -53,6 +53,8 @@ Account
 
 ## 3. Lenses
 
+> **Update (round 2).** Lenses now share one ordinal **depth** scale (0 = explicit / structural / collective, 1 = implicit / personal / mental models). Each region declares its `depth` range, actors are stored as `place: { depth, spread }` instead of x/y, and each layout (`rings`, `triangle`, `bands`, `grid`) projects places onto its shape. Actor categories and connector types moved out of the lenses into a shared `taxonomy.json`. Actors carry `kind: 'actor' | 'agent'`. See `src/lenses/index.js` for the current model; the sketch below is the original.
+
 A lens is one JSON file. Swapping it changes the backdrop and the vocabulary, never the map data.
 
 ```json

@@ -23,3 +23,21 @@ export function icon(nameOrPath, size = 20) {
   svg('path', { d: ICONS[nameOrPath] ?? nameOrPath }, el);
   return el;
 }
+
+// Custom board cursors: a black arrow with a small badge, tip at (3, 2).
+const ARROW = 'M3 2 L3 17 L7 13.2 L9.8 19.5 L12.2 18.4 L9.5 12.3 L14.8 12.3 Z';
+const BADGES = {
+  addActor: '<rect x="15" y="15" width="12" height="12" fill="#fff" stroke="#000" stroke-width="1.4"/><path d="M21 17.5 V24.5 M17.5 21 H24.5" stroke="#000" stroke-width="1.6"/>',
+  connect: '<circle cx="17" cy="25" r="2.2" fill="#000"/><path d="M17 25 L26 16 M21 16 H26 V21" fill="none" stroke="#000" stroke-width="1.6"/>',
+};
+
+export const CURSORS = Object.fromEntries(
+  Object.entries(BADGES).map(([name, badge]) => {
+    const svgText = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><path d="${ARROW}" fill="#000" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/>${badge}</svg>`;
+    return [name, `url("data:image/svg+xml,${encodeURIComponent(svgText)}") 3 2, crosshair`];
+  }),
+);
+
+export function cursorFor(name) {
+  return CURSORS[name] ?? name ?? '';
+}

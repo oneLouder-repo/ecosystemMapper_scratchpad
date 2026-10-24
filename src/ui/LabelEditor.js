@@ -28,7 +28,7 @@ export function LabelEditor(ctx) {
 
   return function editLabel(id) {
     close(true);
-    const actor = ctx.store.map.actors[id];
+    const actor = ctx.mapView.world.actors[id];
     const view = ctx.mapView.viewFor(id);
     if (!actor || !view) return;
     const { scale } = ctx.stage;
@@ -44,7 +44,11 @@ export function LabelEditor(ctx) {
     input.hidden = false;
     view.text.style.visibility = 'hidden';
     editing = { id, view };
-    input.focus();
-    input.select();
+    // Focus after the current pointer event, or the browser's own focus handling steals it back.
+    setTimeout(() => {
+      if (editing?.id !== id) return;
+      input.focus();
+      input.select();
+    });
   };
 }

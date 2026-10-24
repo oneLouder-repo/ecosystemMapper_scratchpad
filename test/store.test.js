@@ -5,33 +5,55 @@ import { createMap, ops } from '../src/core/ops.js';
 
 function setup() {
   const store = new Store(createMap());
-  const a = store.apply(ops.addActor({ label: 'A', x: 0, y: 0 })).id;
-  const b = store.apply(ops.addActor({ label: 'B', x: 300, y: 0 })).id;
+  const a = store.apply(ops.addActor({ label: 'A', place: { depth: 0, spread: 0 } })).id;
+  const b = store.apply(ops.addActor({ label: 'B', place: { depth: 0.5, spread: 0.5 } })).id;
   const c = store.apply(ops.addConnector({ from: { actorId: a }, to: { actorId: b } })).id;
   return { store, a, b, c };
 }
 
+const at = (depth, spread = 0) => ({ depth, spread });
+
 test('add, move, undo and redo an actor', () => {
   const { store, a } = setup();
-  store.apply(ops.moveActor(a, 50, 60));
-  assert.deepEqual([store.map.actors[a].x, store.map.actors[a].y], [50, 60]);
+  store.apply(ops.moveActor(a, at(0.7, 0.2)));
+  assert.deepEqual(store.map.actors[a].place, at(0.7, 0.2));
   store.undo();
-  assert.deepEqual([store.map.actors[a].x, store.map.actors[a].y], [0, 0]);
+  assert.deepEqual(store.map.actors[a].place, at(0));
   store.redo();
-  assert.deepEqual([store.map.actors[a].x, store.map.actors[a].y], [50, 60]);
+  assert.deepEqual(store.map.actors[a].place, at(0.7, 0.2));
 });
 
 test('preview ops skip history and a final op can carry its own inverse', () => {
   const { store, a } = setup();
   const depth = store.undoStack.length;
-  store.apply(ops.moveActor(a, 10, 10), { history: false });
-  store.apply(ops.moveActor(a, 20, 20), { history: false });
-  store.apply(ops.moveActor(a, 30, 30), { inverse: ops.moveActor(a, 0, 0) });
+  store.apply(ops.moveActor(a, at(0.1)), { history: false });
+  store.apply(ops.moveActor(a, at(0.2)), { history: false });
+  store.apply(ops.moveActor(a, at(0.3)), { inverse: ops.moveActor(a, at(0)) });
   assert.equal(store.undoStack.length, depth + 1);
   store.undo();
-  assert.equal(store.map.actors[a].x, 0);
+  assert.equal(store.map.actors[a].place.depth, 0);
   store.redo();
-  assert.equal(store.map.actors[a].x, 30);
+  assert.equal(store.map.actors[a].place.depth, 0.3);
+});
+
+test('groups: removing a member actor updates the group, undo restores it', () => {
+  const { store, a, b } = setup();
+  const g = store.apply(ops.addGroup({ label: 'Funders', memberIds: [a, b] })).id;
+  store.apply(ops.removeItems(store.map, { actorIds: [a] }));
+  assert.deepEqual(store.map.groups[g].memberIds, [b]);
+  store.undo();
+  assert.deepEqual(store.map.groups[g].memberIds, [a, b]);
+  store.apply(ops.removeItems(store.map, { groupIds: [g] }));
+  assert.equal(store.map.groups[g], undefined);
+  assert.ok(store.map.actors[a], 'ungrouping keeps the actors');
+});
+
+test('actor and agent kinds toggle with undo', () => {
+  const { store, a } = setup();
+  assert.equal(store.map.actors[a].kind, 'actor');
+  store.apply(ops.updateActor(a, { kind: 'agent' }));
+  store.undo();
+  assert.equal(store.map.actors[a].kind, 'actor');
 });
 
 test('update restores previous values on undo', () => {
@@ -84,7 +106,7 @@ test('change events fire for apply, undo and redo', () => {
   const { store, a } = setup();
   const seen = [];
   store.addEventListener('change', (e) => seen.push(e.op.op));
-  store.apply(ops.moveActor(a, 1, 1));
+  store.apply(ops.moveActor(a, at(0.4)));
   store.undo();
   store.redo();
   assert.deepEqual(seen, ['moveActor', 'moveActor', 'moveActor']);

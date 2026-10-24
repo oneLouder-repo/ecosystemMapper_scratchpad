@@ -10,7 +10,7 @@ export function TopBar(el, ctx) {
     e.target.value = '';
     if (!file) return;
     try {
-      store.load(await importMap(file));
+      store.load(ctx.actions.migrate(await importMap(file)));
       mapView.select([]);
     } catch (err) {
       alert(`Couldn't open that file: ${err.message}`);
@@ -28,6 +28,7 @@ export function TopBar(el, ctx) {
     h('div', { class: 'spacer' }),
     undo,
     redo,
+    h('button', { class: 'secondary', title: 'Load the example test map', onclick: () => { if (confirm('Load the example test map? The current map is replaced.')) ctx.actions.loadExample(); } }, 'Example'),
     h('button', { class: 'secondary', onclick: () => { if (confirm('Start a new, empty map? The current one is replaced.')) ctx.actions.newMap(); } }, 'New'),
     h('button', { class: 'secondary', onclick: () => fileInput.click() }, 'Open…'),
     h('button', { onclick: () => exportMap(store.map) }, 'Export'),

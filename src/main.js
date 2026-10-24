@@ -2,7 +2,7 @@ import { Stage } from './core/Stage.js';
 import { Store } from './core/Store.js';
 import { createMap, ops } from './core/ops.js';
 import { MapView } from './display/MapView.js';
-import { lensBounds, loadLenses } from './lenses/index.js';
+import { lensBounds, loadLenses, unproject } from './lenses/index.js';
 import { ToolRegistry } from './tools/registry.js';
 import SelectTool from './tools/SelectTool.js';
 import ActorTool from './tools/ActorTool.js';
@@ -14,10 +14,10 @@ import { Inspector } from './ui/Inspector.js';
 import { LayersPanel } from './ui/LayersPanel.js';
 import { LabelEditor } from './ui/LabelEditor.js';
 import { autosave, loadLocal } from './persistence/local.js';
-import { seedMap } from './seed.js';
+import { seedMap, migrateMap } from './seed.js';
 
 const lenses = await loadLenses();
-const store = new Store(loadLocal() ?? seedMap());
+const store = new Store(migrateMap(loadLocal(), lenses) ?? seedMap());
 const stage = new Stage(document.querySelector('#board'));
 const mapView = new MapView(stage, store, lenses);
 
@@ -45,17 +45,34 @@ const ctx = {
   ui: { activeLayerId: store.map.layers[0]?.id, editLabel: null },
   actions: {
     addActorAt(x, y) {
-      const op = store.apply(ops.addActor({ x, y, category: mapView.lens.defaultCategory, layerId: ctx.ui.activeLayerId }));
+      const place = unproject(mapView.lens, x, y);
+      const op = store.apply(ops.addActor({ place, category: mapView.lens.defaultCategory, layerId: ctx.ui.activeLayerId }));
       mapView.select([op.id]);
       ctx.ui.editLabel(op.id);
     },
     deleteSelection() {
       const items = mapView.selectedItems();
-      if (!items.actorIds.length && !items.connectorIds.length) return;
+      if (!items.actorIds.length && !items.connectorIds.length && !items.groupIds.length) return;
       store.apply(ops.removeItems(store.map, items));
       mapView.select([]);
     },
     fitView,
+    groupSelection() {
+      const { actorIds } = mapView.selectedItems();
+      if (actorIds.length < 2) return;
+      const op = store.apply(ops.addGroup({ label: 'New group', memberIds: actorIds, layerId: ctx.ui.activeLayerId }));
+      mapView.select([op.id]);
+    },
+    ungroup(id) {
+      store.apply(ops.removeGroup(id));
+      mapView.select([]);
+    },
+    migrate: (map) => migrateMap(map, lenses),
+    loadExample() {
+      store.load(seedMap());
+      mapView.select([]);
+      fitView();
+    },
     newMap() {
       store.load(createMap({ lensId: store.map.lensId }));
       mapView.select([]);
@@ -102,6 +119,9 @@ document.addEventListener('keydown', (e) => {
   if (mod && e.key.toLowerCase() === 'z') {
     e.preventDefault();
     e.shiftKey ? store.redo() : store.undo();
+  } else if (mod && e.key.toLowerCase() === 'g') {
+    e.preventDefault();
+    ctx.actions.groupSelection();
   } else if (mod && e.key.toLowerCase() === 'y') {
     e.preventDefault();
     store.redo();
