@@ -1,0 +1,93 @@
+import { Stage } from './core/Stage.js';
+import { Store } from './core/Store.js';
+import { createMap, ops } from './core/ops.js';
+import { MapView } from './display/MapView.js';
+import { loadLenses } from './lenses/index.js';
+import { ToolRegistry } from './tools/registry.js';
+import SelectTool from './tools/SelectTool.js';
+import ActorTool from './tools/ActorTool.js';
+import ConnectTool from './tools/ConnectTool.js';
+import PanTool from './tools/PanTool.js';
+import { Toolbar } from './ui/Toolbar.js';
+import { TopBar } from './ui/TopBar.js';
+import { Inspector } from './ui/Inspector.js';
+import { LayersPanel } from './ui/LayersPanel.js';
+import { LabelEditor } from './ui/LabelEditor.js';
+import { autosave, loadLocal } from './persistence/local.js';
+import { seedMap } from './seed.js';
+
+const lenses = await loadLenses();
+const store = new Store(loadLocal() ?? seedMap());
+const stage = new Stage(document.querySelector('#board'));
+const mapView = new MapView(stage, store, lenses);
+
+// Start zoomed so the whole lens fits the board.
+{
+  const lens = mapView.lens;
+  const height = (lens.regions?.length ?? 3) * (lens.bandHeight ?? 340);
+  const { clientHeight } = stage.svgEl;
+  stage.scale = Math.min(1, Math.max(0.4, (clientHeight - 60) / height));
+  stage.moveTo(40, 30);
+}
+
+/**
+ * The context every tool and panel receives. Add shared helpers to
+ * `actions` rather than reaching into other modules.
+ */
+const ctx = {
+  stage,
+  store,
+  ops,
+  mapView,
+  tools: null,
+  ui: { activeLayerId: store.map.layers[0]?.id, editLabel: null },
+  actions: {
+    addActorAt(x, y) {
+      const op = store.apply(ops.addActor({ x, y, category: mapView.lens.defaultCategory, layerId: ctx.ui.activeLayerId }));
+      mapView.select([op.id]);
+      ctx.ui.editLabel(op.id);
+    },
+    deleteSelection() {
+      const items = mapView.selectedItems();
+      if (!items.actorIds.length && !items.connectorIds.length) return;
+      store.apply(ops.removeItems(store.map, items));
+      mapView.select([]);
+    },
+    newMap() {
+      store.load(createMap({ lensId: store.map.lensId }));
+      mapView.select([]);
+    },
+  },
+};
+
+ctx.tools = new ToolRegistry(ctx).register(SelectTool).register(ActorTool).register(ConnectTool).register(PanTool);
+ctx.ui.editLabel = LabelEditor(ctx);
+
+Toolbar(document.querySelector('#toolbar'), ctx.tools);
+TopBar(document.querySelector('#topbar'), ctx);
+Inspector(document.querySelector('#inspector'), ctx);
+LayersPanel(document.querySelector('#layers'), ctx);
+
+ctx.tools.use('select');
+mapView.sync();
+autosave(store);
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input, textarea, select')) return;
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    e.shiftKey ? store.redo() : store.undo();
+  } else if (mod && e.key.toLowerCase() === 'y') {
+    e.preventDefault();
+    store.redo();
+  } else if (e.key === 'Escape') {
+    mapView.select([]);
+    ctx.tools.use('select');
+  } else if (ctx.tools.handleKey(e)) {
+    e.preventDefault();
+  }
+});
+
+// Handy for poking at things from the browser console.
+window.mapper = ctx;

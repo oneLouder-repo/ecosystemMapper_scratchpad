@@ -1,0 +1,26 @@
+{
+  "id": "micro-meso-macro",
+  "name": "Micro / Meso / Macro",
+  "description": "Three tiers of change after van Wijk et al. (2019): individual practice, negotiated collaboration, structural change.",
+  "layout": "bands",
+  "bandHeight": 340,
+  "regions": [
+    { "id": "macro", "label": "Macro / Us", "hint": "Structural change: policy, budgets, strategic alignment", "tint": "#e8eefc" },
+    { "id": "meso", "label": "Meso / We", "hint": "The messy middle: norms, relationships, shared values", "tint": "#eef6f0" },
+    { "id": "micro", "label": "Micro / Me", "hint": "Change you can action directly through your own practice", "tint": "#fdf3e7" }
+  ],
+  "actorCategories": [
+    { "id": "ally", "label": "Key ally", "color": "#9fd8cb" },
+    { "id": "resource", "label": "Resource provider", "color": "#f6d98b" },
+    { "id": "problem", "label": "Problem maker", "color": "#f4a993" },
+    { "id": "other", "label": "Other", "color": "#cfd5e2" }
+  ],
+  "defaultCategory": "other",
+  "connectorTypes": [
+    { "id": "relationship", "label": "Relationship" },
+    { "id": "resource-flow", "label": "Resource flow", "color": "#b8860b" },
+    { "id": "feedback", "label": "Feedback loop", "dash": "8 5", "color": "#2f6fb5" },
+    { "id": "learning", "label": "Learning loop", "dash": "2 5", "color": "#7a4fb5" }
+  ],
+  "defaultConnectorType": "relationship"
+}

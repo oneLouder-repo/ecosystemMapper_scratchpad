@@ -1,0 +1,27 @@
+{
+  "id": "water-of-systems-change",
+  "name": "Water of Systems Change",
+  "description": "Six conditions of systems change in three levels, after Kania, Kramer and Senge (2018).",
+  "layout": "bands",
+  "bandHeight": 340,
+  "regions": [
+    { "id": "structural", "label": "Structural change", "hint": "Policies · Practices · Resource flows (explicit)", "tint": "#e6f2f8" },
+    { "id": "relational", "label": "Relational change", "hint": "Relationships & connections · Power dynamics (semi-explicit)", "tint": "#d9ecf4" },
+    { "id": "transformative", "label": "Transformative change", "hint": "Mental models (implicit)", "tint": "#cbe3ef" }
+  ],
+  "actorCategories": [
+    { "id": "ally", "label": "Champion", "color": "#9fd8cb" },
+    { "id": "resource", "label": "Funder / resource holder", "color": "#f6d98b" },
+    { "id": "gatekeeper", "label": "Gatekeeper", "color": "#e8b4d0" },
+    { "id": "community", "label": "Community", "color": "#b9c8f0" },
+    { "id": "other", "label": "Other", "color": "#cfd5e2" }
+  ],
+  "defaultCategory": "other",
+  "connectorTypes": [
+    { "id": "relationship", "label": "Relationship" },
+    { "id": "power", "label": "Power dynamic", "color": "#b5442f" },
+    { "id": "resource-flow", "label": "Resource flow", "color": "#b8860b" },
+    { "id": "feedback", "label": "Feedback loop", "dash": "8 5", "color": "#2f6fb5" }
+  ],
+  "defaultConnectorType": "relationship"
+}
