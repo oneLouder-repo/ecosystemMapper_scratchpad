@@ -8,7 +8,7 @@ let pending = null;
 export default {
   id: 'connect',
   label: 'Connect',
-  icon: '↗',
+  icon: 'connect',
   key: 'c',
   cursor: 'crosshair',
 

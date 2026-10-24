@@ -10,12 +10,13 @@ export function seedMap() {
     return op.id;
   };
 
-  const funders = add('Federal funders', 'resource', 420, 170);
-  const policy = add('Provincial ministries', 'problem', 760, 200);
-  const network = add('University & college partners', 'ally', 420, 510);
-  const teachers = add('Teachers & parents', 'other', 780, 480);
-  const instructors = add('STEM instructors', 'ally', 420, 850);
-  const youth = add('Youth participants', 'other', 780, 850);
+  // Placed to read sensibly in both the rings and the triangle lens.
+  const funders = add('Federal funders', 'resource', -230, -530);
+  const policy = add('Provincial ministries', 'problem', 230, -530);
+  const network = add('University & college partners', 'ally', -250, -250);
+  const teachers = add('Teachers & parents', 'other', 250, -250);
+  const instructors = add('STEM instructors', 'ally', -110, 60);
+  const youth = add('Youth participants', 'other', 110, 150);
 
   const connect = (from, to, type, label = '') =>
     applyOp(map, ops.addConnector({ from: { actorId: from }, to: { actorId: to }, type, label, layerId }));

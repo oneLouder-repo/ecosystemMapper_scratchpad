@@ -19,10 +19,12 @@ Any static server works too; `npm start` is a tiny one in `server.js`.
 | --- | --- |
 | Add an actor | Double-click the board, or press **A** and click |
 | Rename an actor | Double-click it, or use the panel on the right |
-| Move an actor | Drag it |
+| Move an actor | Drag it. Its region (ring or band) follows where you drop it |
+| Select several | Drag a box on empty board, or shift-click. Drag any selected actor to move them all |
 | Connect actors | Press **C**, drag from one actor to another |
 | Re-dock a connector | Select it, drag one of its round ends onto another actor (or onto empty board to leave it floating) |
-| Pan / zoom | Scroll or drag empty board / Ctrl or ⌘ + scroll |
+| Pan | Scroll, hold **Space** and drag, middle-drag, or the **Pan** tool (**H**) |
+| Zoom | Ctrl or ⌘ + scroll; **F** or **Fit** fits the whole lens |
 | Delete | Select, then Delete or Backspace |
 | Undo / redo | Ctrl+Z / Ctrl+Shift+Z |
 | Switch lens | The **Lens** menu in the top bar |
@@ -55,7 +57,11 @@ Handlers get a stage event (`worldX`, `worldY`, `view`, `handle`, `shiftKey`, �
 
 ## Adding a lens
 
-Add a JSON file to `src/lenses/` (copy `micro-meso-macro.json`) and list its name in `LENS_FILES` in `src/lenses/index.js`. Lenses never change map data; actors whose category a lens doesn't define show as "unmapped" until recategorised.
+Add a JSON file to `src/lenses/` (copy `micro-meso-macro.json`) and list its name in `LENS_FILES` in `src/lenses/index.js`. A lens picks a `layout`: `rings` (concentric circles, used by Micro / Meso / Macro), `triangle` (inverted triangle, used by the Water of Systems Change) or `bands` (horizontal tiers). A new layout is a geometry entry in `src/lenses/index.js` plus a renderer in `src/display/LensView.js`. Lenses never change map data; actors whose category a lens doesn't define show as "unmapped" until recategorised.
+
+## Icons
+
+Tool and panel icons are monochrome line drawings in `src/ui/icons.js`. A tool's `icon` can name one of them or be raw SVG path data on a 24×24 grid.
 
 ## Making things move
 
@@ -71,6 +77,6 @@ Selected actors use this for their breathing outline (`ActorView.js`).
 
 ## Status
 
-Working now: actors, connectors with docking and re-docking, connector types, layers (show, hide, lock, assign), two lenses with live switching, undo and redo, autosave, JSON export and import.
+Working now: actors, marquee and multi-select with group moves, connectors with docking and re-docking, connector types, layers (show, hide, lock, assign), two lenses (rings and inverted triangle) with live switching and region highlighting while dragging, undo and redo, autosave, JSON export and import.
 
 Not yet: accounts and folders, free-text notes, groups, the Node server and live multi-user editing.

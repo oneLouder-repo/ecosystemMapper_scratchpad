@@ -4,7 +4,7 @@ let last = null;
 export default {
   id: 'pan',
   label: 'Pan',
-  icon: '✋',
+  icon: 'pan',
   key: 'h',
   cursor: 'grab',
 

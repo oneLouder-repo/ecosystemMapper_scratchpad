@@ -1,4 +1,5 @@
 import { h } from './dom.js';
+import { icon } from './icons.js';
 
 /** Builds a button per registered tool and keeps the active one highlighted. */
 export function Toolbar(el, tools) {
@@ -13,7 +14,7 @@ export function Toolbar(el, tools) {
             'aria-pressed': String(tool === tools.active),
             onclick: () => tools.use(tool.id),
           },
-          h('span', { class: 'tool-icon', 'aria-hidden': 'true' }, tool.icon),
+          h('span', { class: 'tool-icon' }, icon(tool.icon)),
           h('span', { class: 'tool-label' }, tool.label),
         ),
       ),

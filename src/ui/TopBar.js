@@ -1,5 +1,6 @@
 import { h, options } from './dom.js';
 import { exportMap, importMap } from '../persistence/file.js';
+import { icon } from './icons.js';
 
 /** Lens picker, undo/redo and file actions. */
 export function TopBar(el, ctx) {
@@ -23,6 +24,7 @@ export function TopBar(el, ctx) {
   el.append(
     h('div', { class: 'brand' }, 'Ecosystem Mapper'),
     h('label', { class: 'lens-picker' }, h('span', {}, 'Lens'), lensSelect),
+    h('button', { class: 'secondary icon-text', title: 'Fit the lens to the screen (F)', onclick: () => ctx.actions.fitView() }, icon('fit', 18), 'Fit'),
     h('div', { class: 'spacer' }),
     undo,
     redo,

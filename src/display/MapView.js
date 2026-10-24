@@ -75,6 +75,15 @@ export class MapView extends EventDispatcher {
     this.dispatchEvent('selection');
   }
 
+  deselect(ids) {
+    for (const id of ids) {
+      const view = this.viewFor(id);
+      if (view) view.selected = false;
+      this.selection.delete(id);
+    }
+    this.dispatchEvent('selection');
+  }
+
   selectedItems() {
     const { map } = this.store;
     return {

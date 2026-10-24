@@ -2,7 +2,7 @@
 export default {
   id: 'actor',
   label: 'Actor',
-  icon: '▢',
+  icon: 'actor',
   key: 'a',
   cursor: 'copy',
 

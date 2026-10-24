@@ -79,7 +79,7 @@ A lens is one JSON file. Swapping it changes the backdrop and the vocabulary, ne
 }
 ```
 
-`layout` picks a small renderer: `bands` (horizontal tiers), `rings` (concentric), `pyramid` (Water of Systems Change: structural, relational, transformative levels) or `free`. New layouts are one module each.
+`layout` picks the geometry and renderer: `rings` (concentric circles; Micro / Meso / Macro uses this with Micro at the centre), `triangle` (an inverted triangle; Water of Systems Change uses this with structural change at the wide top and transformative change at the point) or `bands` (horizontal tiers). The example above is simplified; see `src/lenses/*.json` for the real files. An actor's region is never stored: it is worked out from the actor's position, so it follows drag and drop and is re-read when the lens changes.
 
 When a map switches lens and a category doesn't exist in the new lens, the actor keeps its old category and shows as "unmapped" until someone recategorises it. Nothing is lost.
 

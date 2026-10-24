@@ -10,7 +10,7 @@ export class ActorView extends Sprite {
     super();
     this.id = id;
     this.node.classList.add('actor');
-    this.box = this.draw('rect', { rx: 12 });
+    this.box = this.draw('rect');
     this.text = this.draw('text', { class: 'actor-label', 'text-anchor': 'middle' });
     this.badge = this.draw('text', { class: 'actor-badge', 'text-anchor': 'middle' });
   }

@@ -2,7 +2,7 @@ import { Stage } from './core/Stage.js';
 import { Store } from './core/Store.js';
 import { createMap, ops } from './core/ops.js';
 import { MapView } from './display/MapView.js';
-import { loadLenses } from './lenses/index.js';
+import { lensBounds, loadLenses } from './lenses/index.js';
 import { ToolRegistry } from './tools/registry.js';
 import SelectTool from './tools/SelectTool.js';
 import ActorTool from './tools/ActorTool.js';
@@ -21,14 +21,16 @@ const store = new Store(loadLocal() ?? seedMap());
 const stage = new Stage(document.querySelector('#board'));
 const mapView = new MapView(stage, store, lenses);
 
-// Start zoomed so the whole lens fits the board.
-{
-  const lens = mapView.lens;
-  const height = (lens.regions?.length ?? 3) * (lens.bandHeight ?? 340);
-  const { clientHeight } = stage.svgEl;
-  stage.scale = Math.min(1, Math.max(0.4, (clientHeight - 60) / height));
-  stage.moveTo(40, 30);
+/** Zoom and centre so the whole lens backdrop fits the board. */
+function fitView() {
+  const b = lensBounds(mapView.lens);
+  const { clientWidth, clientHeight } = stage.svgEl;
+  const pad = 32;
+  stage.scale = Math.min(1, Math.max(0.2, Math.min((clientWidth - pad * 2) / b.w, (clientHeight - pad * 2) / b.h)));
+  stage.moveTo(clientWidth / 2 - (b.x + b.w / 2) * stage.scale, clientHeight / 2 - (b.y + b.h / 2) * stage.scale);
+  stage.dispatchEvent('camera');
 }
+fitView();
 
 /**
  * The context every tool and panel receives. Add shared helpers to
@@ -53,6 +55,7 @@ const ctx = {
       store.apply(ops.removeItems(store.map, items));
       mapView.select([]);
     },
+    fitView,
     newMap() {
       store.load(createMap({ lensId: store.map.lensId }));
       mapView.select([]);
@@ -72,9 +75,30 @@ ctx.tools.use('select');
 mapView.sync();
 autosave(store);
 
+// Hold Space to pan with any tool, FigJam-style.
+let toolBeforeSpace = null;
+document.addEventListener('keyup', (e) => {
+  if (e.key === ' ' && toolBeforeSpace) {
+    ctx.tools.use(toolBeforeSpace);
+    toolBeforeSpace = null;
+  }
+});
+
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, textarea, select')) return;
   const mod = e.ctrlKey || e.metaKey;
+  if (e.key === ' ') {
+    e.preventDefault();
+    if (!toolBeforeSpace && ctx.tools.active.id !== 'pan') {
+      toolBeforeSpace = ctx.tools.active.id;
+      ctx.tools.use('pan');
+    }
+    return;
+  }
+  if (e.key.toLowerCase() === 'f' && !mod) {
+    fitView();
+    return;
+  }
   if (mod && e.key.toLowerCase() === 'z') {
     e.preventDefault();
     e.shiftKey ? store.redo() : store.undo();
