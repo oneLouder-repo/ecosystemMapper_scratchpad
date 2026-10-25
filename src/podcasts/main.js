@@ -225,7 +225,14 @@ function EpisodeForm(p, e, done) {
     if (f.season.value === 'new') ops.push(col.update('podcasts', p.id, { seasons: { ...p.seasons, [season]: { number: season, title: `Season ${season}`, description: '' } } }));
     let audio = e?.audio;
     if (file) {
-      audio = { mediaId: await putMedia(file), duration: await audioDuration(file), mimetype: file.type || (/\.wav$/i.test(file.name) ? 'audio/wav' : 'audio/mpeg'), size: file.size, name: file.name };
+      try {
+        audio = { mediaId: await putMedia(file), duration: await audioDuration(file), mimetype: file.type || (/\.wav$/i.test(file.name) ? 'audio/wav' : 'audio/mpeg'), size: file.size, name: file.name };
+      } catch (err) {
+        alert(err.message);
+        submit.disabled = false;
+        submit.textContent = e ? 'Save episode' : 'Add episode';
+        return;
+      }
       if (e?.audio?.mediaId) deleteMedia(e.audio.mediaId);
     }
     const date = f.date.value || now;

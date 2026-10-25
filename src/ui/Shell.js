@@ -2,7 +2,7 @@ import { h } from './dom.js';
 import { icon } from './icons.js';
 import { enabledPlugins } from '../plugins.js';
 import { ROLES, initials } from '../platform/org.js';
-import { orgList, switchOrg, createOrg, currentUser, signInAs } from '../platform/session.js';
+import { orgList, openOrg, createOrg, currentUser, signInAs, can, signOut, signedInUser, platformUrl } from '../platform/session.js';
 
 /**
  * The header shared by every page: which org is open (and a switcher), the
@@ -15,7 +15,7 @@ export function Shell(el, { current, org }) {
   const link = (id, href, label, iconName) =>
     h('a', { href, title: label, class: `shell-link${id === current ? ' active' : ''}`, 'aria-current': id === current ? 'page' : null },
       icon(iconName, 18), h('span', {}, label));
-  const reload = () => location.assign('index.html');
+  const account = signedInUser();
 
   el.classList.add('shell');
   el.replaceChildren(
@@ -26,11 +26,13 @@ export function Shell(el, { current, org }) {
         h('span', { class: 'caret-down', 'aria-hidden': 'true' }, '▾')),
       h('ul', { class: 'menu dropdown-content shell-menu' },
         h('li', { class: 'menu-title' }, 'Organisations'),
-        orgList().map((o) => h('li', {}, h('button', { class: o.id === org.id ? 'menu-active' : '', onclick: () => { switchOrg(o.id); reload(); } }, o.name))),
-        h('li', {}, h('button', { onclick: () => {
-          const name = prompt('Name of the new organisation');
-          if (name?.trim()) { createOrg(name.trim()); location.assign('org.html'); }
-        } }, icon('plus', 16), 'New organisation…')),
+        orgList().map((o) => h('li', {}, h('button', { class: o.id === org.id ? 'menu-active' : '', onclick: () => o.id !== org.id && openOrg(o.id) }, o.name))),
+        can.manageOrgs() && (platformUrl()
+          ? h('li', {}, h('a', { href: platformUrl() }, icon('plus', 16), 'Platform admin…'))
+          : h('li', {}, h('button', { onclick: () => {
+              const name = prompt('Name of the new organisation');
+              if (name?.trim()) { createOrg(name.trim()); location.assign('org.html'); }
+            } }, icon('plus', 16), 'New organisation…'))),
         h('li', {}, h('a', { href: 'org.html' }, icon('settings', 16), 'Organisation settings')))),
     h('nav', { class: 'shell-nav', 'aria-label': 'Plugins' },
       link('home', 'index.html', 'Dashboard', 'home'),
@@ -40,12 +42,23 @@ export function Shell(el, { current, org }) {
     h('details', { class: 'dropdown dropdown-end shell-user' },
       h('summary', { title: 'Your profile' }, Avatar(me, 28), h('span', { class: 'shell-user-name' }, me ? `${me.name} · ${role?.label}` : 'Not signed in')),
       h('ul', { class: 'menu dropdown-content shell-menu' },
+        account && h('li', { class: 'menu-title' }, `Signed in as ${account.email}${account.isSuper ? ' (platform admin)' : ''}`),
         h('li', {}, h('a', { href: 'me.html' }, icon('person', 16), 'My profile and work')),
-        h('li', { class: 'menu-title' }, 'Sign in as (mock accounts)'),
-        Object.values(org.staff).sort((a, b) => a.name.localeCompare(b.name)).map((s) =>
-          h('li', {}, h('button', { class: s.id === me?.id ? 'menu-active' : '', onclick: () => { signInAs(org.id, s.id); location.reload(); } },
-            Avatar(s, 20), s.name))))),
+        can.signOut() && h('li', {}, h('button', { onclick: signOut }, icon('swap', 16), 'Sign out')),
+        can.viewAs() && [
+          h('li', { class: 'menu-title' }, account ? 'View as (to see what they see)' : 'Sign in as (mock accounts)'),
+          Object.values(org.staff).sort((a, b) => a.name.localeCompare(b.name)).map((s) =>
+            h('li', {}, h('button', { class: s.id === me?.id ? 'menu-active' : '', onclick: async () => {
+              try { await signInAs(org.id, s.id); location.reload(); } catch (err) { alert(err.message); }
+            } }, Avatar(s, 20), s.name)))])),
   );
+  // Tell people when a save didn't reach the server.
+  window.addEventListener('toolbox:save-failed', (e) => {
+    document.querySelector('.save-warning')?.remove();
+    const note = h('div', { class: 'alert alert-error save-warning', role: 'alert' }, `Not saved: ${e.detail.why}`);
+    document.body.append(note);
+    setTimeout(() => note.remove(), 6000);
+  });
   // Close a menu when clicking elsewhere.
   document.addEventListener('click', (e) => {
     for (const d of el.querySelectorAll('details[open]')) if (!d.contains(e.target)) d.open = false;

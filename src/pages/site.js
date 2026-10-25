@@ -1,6 +1,6 @@
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { onDocChange } from '../platform/storage.js';
+import { onDocChange, session, isHosted } from '../platform/storage.js';
 import { loadOrg, loadStrategy, loadData, loadDashboards, loadPodcasts, loadPages } from '../platform/docs.js';
 import { migrateStrategy } from '../platform/strategy.js';
 import { migratePodcasts, published } from '../platform/podcasts.js';
@@ -44,7 +44,10 @@ document.body.append(player.el);
 const asOf = {};
 
 const params = () => Object.fromEntries(new URLSearchParams(location.search));
-const siteId = () => params().site ?? 'site-impact';
+// Without ?site=, the org's first public site.
+const firstSite = () => Object.values(docs.org.sites).find((s) => s.visibility === 'public')?.id ?? Object.keys(docs.org.sites)[0];
+const siteId = () => params().site ?? firstSite();
+const staffView = !isHosted() || !!session()?.member;
 const link = (p) => `?${new URLSearchParams({ site: siteId(), ...p })}`;
 player.setLink(link);
 
@@ -117,7 +120,7 @@ function render() {
   const navLink = (key, href, label) => h('a', { href, 'aria-current': current === key ? 'page' : null }, label);
 
   root.replaceChildren(
-    h('div', { class: 'preview-banner' }, 'Sample public site, made by Org Toolbox from live data. ', h('a', { href: 'pages.html' }, 'Back to the toolbox')),
+    staffView && h('div', { class: 'preview-banner' }, isHosted() ? 'You’re signed in, so this is the public site as visitors see it. ' : 'Sample public site, made by Org Toolbox from live data. ', h('a', { href: 'pages.html' }, 'Back to the toolbox')),
     h('header', { class: 'site-head' },
       h('div', { class: 'inner' },
         h('a', { class: 'site-brand', href: link({}) }, Logo(org, 36), h('strong', {}, org.name)),
@@ -137,7 +140,8 @@ function render() {
         org.contact.address && h('div', {}, org.contact.address),
         org.contact.email && h('div', {}, h('a', { href: `mailto:${org.contact.email}` }, org.contact.email)),
         org.contact.phone && h('div', {}, org.contact.phone)),
-      h('p', { class: 'site-small' }, 'Every chart has a table view for screen readers and printing.')),
+      h('p', { class: 'site-small' }, 'Every chart has a table view for screen readers and printing.',
+        isHosted() && !staffView && [' · ', h('a', { href: '/login.html?next=/index.html' }, 'Staff sign in')])),
   );
 }
 

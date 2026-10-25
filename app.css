@@ -696,3 +696,32 @@ body.podcasts-page { height: 100vh; display: flex; flex-direction: column; overf
 .lens-notes dt { font-weight: 700; margin-top: 12px; }
 .lens-notes dd { margin: 2px 0 0; }
 @media (max-width: 900px) { .help-layout { grid-template-columns: 1fr; } .help-toc { position: static; } }
+
+/* ---------------------------------------------------------------- Sign-in and the platform's own site */
+body.login-page, body.platform-page { background: var(--bg); min-height: 100vh; }
+.login-wrap { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; align-items: flex-start; padding: 8vh 16px 40px; }
+.login-box { width: min(420px, 100%); padding: 28px; background: var(--panel); border: 1px solid var(--line); gap: 10px; }
+.login-box h1 { font-size: 24px; margin: 0 0 8px; }
+.login-box h2 { font-size: 17px; margin: 0; }
+.login-form { display: flex; flex-direction: column; gap: 4px; }
+.login-form .fieldset { padding: 0; }
+.login-error { color: var(--color-error); min-height: 1.2em; margin: 4px 0; font-size: 14px; }
+.google-btn { gap: 10px; }
+.g-mark { font-weight: 800; color: #4285f4; }
+.small { font-size: 13px; }
+.dev-login { width: min(460px, 100%); }
+.dev-users { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow: auto; }
+.dev-user { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: var(--radius-field); text-align: left; }
+.dev-user:hover { background: var(--bg); }
+.dev-user small { display: block; color: var(--muted); font-size: 12px; }
+.platform-head { display: flex; align-items: center; gap: 12px; padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.platform-hero { max-width: 720px; margin: 12vh auto; padding: 0 24px; text-align: center; }
+.platform-hero h1 { font-size: 36px; line-height: 1.15; margin: 0 0 12px; }
+.platform-hero p { color: var(--muted); font-size: 18px; margin: 0 0 24px; }
+.org-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; color: var(--ink); text-decoration: none; }
+.org-card:hover { border-color: var(--accent); }
+.platform-form { flex-wrap: wrap; }
+.slug-field { display: inline-flex; align-items: center; gap: 4px; }
+.staff-email { display: block; width: 100%; max-width: 260px; margin-top: 2px; color: var(--muted); }
+.save-warning { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 60; }
+.login-form .input, .login-box .btn.w-full { width: 100%; }

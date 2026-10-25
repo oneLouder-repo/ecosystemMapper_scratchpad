@@ -8,40 +8,16 @@
  */
 import { loadOrSeed, saveDoc, activeOrg } from './storage.js';
 import './session.js';
-import { seedOrg, seedRiverbend, blankOrg, migrateOrg } from './org.js';
+import { blankOrg, migrateOrg } from './org.js';
 import { migrateStrategy, measureIndex } from './strategy.js';
-import { seedStrategy, seedRiverbendStrategy, blankStrategy } from './strategySeed.js';
+import { blankStrategy } from './strategySeed.js';
 import { seedData } from './data.js';
 import { seedDashboards } from './dashboards.js';
-import { seedPodcasts, blankPodcasts, migratePodcasts } from './podcasts.js';
+import { blankPodcasts, migratePodcasts } from './podcasts.js';
 import { loadPages as loadPagesFor } from './pages.js';
-import { loadMapIndex, loadAllMaps, mapEntry } from './maps.js';
-import { createMap } from '../core/ops.js';
-import { seedMap } from '../seed.js';
+import { loadMapIndex, loadAllMaps } from './maps.js';
+import { SEEDS } from './seeds.js';
 
-const exampleMaps = () => {
-  const main = { ...seedMap(), id: 'map-ecosystem' };
-  const spheres = { ...createMap({ name: 'Indigenous partnerships', lensId: 'spheres-of-systems-change' }), id: 'map-indigenous' };
-  return {
-    index: { maps: {
-      'map-ecosystem': mapEntry({ id: 'map-ecosystem', title: 'National STEM outreach ecosystem', description: 'Everyone shaping STEM outreach for youth in Canada, and how they relate.', ownerId: 's-ed', memberIds: ['s-indig', 's-part', 's-eval', 's-prog'] }),
-      'map-indigenous': mapEntry({ id: 'map-indigenous', title: 'Indigenous partnerships', description: 'A working map for the co-design sessions.', ownerId: 's-indig', memberIds: ['s-ed', 's-train'] }),
-    } },
-    contents: { 'map-ecosystem': main, 'map-indigenous': spheres },
-  };
-};
-
-const SEEDS = {
-  'org-example': { org: seedOrg, strategy: seedStrategy, maps: exampleMaps, podcasts: seedPodcasts },
-  'org-riverbend': {
-    org: seedRiverbend,
-    strategy: seedRiverbendStrategy,
-    maps: () => {
-      const map = { ...createMap({ name: 'Riverbend food system', lensId: 'water-of-systems-change' }), id: 'map-food' };
-      return { index: { maps: { 'map-food': mapEntry({ id: 'map-food', title: 'Riverbend food system', ownerId: 'r-lead', memberIds: ['r-vol'] }) } }, contents: { 'map-food': map } };
-    },
-  },
-};
 const seedFor = (doc) => SEEDS[activeOrg()]?.[doc];
 
 export const loadOrg = () => migrateOrg(loadOrSeed('org', seedFor('org') ?? (() => blankOrg({ id: activeOrg(), name: 'New org' }))));
