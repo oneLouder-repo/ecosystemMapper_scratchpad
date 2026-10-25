@@ -13,7 +13,8 @@ import { migrateStrategy, measureIndex } from './strategy.js';
 import { seedStrategy, seedRiverbendStrategy, blankStrategy } from './strategySeed.js';
 import { seedData } from './data.js';
 import { seedDashboards } from './dashboards.js';
-import { seedRadio, blankRadio } from './radio.js';
+import { seedPodcasts, blankPodcasts, migratePodcasts } from './podcasts.js';
+import { loadPages as loadPagesFor } from './pages.js';
 import { loadMapIndex, loadAllMaps, mapEntry } from './maps.js';
 import { createMap } from '../core/ops.js';
 import { seedMap } from '../seed.js';
@@ -31,7 +32,7 @@ const exampleMaps = () => {
 };
 
 const SEEDS = {
-  'org-example': { org: seedOrg, strategy: seedStrategy, maps: exampleMaps, radio: seedRadio },
+  'org-example': { org: seedOrg, strategy: seedStrategy, maps: exampleMaps, podcasts: seedPodcasts },
   'org-riverbend': {
     org: seedRiverbend,
     strategy: seedRiverbendStrategy,
@@ -47,7 +48,8 @@ export const loadOrg = () => migrateOrg(loadOrSeed('org', seedFor('org') ?? (() 
 export const loadStrategy = () => migrateStrategy(loadOrSeed('strategy', seedFor('strategy') ?? blankStrategy));
 export const loadData = () => loadOrSeed('data', () => seedData(Object.keys(measureIndex(loadStrategy()))));
 export const loadDashboards = () => loadOrSeed('dashboards', () => seedDashboards(loadStrategy()));
-export const loadRadio = () => loadOrSeed('radio', seedFor('radio') ?? blankRadio);
+export const loadPodcasts = () => migratePodcasts(loadOrSeed('podcasts', seedFor('podcasts') ?? blankPodcasts));
+export const loadPages = () => loadPagesFor(activeOrg());
 export const loadMaps = () => loadMapIndex(seedFor('maps'));
 
 export function loadAll() {
@@ -59,7 +61,8 @@ export function loadAll() {
     dashboards: loadDashboards(),
     maps,
     mapContents: loadAllMaps(maps),
-    radio: loadRadio(),
+    podcasts: loadPodcasts(),
+    pages: loadPages(),
   };
 }
 

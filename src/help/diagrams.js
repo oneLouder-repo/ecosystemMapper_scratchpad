@@ -80,7 +80,7 @@ export function lensAlignment(lenses, { order } = {}) {
 /** Boxes for each document and arrows for the ids that connect them. */
 export function dataModelDiagram() {
   const W = 1120;
-  const Hh = 640;
+  const Hh = 690;
   const el = svg('svg', { viewBox: `0 0 ${W} ${Hh}`, class: 'diagram', role: 'img',
     'aria-label': 'The documents each org holds and the ids that link them: strategy measures feed program data and dashboards, dashboards publish to sites, task assets point at map actors and staff.' });
   const defs = svg('defs', {}, el);
@@ -112,8 +112,9 @@ export function dataModelDiagram() {
   const maps = box(780, 140, 300, 'maps  +  map/<id>', ['index: title · ownerId · memberIds (staff)', 'each map: actors { place, kind }', 'connectors · groups · layers · lensId']);
   const data = box(410, 380, 300, 'data', ['series[measureId].points', '[{ date, value }] by month']);
   const dash = box(40, 380, 300, 'dashboards', ['widgets [{ type, measureId, nodeId }]', 'visibility · siteId · createdBy', 'sourceNodeId']);
-  const radio = box(780, 380, 300, 'radio  (Castopod-shaped)', ['podcasts { hostIds (staff) } · episodes', 'schedule (weekly programme)', 'station · RSS feed per show']);
-  const site = box(40, 540, 300, 'public site (site.html)', ['public dashboards for one site, live,', 'in the org’s theme, with its logo'], 'dm-out');
+  const pods = box(780, 380, 300, 'podcasts  (Castopod-shaped)', ['shows { hostIds (staff), seasons, featured }', 'episodes { season, audio: an upload }', 'station { siteId, look } · RSS per show']);
+  const pages = box(410, 540, 300, 'pages', ['pages and articles { siteId, authorId }', 'body: light markdown with live', '[[dashboard]] and [[episode]] embeds']);
+  const site = box(40, 540, 300, 'public site (site.html)', ['one site’s dashboards, pages, news', 'and podcast station, live, in the', 'org’s theme, with its logo'], 'dm-out');
 
   arrow(`M ${strat.cx} ${strat.b} V ${data.y}`, 'measureId', strat.cx + 40, (strat.b + data.y) / 2);
   arrow(`M ${data.x} ${data.cy} H ${dash.r}`, 'reads values', (data.x + dash.r) / 2, data.cy - 8);
@@ -121,5 +122,7 @@ export function dataModelDiagram() {
   arrow(`M ${strat.r} ${strat.y + 100} H ${maps.x}`, 'assets → actor', (strat.r + maps.x) / 2, strat.y + 92);
   arrow(`M ${strat.x} ${strat.y + 40} H ${org.r}`, 'staff ids', (strat.x + org.r) / 2, strat.y + 32);
   arrow(`M ${dash.cx} ${dash.b} V ${site.y}`, 'siteId', dash.cx + 30, (dash.b + site.y) / 2 + 4);
+  arrow(`M ${pages.x} ${pages.cy} H ${site.r}`, 'siteId', (pages.x + site.r) / 2, pages.cy - 8);
+  arrow(`M ${pods.cx} ${pods.b} V ${Hh - 24} H ${site.cx} V ${site.b}`, 'station.siteId', (pods.cx + pages.r) / 2 + 30, Hh - 30);
   return el;
 }

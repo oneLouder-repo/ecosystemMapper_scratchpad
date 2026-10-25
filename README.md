@@ -6,12 +6,13 @@ A small, cohesive platform for nonprofits' planning, knowledge and learning work
 | --- | --- | --- |
 | Ecosystem Mapper | `mapper.html` | Map actors, agents, relationships and loops through five systems lenses (below) |
 | Strategy & Work | `strategy.html` | Framework → plans (nested, dated, themed) → objectives → goals → workplans → tasks, with Gantt charts and task lifetime timelines |
-| Creative Palette | `palette.html` | Mini-tools for the data dialogue: design dashboards, keep program data current, publish to sites |
-| Radio & Podcasts | `radio.html` | Shows, episodes, a weekly radio programme, live player and RSS feeds (Castopod-shaped) |
+| Workbench | `palette.html` | Mini-tools for the data dialogue: design dashboards, keep program data current, publish to sites |
+| Podcasts | `podcasts.html` | Your own podcast station: shows by season, uploaded .mp3/.wav episodes, featured shows, RSS feeds, and the station's look |
+| Sites & Pages | `pages.html` | What each public site shows, plus its information pages and news articles, with live dashboard and episode embeds |
 | Organisation | `org.html` | Profile, contact, logo, people and teams, public sites and their theme, plugins, and the orgs on the platform |
 | My profile | `me.html` | The signed-in person's picture, followed strategic areas, tasks, workplans, dashboards, maps and shows |
 | Help | `help.html` | User guide, how the systems lenses line up, and the data model, with diagrams |
-| Sample public site | `site.html?site=<id>` | What the public sees: published dashboards with live data and a timeline player |
+| Sample public site | `site.html?site=<id>` | What the public sees: dashboards, pages, news and the podcast station, in the org's theme |
 
 Every plugin shares the same small framework (`src/core`), header (`src/ui/Shell.js`), data layer (`src/platform`) and UI kit ([DaisyUI](https://daisyui.com), vendored in `vendor/daisyui`, so still no build step). To add a plugin: make a page and its module, then add an entry to `src/plugins.js`; it appears on the dashboard, in the header and in Organisation → Plugins. Data autosaves to the browser for now, per organisation.
 
@@ -22,11 +23,19 @@ Two example organisations come built in (switch from the menu at the top left). 
 - The left side is the whole strategy as a tree. Click to open, **+** to add the next level down.
 - Plans, objectives, goals and workplans show a Gantt chart of the workplans beneath them. Drag a task bar to move it, drag its ends to change dates, click it to open the task. Weeks / Months / Quarters zooms.
 - A task shows its lifetime as a timeline: status over time, notes, milestones and today. Changing status records itself on the timeline.
-- Objectives and goals carry **measures** (name, target, unit). **Create dashboard** on an objective or goal builds an accessible dashboard from every measure on it and below, and opens it in the Creative Palette.
+- Objectives and goals carry **measures** (name, target, unit). **Create dashboard** on an objective or goal builds an accessible dashboard from every measure on it and below, and opens it in the Workbench.
 - Every task (and workplan) has a **toolbox of assets**: ecosystem-map actors, staff, outside people, other strategy items, documents, links, literature and media, picked from one pop-up. Workplans, goals, objectives and plans gather the assets used beneath them, showing which tasks use each one.
 - The URL holds the selected item (`strategy.html#<id>`), so links can point straight at a task.
 
-### Creative Palette and public sites, quickly
+### Podcasts and public sites, quickly
+
+- **Podcasts** holds shows, each organised by season. Upload an episode as an .mp3 or .wav file (it is kept in the browser for now), give it a season, notes and people, and publish it now, on a date, or keep it as a draft.
+- Toggle any show as a **featured show**, and drag the order with the arrows. The public **station page** leads with the newest episode, then the featured shows, then an archive of every show by season, with search.
+- The station's **look** (player style, cover art shape, banner or split header) sits on top of the org's palette and shape, so each org can skin its station.
+- **Sites & Pages** lists every site and what is on it, and is where you write pages (in the site menu) and news articles. A line like `[[dashboard:dash-equity]]` or `[[episode:ep-sv-3]]` embeds live content.
+- On a public site, links change the page without reloading, so the player keeps playing as visitors move around.
+
+### Workbench and public sites, quickly
 
 - **Dashboards**: start from an objective or goal, or blank. Each widget (headline number, line, monthly columns, work progress, text) has controls beneath it in the editor. Set visibility to Public and choose a site to publish.
 - **Play** steps a dashboard month by month through its data, in the editor and on public sites.

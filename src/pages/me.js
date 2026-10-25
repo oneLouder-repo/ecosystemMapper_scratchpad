@@ -35,7 +35,7 @@ function render() {
   const areas = nodes.filter((n) => n.type === 'objective' || n.type === 'goal');
   const myDashboards = Object.values(docs.dashboards.dashboards).filter((d) => d.createdBy === me.id);
   const myMaps = mapsFor(docs.maps, me.id);
-  const myShows = Object.values(docs.radio.podcasts).filter((p) => p.hostIds.includes(me.id));
+  const myShows = Object.values(docs.podcasts.podcasts).filter((p) => p.hostIds.includes(me.id));
   const open = myTasks.filter((t) => t.status !== 'done');
 
   const section = (title, count, body) => h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('h2', {}, title), count != null && h('span', { class: 'badge badge-ghost' }, String(count))), body);
@@ -103,7 +103,7 @@ function render() {
             h('li', { class: 'asset' }, icon('chart', 18),
               h('div', { class: 'asset-text' }, h('a', { href: `palette.html#${d.id}` }, d.title), h('small', {}, `${d.widgets.length} widgets`)),
               h('span', { class: `badge ${d.visibility}` }, d.visibility))))
-        : empty('Make one from an objective in Strategy & Work, or in the Creative Palette.')),
+        : empty('Make one from an objective in Strategy & Work, or in the Workbench.')),
 
       section('My ecosystem maps', myMaps.length, myMaps.length
         ? h('ul', { class: 'asset-list' }, myMaps.map((m) =>
@@ -115,7 +115,7 @@ function render() {
 
       myShows.length > 0 && section('Shows I host', myShows.length,
         h('ul', { class: 'asset-list' }, myShows.map((p) =>
-          h('li', { class: 'asset' }, icon('radio', 18), h('div', { class: 'asset-text' }, h('a', { href: `radio.html#${p.id}` }, p.title), h('small', {}, p.category)))))),
+          h('li', { class: 'asset' }, icon('mic', 18), h('div', { class: 'asset-text' }, h('a', { href: `podcasts.html#${p.id}` }, p.title), h('small', {}, p.category)))))),
     ),
     h('p', { class: 'note' }, 'Accounts are mocked for now: use the menu under your picture (top right) to see the platform as anyone in the org.'),
   ));

@@ -5,7 +5,7 @@ import { Player } from './Player.js';
 
 /**
  * A whole dashboard: title, description, the timeline player and the
- * widget grid. Used by the Creative Palette (with `decorate` to add edit
+ * widget grid. Used by the Workbench (with `decorate` to add edit
  * controls to each widget) and by public sites.
  */
 export function DashboardView(dash, docs, { decorate, asOf: start } = {}) {

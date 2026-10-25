@@ -3,7 +3,7 @@ import { measuresUnder, rootOf, childrenOf, descendants } from './strategy.js';
 import { dataMonths } from './data.js';
 
 /**
- * Dashboards, made in the Creative Palette and published to sites.
+ * Dashboards, made in the Workbench and published to sites.
  * { id, dashboards: { [id]: Dashboard } }
  *
  * Dashboard {
