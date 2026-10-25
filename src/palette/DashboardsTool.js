@@ -24,9 +24,9 @@ function Gallery(ctx) {
     h('p', { class: 'lede' }, 'Design dashboards from your strategy measures and program data. Keep them private for staff and the board, or publish them to a public site.'),
     h('div', { class: 'editor-bar' },
       h('label', {}, 'Start from', from),
-      h('button', { onclick: () => ctx.create(from.value) }, 'Create dashboard'),
+      h('button', { class: 'btn btn-sm btn-primary', onclick: () => ctx.create(from.value) }, 'Create dashboard'),
       h('span', { class: 'muted' }, 'or'),
-      h('button', { class: 'secondary', onclick: () => ctx.create() }, 'Blank dashboard')),
+      h('button', { class: 'btn btn-sm', onclick: () => ctx.create() }, 'Blank dashboard')),
     list.length
       ? h('div', { class: 'cards' }, list.map((d) => {
           const site = ctx.org.sites[d.siteId];
@@ -76,9 +76,9 @@ function Editor(ctx, dash) {
       w.type === 'text' && h('input', { name: `${w.id}-text`, value: w.text ?? '', placeholder: 'Text', 'aria-label': 'Widget text', onchange: (e) => setWidget(w.id, { text: e.target.value }) }),
       h('select', { name: `${w.id}-size`, 'aria-label': 'Size', onchange: (e) => setWidget(w.id, { size: e.target.value }) },
         options([{ id: 'small', label: 'Small' }, { id: 'wide', label: 'Wide' }, { id: 'full', label: 'Full width' }], w.size)),
-      h('button', { class: 'secondary', title: 'Move earlier', 'aria-label': 'Move earlier', disabled: i === 0, onclick: () => move(i, -1) }, '←'),
-      h('button', { class: 'secondary', title: 'Move later', 'aria-label': 'Move later', disabled: i === dash.widgets.length - 1, onclick: () => move(i, 1) }, '→'),
-      h('button', { class: 'secondary danger', title: 'Remove widget', 'aria-label': 'Remove widget', onclick: () => update({ widgets: dash.widgets.filter((x) => x.id !== w.id) }) }, '×')));
+      h('button', { class: 'btn btn-sm', title: 'Move earlier', 'aria-label': 'Move earlier', disabled: i === 0, onclick: () => move(i, -1) }, '←'),
+      h('button', { class: 'btn btn-sm', title: 'Move later', 'aria-label': 'Move later', disabled: i === dash.widgets.length - 1, onclick: () => move(i, 1) }, '→'),
+      h('button', { class: 'btn btn-sm btn-ghost btn-error', title: 'Remove widget', 'aria-label': 'Remove widget', onclick: () => update({ widgets: dash.widgets.filter((x) => x.id !== w.id) }) }, '×')));
     return el;
   };
 
@@ -97,8 +97,8 @@ function Editor(ctx, dash) {
         h('select', { name: 'siteId', onchange: (e) => update({ siteId: e.target.value || null }) },
           h('option', { value: '' }, 'No site'),
           options(sites.map((s) => ({ id: s.id, label: `${s.name} (${s.visibility})` })), dash.siteId))),
-      site && h('a', { href: siteUrl(dash), target: '_blank', class: 'secondary' }, dash.visibility === 'public' ? 'View on site ↗' : 'Preview on site ↗'),
-      h('button', { class: 'secondary danger', onclick: () => {
+      site && h('a', { href: siteUrl(dash), target: '_blank', class: 'btn btn-sm' }, dash.visibility === 'public' ? 'View on site ↗' : 'Preview on site ↗'),
+      h('button', { class: 'btn btn-sm btn-ghost btn-error', onclick: () => {
         if (!confirm(`Delete “${dash.title}”? You can undo.`)) return;
         ctx.go('dashboards');
         dashboards.apply(col.remove('dashboards', dash.id));
@@ -112,7 +112,7 @@ function Editor(ctx, dash) {
     preview,
     h('div', { class: 'add-widget' },
       addType,
-      h('button', { onclick: () => {
+      h('button', { class: 'btn btn-sm btn-primary', onclick: () => {
         const type = addType.value;
         const first = { measure: { measureId: measures[0]?.id }, node: { nodeId: dash.sourceNodeId ?? nodes[0]?.id }, null: { title: 'Heading', text: 'Say what this shows and why it matters.' } };
         update({ widgets: [...dash.widgets, widget(type, first[WIDGET_TYPES.find((t) => t.id === type).needs])] });

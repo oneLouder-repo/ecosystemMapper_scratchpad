@@ -17,7 +17,7 @@ export function Player({ months, value, onChange, stepMs = 700 }) {
     'aria-label': 'Month', 'aria-valuetext': months.length ? monthLabel(months[i]) : '',
     oninput: (e) => go(+e.target.value),
   });
-  const button = h('button', { class: 'player-play', 'aria-pressed': 'false', onclick: () => (timer ? stop() : play()) }, '▶ Play');
+  const button = h('button', { class: 'btn btn-sm btn-primary player-play', 'aria-pressed': 'false', onclick: () => (timer ? stop() : play()) }, '▶ Play');
 
   function go(n) {
     i = Math.max(0, Math.min(months.length - 1, n));

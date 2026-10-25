@@ -34,16 +34,21 @@ const SHAPES = {
   'm-meetings': { from: 0, to: 23, season: 0, round: 1, cumulative: true },
   'm-views': { from: 90, to: 410, season: 0.25, round: 1 },
   'm-reporting': { from: 30, to: 78, season: 0, round: 1 },
+  'm-meals': { from: 1900, to: 3600, season: -0.12, round: 10 },
+  'm-boxes': { from: 120, to: 260, season: -0.1, round: 1 },
 };
 
-export function seedData() {
+/** Example data for the given measures (by default, every example measure). */
+export function seedData(ids = Object.keys(SHAPES)) {
   const months = [];
   for (let y = 2025, m = 4; y < 2026 || m <= 10; ) {
     months.push(`${y}-${String(m).padStart(2, '0')}-01`);
     if (++m > 12) { m = 1; y++; }
   }
   const series = {};
-  for (const [id, s] of Object.entries(SHAPES)) {
+  for (const id of ids) {
+    const s = SHAPES[id];
+    if (!s) continue;
     let seed = id.length * 97;
     const noise = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280 - 0.5) * 0.04;
     const points = months.map((date, i) => {

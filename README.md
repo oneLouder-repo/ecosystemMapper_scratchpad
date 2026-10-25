@@ -1,16 +1,21 @@
 # Org Toolbox (scratchpad)
 
-A small, cohesive toolbox for a nonprofit's planning, knowledge and learning work. Open `index.html` (via `npm start`) for the dashboard, then choose a tool:
+A small, cohesive platform for nonprofits' planning, knowledge and learning work. It holds many organisations; each picks the **plugins** it uses. Open `index.html` (via `npm start`) for the dashboard, then choose a plugin:
 
-| Tool | Page | What it does |
+| Plugin | Page | What it does |
 | --- | --- | --- |
 | Ecosystem Mapper | `mapper.html` | Map actors, agents, relationships and loops through five systems lenses (below) |
 | Strategy & Work | `strategy.html` | Framework → plans (nested, dated, themed) → objectives → goals → workplans → tasks, with Gantt charts and task lifetime timelines |
 | Creative Palette | `palette.html` | Mini-tools for the data dialogue: design dashboards, keep program data current, publish to sites |
-| Org Overview | `org.html` | Staff, teams, roles and public sites |
+| Radio & Podcasts | `radio.html` | Shows, episodes, a weekly radio programme, live player and RSS feeds (Castopod-shaped) |
+| Organisation | `org.html` | Profile, contact, logo, people and teams, public sites and their theme, plugins, and the orgs on the platform |
+| My profile | `me.html` | The signed-in person's picture, followed strategic areas, tasks, workplans, dashboards, maps and shows |
+| Help | `help.html` | User guide, how the systems lenses line up, and the data model, with diagrams |
 | Sample public site | `site.html?site=<id>` | What the public sees: published dashboards with live data and a timeline player |
 
-Every tool shares the same small framework (`src/core`), header (`src/ui/Shell.js`) and data layer (`src/platform`). To add a tool: make a page and its module, then add an entry to `src/toolbox.js`; it appears on the dashboard and in the header. Each tool's data autosaves to the browser for now; **Example** buttons reload the shared example data.
+Every plugin shares the same small framework (`src/core`), header (`src/ui/Shell.js`), data layer (`src/platform`) and UI kit ([DaisyUI](https://daisyui.com), vendored in `vendor/daisyui`, so still no build step). To add a plugin: make a page and its module, then add an entry to `src/plugins.js`; it appears on the dashboard, in the header and in Organisation → Plugins. Data autosaves to the browser for now, per organisation.
+
+Two example organisations come built in (switch from the menu at the top left). Accounts are mocked: the menu under your picture signs you in as anyone on staff.
 
 ### Strategy & Work, quickly
 

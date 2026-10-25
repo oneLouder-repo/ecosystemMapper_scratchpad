@@ -30,6 +30,13 @@ export const ICONS = {
   media: 'M3 5 H21 V19 H3 Z M10 9 V15 L15 12 Z',
   person: 'M12 8 A3.5 3.5 0 1 0 12.01 8 Z M5 20 C5.5 15.5 8 14 12 14 S18.5 15.5 19 20',
   chart: 'M4 4 V20 H20 M8 16 V12 M12 16 V8 M16 16 V11',
+  radio: 'M4 9 H20 V20 H4 Z M7 9 L17 4 M8 14.5 A2 2 0 1 0 8.01 14.5 Z M13 13 H17 M13 16 H17',
+  help: 'M12 3 A9 9 0 1 0 12.01 3 Z M9.5 9.5 A2.5 2.5 0 1 1 12 12 V14 M12 17 V17.5',
+  play: 'M7 4 V20 L20 12 Z',
+  pause: 'M7 4 H10 V20 H7 Z M14 4 H17 V20 H14 Z',
+  rss: 'M5 5 A14 14 0 0 1 19 19 M5 10 A9 9 0 0 1 14 19 M6 18 A1 1 0 1 0 6.01 18 Z',
+  settings: 'M12 9 A3 3 0 1 0 12.01 9 Z M12 2 V5 M12 19 V22 M2 12 H5 M19 12 H22 M4.9 4.9 L7 7 M17 17 L19.1 19.1 M4.9 19.1 L7 17 M17 7 L19.1 4.9',
+  swap: 'M4 8 H18 L14 4 M20 16 H6 L10 20',
 };
 
 export function icon(nameOrPath, size = 20) {

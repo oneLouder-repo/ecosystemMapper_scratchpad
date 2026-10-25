@@ -78,7 +78,7 @@ test('statusAt replays a task’s status history', () => {
 });
 
 test('assets resolve against the map, org and strategy, and survive deletion', () => {
-  const docs = { map: seedMap(), org: seedOrg(), strategy: strategy() };
+  const docs = { mapContents: { 'map-ecosystem': seedMap() }, org: seedOrg(), strategy: strategy() };
   const used = Object.values(docs.strategy.nodes).flatMap((n) => n.assets ?? []);
   assert.ok(used.length >= 10);
   for (const a of used) {
@@ -86,9 +86,10 @@ test('assets resolve against the map, org and strategy, and survive deletion', (
     assert.equal(resolveAsset(a, docs).missing, undefined, `${a.label} resolves`);
   }
   const actor = used.find((a) => a.kind === 'actor');
-  docs.map.actors[actor.ref].label = 'Renamed';
+  docs.mapContents['map-ecosystem'].actors[actor.ref].label = 'Renamed';
   assert.equal(resolveAsset(actor, docs).label, 'Renamed');
-  delete docs.map.actors[actor.ref];
+  assert.equal(resolveAsset(actor, docs).href, 'mapper.html#map-ecosystem');
+  delete docs.mapContents['map-ecosystem'].actors[actor.ref];
   const gone = resolveAsset(actor, docs);
   assert.equal(gone.missing, true);
   assert.equal(gone.label, actor.label, 'falls back to the saved label');

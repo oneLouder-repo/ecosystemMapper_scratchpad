@@ -7,6 +7,7 @@ import { autosaveDoc, onDocChange } from '../platform/storage.js';
 import { loadOrg, loadStrategy, loadData, loadDashboards } from '../platform/docs.js';
 import { migrateStrategy } from '../platform/strategy.js';
 import { dashboardFromNode } from '../platform/dashboards.js';
+import { currentUser } from '../platform/session.js';
 import { DashboardsTool } from './DashboardsTool.js';
 import { DataTool } from './DataTool.js';
 import { PublishTool } from './PublishTool.js';
@@ -55,9 +56,10 @@ const ctx = {
   },
   /** Make a dashboard (blank, or from an objective or goal) and open it. */
   create(nodeId) {
+    const me = currentUser(org)?.id ?? null;
     const dash = nodeId
-      ? dashboardFromNode(strategy, nodeId)
-      : { title: 'Untitled dashboard', description: '', visibility: 'private', siteId: null, widgets: [] };
+      ? dashboardFromNode(strategy, nodeId, me)
+      : { title: 'Untitled dashboard', description: '', visibility: 'private', siteId: null, createdBy: me, widgets: [] };
     const op = dashboards.apply(col.add('dashboards', dash));
     ctx.go(op.id);
   },

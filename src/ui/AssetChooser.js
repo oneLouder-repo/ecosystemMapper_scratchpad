@@ -9,7 +9,7 @@ import { NODE_TYPES } from '../platform/strategy.js';
  * kind; each calls pick(asset). The dialog stays open so several things
  * can be added, and items already added show as added.
  *
- *   openAssetChooser({ docs: { map, org, strategy }, node, current: () => assets, onPick })
+ *   openAssetChooser({ docs: { maps, mapContents, org, strategy }, node, current: () => assets, onPick })
  *
  * To add a kind, add a picker to PICKERS with the same id as in ASSET_KINDS.
  */
@@ -35,7 +35,7 @@ export function openAssetChooser({ docs, node, current, onPick, kind = 'actor' }
   dialog.append(
     h('div', { class: 'chooser-head' },
       h('strong', { id: 'chooser-title' }, `Add to the toolbox for “${node.title}”`),
-      h('button', { class: 'secondary', onclick: () => dialog.close() }, 'Done')),
+      h('button', { class: 'btn btn-sm', onclick: () => dialog.close() }, 'Done')),
     h('div', { class: 'chooser-body' }, kinds, pane));
   dialog.addEventListener('close', () => dialog.remove());
   document.body.append(dialog);
@@ -77,21 +77,23 @@ function form(fields, submit, button = 'Add') {
     if (submit(values) !== false) e.target.reset();
   } },
     fields.map(([name, label]) => h('label', {}, label, inputs[name])),
-    h('button', { type: 'submit' }, button));
+    h('button', { class: 'btn btn-sm btn-primary', type: 'submit' }, button));
 }
 
 const PICKERS = {
   actor: ({ docs, used, pick }) => {
-    const actors = Object.values(docs.map?.actors ?? {}).sort((a, b) => a.label.localeCompare(b.label));
-    if (!actors.length) return h('p', { class: 'muted' }, 'The ecosystem map has no actors yet. ', h('a', { href: 'mapper.html' }, 'Open the mapper'), '.');
+    // Every map's actors, grouped by map.
+    const items = Object.values(docs.maps?.maps ?? {}).flatMap((entry) =>
+      Object.values(docs.mapContents?.[entry.id]?.actors ?? {}).sort((a, b) => a.label.localeCompare(b.label)).map((a) => ({
+        group: entry.title,
+        label: a.label,
+        sub: `${a.kind === 'agent' ? 'Agent' : 'Actor'} · ${a.category.replace(/-/g, ' ')}`,
+        asset: { kind: 'actor', mapId: entry.id, ref: a.id, label: a.label },
+      })));
+    if (!items.length) return h('p', { class: 'muted' }, 'Your ecosystem maps have no actors yet. ', h('a', { href: 'mapper.html' }, 'Open the mapper'), '.');
     return [
-      h('p', { class: 'muted' }, 'Actors and agents from your ecosystem map. Renaming one on the map renames it here.'),
-      ...pickList({ name: 'q-actor', used, pick, placeholder: 'Search the map…',
-        items: actors.map((a) => ({
-          label: a.label,
-          sub: `${a.kind === 'agent' ? 'Agent' : 'Actor'} · ${a.category.replace(/-/g, ' ')}`,
-          asset: { kind: 'actor', ref: a.id, label: a.label },
-        })) }),
+      h('p', { class: 'muted' }, 'Actors and agents from your ecosystem maps. Renaming one on its map renames it here.'),
+      ...pickList({ name: 'q-actor', used, pick, placeholder: 'Search your maps…', items }),
     ];
   },
 
@@ -132,7 +134,7 @@ const PICKERS = {
     return [
       note,
       h('label', {}, 'Upload a file', file),
-      h('button', { onclick: () => {
+      h('button', { class: 'btn btn-sm btn-primary', onclick: () => {
         const f = file.files[0];
         if (!f) return;
         const detail = `${f.type || 'File'} · ${Math.ceil(f.size / 1024)} KB`;

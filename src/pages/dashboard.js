@@ -1,8 +1,9 @@
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { Shell } from '../ui/Shell.js';
-import { TOOLBOX } from '../toolbox.js';
+import { enabledPlugins } from '../plugins.js';
 import { loadAll } from '../platform/docs.js';
+import { currentUser } from '../platform/session.js';
 import { statusById } from '../platform/strategy.js';
 import { addDays, short, today } from '../strategy/dates.js';
 
@@ -10,6 +11,8 @@ const docs = loadAll();
 const { org, strategy, dashboards } = docs;
 
 Shell(document.querySelector('#shell'), { current: 'home', org });
+const me = currentUser(org);
+const myOpen = Object.values(strategy.nodes).filter((n) => n.type === 'task' && n.status !== 'done' && n.assigneeIds.includes(me?.id)).length;
 
 // Tasks that are open and due in the next 30 days, or overdue.
 const now = today();
@@ -23,9 +26,10 @@ document.querySelector('#app').replaceChildren(
   h('div', { class: 'page' },
     h('h1', {}, org.name),
     h('p', { class: 'lede' }, org.mission),
-    h('h2', {}, 'Your toolbox'),
+    me && h('p', {}, `Welcome back, ${me.name.split(' ')[0]}. `, h('a', { href: 'me.html' }, `You have ${myOpen} open task${myOpen === 1 ? '' : 's'}`), '.'),
+    h('h2', {}, 'Your plugins'),
     h('div', { class: 'cards' },
-      TOOLBOX.map((tool) =>
+      enabledPlugins(org).map((tool) =>
         h('a', { class: 'card', href: tool.href },
           h('h3', {}, icon(tool.icon, 26), tool.name),
           h('p', {}, tool.blurb),
@@ -57,6 +61,6 @@ document.querySelector('#app').replaceChildren(
             shown.length ? `${shown.length} live dashboard${shown.length > 1 ? 's' : ''}` : 'No dashboards yet'));
       })),
     h('p', { class: 'note' },
-      'Coming next: staff accounts with roles and sandboxes, feedback forms on public dashboards, and program data fed straight from your systems.'),
+      'Coming next: real accounts and roles with the server, sandboxes, feedback forms on public dashboards, and program data fed straight from your systems.'),
   ),
 );

@@ -64,7 +64,7 @@ export function Inspector(el, ctx) {
       field('Type', h('select', { onchange: (e) => store.apply(ops.updateConnector(c.id, { type: e.target.value })) }, typeOptions(lens, c.type))),
       field('Layer', layerSelect(c, ops.updateConnector)),
       h('button', {
-        class: 'secondary',
+        class: 'btn btn-sm',
         onclick: () => store.apply(ops.batch([
           ops.dockConnector(c.id, 'from', c.to),
           ops.dockConnector(c.id, 'to', c.from),
@@ -79,7 +79,7 @@ export function Inspector(el, ctx) {
       field('Name', h('input', { value: g.label, onchange: (e) => store.apply(ops.updateGroup(g.id, { label: e.target.value })) })),
       h('p', { class: 'muted' }, `${g.memberIds.length} members: ${g.memberIds.map((id) => store.map.actors[id]?.label || 'Untitled').join(', ')}`),
       field('Layer', layerSelect(g, ops.updateGroup)),
-      h('button', { class: 'secondary', onclick: () => ctx.actions.ungroup(g.id) }, 'Ungroup (keeps the actors)'),
+      h('button', { class: 'btn btn-sm', onclick: () => ctx.actions.ungroup(g.id) }, 'Ungroup (keeps the actors)'),
     ];
   }
 
@@ -107,7 +107,7 @@ export function Inspector(el, ctx) {
     if (count > 1) {
       body = [
         h('h2', {}, `${count} selected`),
-        actorIds.length > 1 && h('button', { onclick: () => ctx.actions.groupSelection() }, 'Group these actors (Ctrl+G)'),
+        actorIds.length > 1 && h('button', { class: 'btn btn-sm btn-primary', onclick: () => ctx.actions.groupSelection() }, 'Group these actors (Ctrl+G)'),
         h('p', { class: 'muted' }, 'Press Delete to remove them.'),
       ];
     } else if (actorIds.length) body = renderActor(store.map.actors[actorIds[0]]);

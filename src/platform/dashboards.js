@@ -11,6 +11,7 @@ import { dataMonths } from './data.js';
  *   visibility: 'private' | 'public',   public ones show on their site
  *   siteId,                             which org site publishes it
  *   sourceNodeId,                       the objective or goal it was made from, if any
+ *   createdBy,                          staff id of whoever made it
  *   widgets: [Widget],
  * }
  * Widget { id, type, size: 'small' | 'wide', title?, text?, measureId?, nodeId? }
@@ -41,17 +42,18 @@ export const widget = (type, more = {}) => ({
  * then a headline number and a line chart for every measure on it and
  * beneath it, then the progress of the work that serves it.
  */
-export function dashboardFromNode(strategy, nodeId) {
+export function dashboardFromNode(strategy, nodeId, createdBy = null) {
   const node = strategy.nodes[nodeId];
   const measures = measuresUnder(strategy, nodeId);
   const goals = childrenOf(strategy, nodeId).filter((n) => n.type === 'goal').map((g) => g.title);
-  const intro = node.notes || (goals.length ? `How we are doing on ${goals.length} goals: ${goals.join('; ')}.` : `Progress on ${node.title.toLowerCase()}.`);
+  const intro = node.notes || (goals.length ? `How we are doing on ${goals.length === 1 ? 'our goal' : `${goals.length} goals`}: ${goals.join('; ')}.` : `Progress on ${node.title.toLowerCase()}.`);
   return {
     title: node.title,
     description: `Live from our program data. Part of ${rootOf(strategy)?.title ?? 'our strategy'}.`,
     visibility: 'private',
     siteId: null,
     sourceNodeId: nodeId,
+    createdBy,
     widgets: [
       widget('text', { title: node.title, text: intro }),
       ...measures.map((m) => widget('kpi', { measureId: m.id })),
@@ -67,9 +69,16 @@ export function dashboardMonths(dash, data) {
   return dataMonths(data, ids.length ? ids : undefined);
 }
 
+/** Example dashboards: one public dashboard per example org. */
 export function seedDashboards(strategy) {
-  const objective = Object.values(strategy.nodes).find((n) => n.type === 'objective' && n.measures?.some((m) => m.id === 'm-reach'));
-  const dash = { ...dashboardFromNode(strategy, objective.id), id: 'dash-equity', visibility: 'public', siteId: 'site-impact' };
-  dash.title = 'Reach and equity';
-  return { id: 'dashboards-example', dashboards: { [dash.id]: dash } };
+  const examples = [
+    { objectiveId: 'obj-equity', id: 'dash-equity', title: 'Reach and equity', siteId: 'site-impact', createdBy: 's-eval' },
+    { objectiveId: 'obj-meals', id: 'dash-meals', title: 'Meals and good food boxes', siteId: 'site-main', createdBy: 'r-lead' },
+  ];
+  const dashboards = {};
+  for (const ex of examples) {
+    if (!strategy.nodes[ex.objectiveId]) continue;
+    dashboards[ex.id] = { ...dashboardFromNode(strategy, ex.objectiveId, ex.createdBy), id: ex.id, title: ex.title, visibility: 'public', siteId: ex.siteId };
+  }
+  return { id: 'dashboards', dashboards };
 }
