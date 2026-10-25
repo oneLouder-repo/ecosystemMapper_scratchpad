@@ -34,8 +34,8 @@ export const HELP_SEED = {
 # Tips
 - Click a zone of the lens (like Meso) and the actors in it signal.
 - **Tidy** (beside Fit) spaces the actors out for the lens you're on. Each stays in its zone and layer; Undo puts them back.
-- Put actors into **groups** to show coalitions or sectors, give a group a description, and move it to its own layer to show and hide it.
-- **Data viz** (D): click an actor or connector to light up everything it's connected to for 15 seconds. The info box says who is part of planned work in Strategy & Work.
+- Put actors into **groups** to show coalitions or sectors, give a group a description, and move it (with its connectors) to its own layer to show and hide it.
+- **Data viz** (D): click an actor or connector to light up everything it's connected to for 15 seconds while the rest dims.
 - A task in Strategy & Work can point at map actors as assets, so work and the ecosystem stay linked.
 - Members of a map can edit it; everyone else in the organisation can view it.`,
         },

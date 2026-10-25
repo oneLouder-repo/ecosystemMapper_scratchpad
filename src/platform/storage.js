@@ -80,19 +80,35 @@ async function send(name) {
     const doc = job.next;
     job.next = null;
     try {
+      // No keepalive here: browsers cap keepalive requests at 64 KB in total, so
+      // a big document (a map) or a few saves in a row would fail outright.
       const res = await fetch(`/api/docs/${encodeURIComponent(name)}`, {
-        method: 'PUT', keepalive: JSON.stringify(doc).length < 60000,
-        headers: { 'content-type': 'application/json', 'x-toolbox': '1' }, body: JSON.stringify(doc),
+        method: 'PUT', headers: { 'content-type': 'application/json', 'x-toolbox': '1' }, body: JSON.stringify(doc),
       });
       if (!res.ok) saveProblem(name, res.status === 403 ? 'You can’t change this here.' : `The server said ${res.status}.`);
-    } catch {
-      saveProblem(name, 'The server could not be reached.');
-      job.next ??= doc; // Try again with the next change.
+      job.retries = 0;
+    } catch (err) {
+      console.warn(`Saving ${name}: the request failed`, err);
+      job.next ??= doc;
+      // Try again shortly (2s, 4s, 8s… up to a minute); the next change also retries.
+      job.retries = (job.retries ?? 0) + 1;
+      if (job.retries > 2) saveProblem(name, 'The server could not be reached. Your changes will be saved when it’s back.');
+      clearTimeout(job.timer);
+      job.timer = setTimeout(() => send(name), Math.min(60000, 1000 * 2 ** job.retries));
       break;
     }
   }
   job.busy = false;
 }
+// Leaving the page: send whatever is still waiting, if it's small enough to go with keepalive.
+if (hosted) window.addEventListener('pagehide', () => {
+  for (const [name, job] of Object.entries(sending)) {
+    if (!job.next) continue;
+    const body = JSON.stringify(job.next);
+    if (new Blob([body]).size > 60000) continue;
+    fetch(`/api/docs/${encodeURIComponent(name)}`, { method: 'PUT', keepalive: true, headers: { 'content-type': 'application/json', 'x-toolbox': '1' }, body }).catch(() => {});
+  }
+});
 function saveProblem(name, why) {
   console.warn(`Saving ${name} failed: ${why}`);
   window.dispatchEvent(new CustomEvent('toolbox:save-failed', { detail: { name, why } }));

@@ -77,14 +77,12 @@ test('tidy keeps every actor in its zone (and grid column), and spaces them out'
 });
 
 test('data viz lights up an actor’s connections, or a connector’s two ends', async () => {
-  const { relatedTo, workByActor } = await import('../src/tools/DataVizTool.js');
+  const { relatedTo } = await import('../src/display/related.js');
   const { seedMap } = await import('../src/seed.js');
-  const { seedStrategy } = await import('../src/platform/strategySeed.js');
   const map = seedMap();
   const lit = relatedTo(map, 'actor-indig-comm');
   assert.ok(lit.has('actor-actua') && lit.has('actor-indig-youth') && lit.has('actor-indig-gov'));
   assert.ok(!lit.has('actor-ised'));
   const conn = Object.values(map.connectors).find((c) => c.label === 'core funding');
   assert.deepEqual([...relatedTo(map, conn.id)].sort(), [conn.id, 'actor-actua', 'actor-ised'].sort());
-  assert.ok(workByActor(seedStrategy())['actor-indig-comm']?.length > 0, 'the example strategy has work with Indigenous communities');
 });

@@ -47,7 +47,8 @@ export function Inspector(el, ctx) {
       field('Category', h('select', { onchange: (e) => store.apply(ops.updateActor(a.id, { category: e.target.value })) }, categoryOptions(lens, a.category))),
       field('Region', h('output', {}, [region?.label, column?.label].filter(Boolean).join(' · ') || 'Outside the lens')),
       field('Depth', h('output', { class: 'muted' }, `${Math.round(a.place.depth * 100)}% from surface (explicit) to deep (implicit)`)),
-      field('Layer', layerSelect(a, ops.updateActor)),
+      field('Layer', h('select', { onchange: (e) => store.apply(ops.batch(ctx.actions.actorsToLayerOps([a.id], e.target.value))) },
+        options(store.map.layers.map((l) => ({ id: l.id, label: l.name })), a.layerId ?? store.map.layers[0]?.id))),
       field('Notes', h('textarea', {
         rows: 5,
         value: a.meta?.notes ?? '',
@@ -91,7 +92,7 @@ export function Inspector(el, ctx) {
       h('p', { class: 'muted' }, `${g.memberIds.length} members: ${g.memberIds.map((id) => store.map.actors[id]?.label || 'Untitled').join(', ')}`),
       field('Layer', layerSelect(g, ops.updateGroup)),
       h('div', { class: 'inspector-actions' },
-        h('button', { class: 'btn btn-sm', title: 'Move the group, its actors and the connectors between them onto a new layer', onclick: () => ctx.actions.groupToLayer(g.id) }, 'Move to its own layer'),
+        h('button', { class: 'btn btn-sm', title: 'Move the group, its actors and their connectors onto a new layer', onclick: () => ctx.actions.groupToLayer(g.id) }, 'Move to its own layer'),
         h('button', { class: 'btn btn-sm btn-ghost', onclick: () => ctx.actions.ungroup(g.id) }, 'Ungroup (keeps the actors)')),
     ];
   }
@@ -108,7 +109,7 @@ export function Inspector(el, ctx) {
         h('li', {}, 'Click a zone of the lens to make its actors signal.'),
         h('li', {}, 'Drag a box to select several. Ctrl or ⌘ + G groups them.'),
         h('li', {}, 'Select a connector, then drag its round ends to re-dock it.'),
-        h('li', {}, 'Data viz (D): click anything to see what it’s connected to, and who is part of planned work.'),
+        h('li', {}, 'Data viz (D): click anything to light up what it’s connected to for 15 seconds.'),
         h('li', {}, 'Scroll or hold Space to pan, Ctrl or ⌘ + scroll to zoom, F to fit, Tidy to space actors out.'),
       ),
     ];

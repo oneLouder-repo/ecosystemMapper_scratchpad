@@ -16,8 +16,8 @@ import { LayersPanel } from './ui/LayersPanel.js';
 import { LabelEditor } from './ui/LabelEditor.js';
 import { seedMap, migrateMap } from './seed.js';
 import { Shell } from './ui/Shell.js';
-import { autosaveDoc, saveDoc, onDocChange } from './platform/storage.js';
-import { loadOrg, loadMaps, loadStrategy } from './platform/docs.js';
+import { autosaveDoc, saveDoc } from './platform/storage.js';
+import { loadOrg, loadMaps } from './platform/docs.js';
 import { loadMapContent, mapDocName, createMapIn } from './platform/maps.js';
 import { currentUser } from './platform/session.js';
 
@@ -53,10 +53,6 @@ fitView();
  * The context every tool and panel receives. Add shared helpers to
  * `actions` rather than reaching into other modules.
  */
-// The org's strategy, for the data viz tool (which actors are part of planned work).
-let strategy = loadStrategy();
-onDocChange('strategy', (doc) => { strategy = doc; });
-
 /** The board's visible area, in world coordinates. */
 function viewRect() {
   const r = stage.svgEl.getBoundingClientRect();
@@ -71,7 +67,6 @@ const ctx = {
   ops,
   mapView,
   tools: null,
-  strategy: () => strategy,
   ui: { activeLayerId: store.map.layers[0]?.id, editLabel: null },
   actions: {
     addActorAt(x, y, kind = 'actor') {
@@ -108,18 +103,33 @@ const ctx = {
       const moves = Object.entries(places).map(([id, place]) => ops.moveActor(id, place));
       if (moves.length) store.apply(ops.batch(moves));
     },
-    /** Move a group, its actors and the connectors between them onto a new layer named after it. */
+    /**
+     * Ops to move actors to a layer, taking their connectors along: every
+     * connector touching one of them that was on that actor's old layer.
+     */
+    actorsToLayerOps(actorIds, layerId) {
+      const map = store.map;
+      const base = map.layers[0]?.id;
+      const moving = new Set(actorIds);
+      const list = actorIds.map((id) => ops.updateActor(id, { layerId }));
+      for (const c of Object.values(map.connectors)) {
+        const ends = [c.from?.actorId, c.to?.actorId].filter((id) => moving.has(id));
+        const travels = ends.some((id) => (map.actors[id].layerId ?? base) === (c.layerId ?? base));
+        if (travels && (c.layerId ?? base) !== layerId) list.push(ops.updateConnector(c.id, { layerId }));
+      }
+      return list;
+    },
+    /** Move a group, its actors and their connectors onto a new layer named after it. */
     groupToLayer(groupId) {
       const map = store.map;
       const g = map.groups[groupId];
       if (!g) return;
       const layerId = uid('layer');
-      const list = [ops.addLayer({ id: layerId, name: g.label || 'Group' })];
-      const members = new Set(g.memberIds);
-      const inside = Object.values(map.connectors).filter((c) => members.has(c.from?.actorId) && members.has(c.to?.actorId));
-      for (const id of g.memberIds) list.push(ops.updateActor(id, { layerId }));
-      for (const c of inside) list.push(ops.updateConnector(c.id, { layerId }));
-      list.push(ops.updateGroup(g.id, { layerId }));
+      const list = [
+        ops.addLayer({ id: layerId, name: g.label || 'Group' }),
+        ...ctx.actions.actorsToLayerOps(g.memberIds, layerId),
+        ops.updateGroup(g.id, { layerId }),
+      ];
       store.apply(ops.batch(list));
       ctx.ui.activeLayerId = layerId;
       mapView.select([]);

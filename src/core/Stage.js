@@ -30,9 +30,10 @@ export class Stage extends DisplayObject {
 
     // Fixed layers, back to front.
     this.lensLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-lens' })));
-    this.groupLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-groups' })));
+    // Groups sit on top: their frames only catch the pointer on the outline and tab.
     this.connectorLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-connectors' })));
     this.actorLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-actors' })));
+    this.groupLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-groups' })));
     this.overlayLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-overlay' })));
 
     this.#bindPointer();

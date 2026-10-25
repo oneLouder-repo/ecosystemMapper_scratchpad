@@ -66,23 +66,33 @@ const TIDY = {
     for (const band of layouts.rings.bandsOf(lens)) {
       const members = actors.filter((a) => regionForDepth(lens, a.place.depth) === band.region);
       if (!members.length) continue;
-      // Sub-rings across the band's thickness, clear of its edges.
-      // (Rings sit a card's width apart, so cards side by side at 3 and 9 o'clock don't touch.)
-      const lo = band.inner ? band.inner + h / 2 + 12 : Math.min(90, band.outer / 2);
-      const hi = band.outer - h / 2 - 12;
-      const k = Math.max(1, Math.floor((hi - lo) / (w + GAP_X)) + 1);
-      const radii = k === 1 ? [(lo + hi) / 2] : Array.from({ length: k }, (_, i) => lo + ((hi - lo) * i) / (k - 1));
+      // Rings within the band, a card's width apart (so cards side by side at
+      // 3 and 9 o'clock don't touch), from the outer edge inwards. The centre
+      // of the innermost disc can hold one more.
+      const hi = band.outer - h / 2 - 14;
+      const lo = band.inner ? band.inner + h / 2 + 14 : 0;
+      const radii = [];
+      for (let r = hi; r >= lo - 1 && r > 0; r -= w + GAP_X) radii.push(r);
+      if (!band.inner && (radii.at(-1) ?? hi) > w + GAP_X) radii.push(0);
+      if (!radii.length) radii.push((band.inner + band.outer) / 2);
       // Leave the top of each ring clear for its label.
-      const gapOf = (r) => Math.min(0.9, 130 / r);
-      const caps = radii.map((r) => Math.max(1, Math.floor(((2 * Math.PI - 2 * gapOf(r)) * r) / (w + GAP_X))));
+      const gapOf = (r) => (r ? Math.min(0.8, 80 / r) : 0);
+      const capOf = (r) => (r ? Math.max(1, Math.floor(((2 * Math.PI - 2 * gapOf(r)) * r) / (w + GAP_X))) : 1);
+      // Fill the outer rings first (more room), spilling inwards only as needed.
+      let left = members.length;
+      const counts = radii.map((r) => { const c = Math.min(left, capOf(r)); left -= c; return c; });
+      for (let i = 0; left > 0; i = (i + 1) % radii.length, left--) counts[i]++;
+      const used = radii.map((r, i) => ({ r, c: counts[i] })).filter((x) => x.c);
       const angleOf = (a) => ((a.place.spread * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
       const list = ordered(members, angleOf, groupOf);
-      const slot = share(list.length, caps);
-      const rings = radii.map(() => []);
+      // Each ring takes items from all the way round, so every ring spans the full circle.
+      const slot = share(list.length, used.map((x) => x.c));
+      const rings = used.map(() => []);
       list.forEach((a, i) => rings[slot[i]].push(a));
+      const radiiUsed = used.map((x) => x.r);
       rings.forEach((ring, ri) => {
         if (!ring.length) return;
-        const r = radii[ri];
+        const r = radiiUsed[ri];
         const gap = gapOf(r);
         const span = 2 * Math.PI - 2 * gap;
         const at = (shift) => ring.map((_, j) => {
