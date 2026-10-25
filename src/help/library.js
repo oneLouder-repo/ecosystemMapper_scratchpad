@@ -28,11 +28,14 @@ export const HELP_SEED = {
 # Make your first map
 1. Open **Ecosystem Mapper** from the header and press **New map**.
 2. Pick a lens to draw behind the map. You can switch lens at any time.
-3. Use the **Actor** tool to add the people, organisations and forces in your ecosystem. Drag an actor to change how deep it sits.
-4. Use the **Connect** tool to draw relationships between actors, and label them.
+3. Click **Actor** or **Agent** to add one, or drag the button onto the board to drop it where you want. Drag an actor to change how deep it sits.
+4. Drag from the small box on an actor's top-left corner to another actor to connect them. Pick the connector's type and its strength (1 to 5, drawn as thickness) on the right. Each type has its own line end.
 
 # Tips
-- Put actors into **groups** to show coalitions or sectors, and into **layers** to show and hide parts of the map.
+- Click a zone of the lens (like Meso) and the actors in it signal.
+- **Tidy** (beside Fit) spaces the actors out for the lens you're on. Each stays in its zone and layer; Undo puts them back.
+- Put actors into **groups** to show coalitions or sectors, give a group a description, and move it to its own layer to show and hide it.
+- **Data viz** (D): click an actor or connector to light up everything it's connected to for 15 seconds. The info box says who is part of planned work in Strategy & Work.
 - A task in Strategy & Work can point at map actors as assets, so work and the ecosystem stay linked.
 - Members of a map can edit it; everyone else in the organisation can view it.`,
         },

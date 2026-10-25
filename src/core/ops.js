@@ -51,11 +51,14 @@ export const ops = {
   moveActor: (id, place) => ({ op: 'moveActor', id, place }),
   removeActor: (id) => ({ op: 'removeActor', id }),
 
-  /** A dock is { actorId } (attached) or { x, y } (a floating end). */
+  /**
+   * A dock is { actorId } (attached) or { x, y } (a floating end).
+   * `strength` (1–5) is how strong the connection is, drawn as line thickness.
+   */
   addConnector: ({ id = uid('conn'), ...data }) => ({
     op: 'addConnector',
     id,
-    data: { from: null, to: null, type: 'relationship', label: '', layerId: null, ...data },
+    data: { from: null, to: null, type: 'relationship', label: '', strength: 3, layerId: null, ...data },
   }),
   updateConnector: (id, patch) => ({ op: 'updateConnector', id, patch }),
   dockConnector: (id, end, dock) => ({ op: 'dockConnector', id, end, dock }),
@@ -65,7 +68,7 @@ export const ops = {
   addGroup: ({ id = uid('group'), ...data }) => ({
     op: 'addGroup',
     id,
-    data: { label: 'Group', memberIds: [], layerId: null, ...data },
+    data: { label: 'Group', description: '', memberIds: [], layerId: null, ...data },
   }),
   updateGroup: (id, patch) => ({ op: 'updateGroup', id, patch }),
   removeGroup: (id) => ({ op: 'removeGroup', id }),

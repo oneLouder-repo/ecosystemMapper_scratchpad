@@ -231,3 +231,45 @@ main { grid-area: board; position: relative; min-width: 0; }
 [data-theme='toolbox'] .btn:not(.btn-primary, .btn-ghost, .btn-error, .btn-success, .btn-active, .btn-link) { --btn-bg: var(--color-base-100); --btn-border: var(--color-base-300); }
 .tabs a, a.tab { text-decoration: none; }
 a.btn { text-decoration: none; }
+
+/* Round 9: dock boxes, signals, connector ends and strength, data viz, drag-to-add. */
+.tool.armed { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.tool-sep { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; width: auto; }
+.tool-add { cursor: grab; touch-action: none; }
+.drag-actor { position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none; margin: -29px 0 0 -75px; width: 150px; height: 58px; display: grid; place-items: center; border-radius: 8px; background: #cfd5e2; border: 1.5px dashed #2d3448; font-size: 14px; font-weight: 600; color: var(--ink); opacity: 0.7; box-shadow: 0 6px 18px rgb(20 30 60 / 0.2); }
+.drag-actor.agent { border-style: solid; border-width: 2px; }
+.drag-actor.over { opacity: 0.95; }
+.actor .actor-dock, .actor.selected .actor-dock, .actor.agent .actor-dock, .actor.unmapped .actor-dock { fill: #fff; stroke: #2d3448; stroke-width: 1.5; stroke-opacity: 1; stroke-dasharray: none; filter: none; opacity: 0.55; cursor: crosshair; transition: opacity 120ms; }
+.actor:hover .actor-dock, .actor.selected .actor-dock, svg.connecting .actor-dock { opacity: 1; }
+.actor .actor-dock:hover { fill: var(--accent); stroke: var(--accent); }
+.actor.target rect:not(.actor-dock):not(.actor-ping) { stroke: var(--accent); stroke-width: 4; stroke-opacity: 1; }
+.actor .actor-ping { fill: none !important; stroke: var(--accent); stroke-width: 3; opacity: 0; filter: none; pointer-events: none; }
+.lens-region.flash { filter: brightness(0.9) saturate(1.6); stroke: var(--accent); stroke-dasharray: none; stroke-width: 3; }
+.connector-cap { stroke: currentColor; stroke-linejoin: round; stroke-linecap: round; fill: none; pointer-events: none; }
+.connector-cap.filled { fill: currentColor; }
+.connector-cap.hollow { fill: var(--bg); }
+.connector.selected .connector-hit { stroke: var(--accent); stroke-opacity: 0.18; }
+.connector.unmapped .connector-cap { color: #aab; }
+svg.dataviz-focus .layer-actors > g, svg.dataviz-focus .layer-connectors > g, svg.dataviz-focus .layer-groups > g { opacity: 0.25; transition: opacity 250ms; }
+svg.dataviz-focus .layer-actors > g.focus, svg.dataviz-focus .layer-connectors > g.focus, svg.dataviz-focus .layer-groups > g.focus { opacity: 1; }
+svg.dataviz-focus .connector.focus .connector-line { animation: connector-pulse 1.1s ease-in-out infinite; }
+@keyframes connector-pulse { 50% { stroke-opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { svg.dataviz-focus .connector.focus .connector-line { animation: none; } }
+.dataviz-box { position: absolute; top: 12px; left: 12px; width: 320px; max-height: calc(100% - 24px); overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-box); box-shadow: 0 8px 24px rgb(20 30 60 / 0.16); font-size: 14px; z-index: 5; }
+.dataviz-box header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.dv-body { padding: 10px 12px; }
+.dv-body p { margin: 0 0 8px; }
+.dv-focus-title { display: flex; justify-content: space-between; gap: 8px; }
+.dv-left { color: var(--muted); font-variant-numeric: tabular-nums; }
+.dv-actors, .dv-names { list-style: none; padding: 0; margin: 0 0 10px; display: grid; gap: 6px; }
+.dv-actors > li { border-left: 3px solid var(--line); padding-left: 8px; }
+.dv-actors > li.engaged { border-left-color: var(--accent); }
+.dv-work { margin: 2px 0 0; padding-left: 16px; font-size: 13px; }
+.dv-work small, .dv-names small { color: var(--muted); }
+.dv-none { font-size: 12px; color: var(--muted); margin: 2px 0 0 !important; }
+.strength-picker { display: flex; gap: 4px; }
+.strength-picker button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0 4px; border: 1px solid var(--line); border-radius: var(--radius-field); background: var(--panel); font-size: 12px; cursor: pointer; }
+.strength-picker button .strength-line { display: block; width: 70%; background: var(--ink); border-radius: 3px; }
+.strength-picker button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.strength-picker button.on .strength-line { background: var(--accent); }
+.inspector-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }

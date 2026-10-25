@@ -1,5 +1,5 @@
 import { EventDispatcher } from '../core/EventDispatcher.js';
-import { project } from '../lenses/index.js';
+import { project, regionAt } from '../lenses/index.js';
 import { ActorView } from './ActorView.js';
 import { ConnectorView } from './ConnectorView.js';
 import { GroupView } from './GroupView.js';
@@ -98,6 +98,28 @@ export class MapView extends EventDispatcher {
       this.selection.delete(id);
     }
     this.dispatchEvent('selection');
+  }
+
+  /** Every visible actor in a lens region signals once, and the region lights up. */
+  signalRegion(regionId) {
+    const lens = this.lens;
+    this.lensView.flash(regionId);
+    for (const a of Object.values(this.store.map.actors)) {
+      const view = this.#actors.get(a.id);
+      if (view?.visible && regionAt(lens, a.place)?.id === regionId) view.signal();
+    }
+  }
+
+  /**
+   * Data viz focus: these actors and connectors pulse, everything else dims.
+   * Pass null to clear it.
+   */
+  focus(ids) {
+    const on = ids ? new Set(ids) : null;
+    this.stage.svgEl.classList.toggle('dataviz-focus', Boolean(on));
+    for (const [id, view] of this.#actors) view.pulsing = Boolean(on?.has(id));
+    for (const [id, view] of this.#connectors) view.node.classList.toggle('focus', Boolean(on?.has(id)));
+    for (const [id, view] of this.#groups) view.node.classList.toggle('focus', Boolean(on?.has(id)));
   }
 
   selectedItems() {

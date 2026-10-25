@@ -1,9 +1,12 @@
 import { Sprite } from '../core/Sprite.js';
 import { regionAt, unproject } from '../lenses/index.js';
+import { startConnect, moveConnect, endConnect, cancelConnect } from './connectDrag.js';
 
 /**
  * Select, move and re-dock.
  *   click an actor or connector   select it (shift toggles it in the selection)
+ *   drag an actor's dock box      draw a connector to another actor
+ *   click a zone of the lens      the actors in that zone signal
  *   drag empty board              draw a marquee to select everything it touches
  *   drag a selected actor         move every selected actor together
  *   drag a group's frame or tab   move the whole group
@@ -25,6 +28,11 @@ export default {
     const { view } = e;
     const { map } = ctx.store;
     const { mapView } = ctx;
+
+    if (view?.kind === 'actor' && e.dock) {
+      drag = { kind: 'connect', pending: startConnect(e, ctx) };
+      return;
+    }
 
     if (view?.kind === 'connector' && e.handle && view.selected) {
       drag = { kind: 'dock', id: view.id, end: e.handle, original: structuredClone(map.connectors[view.id][e.handle]) };
@@ -66,7 +74,7 @@ export default {
     marquee.node.classList.add('marquee');
     marquee.rect = marquee.draw('rect');
     ctx.stage.overlayLayer.addChild(marquee);
-    drag = { kind: 'marquee', x: e.worldX, y: e.worldY, marquee, base: e.shiftKey ? [...mapView.selection] : [] };
+    drag = { kind: 'marquee', x: e.worldX, y: e.worldY, marquee, base: e.shiftKey ? [...mapView.selection] : [], zone: mapView.lensView.regionOf(e.target) };
     if (!e.shiftKey) mapView.select([]);
   },
 
@@ -74,7 +82,9 @@ export default {
     if (!drag) return;
     const { store, ops, mapView } = ctx;
 
-    if (drag.kind === 'move') {
+    if (drag.kind === 'connect') {
+      moveConnect(drag.pending, e, ctx);
+    } else if (drag.kind === 'move') {
       drag.moved = true;
       store.apply(moveOp(drag, e, ctx), { history: false });
       const lead = store.map.actors[drag.lead];
@@ -94,7 +104,9 @@ export default {
     if (!drag) return;
     const { store, ops, mapView } = ctx;
 
-    if (drag.kind === 'move' && drag.moved) {
+    if (drag.kind === 'connect') {
+      endConnect(drag.pending, e, ctx);
+    } else if (drag.kind === 'move' && drag.moved) {
       store.apply(moveOp(drag, e, ctx), {
         inverse: ops.batch(drag.start.map((a) => ops.moveActor(a.id, a.place))),
       });
@@ -113,6 +125,9 @@ export default {
       });
     } else if (drag.kind === 'marquee') {
       drag.marquee.parent?.removeChild(drag.marquee);
+      // A click (not a drag) on a zone makes its actors signal.
+      const click = Math.hypot(e.worldX - drag.x, e.worldY - drag.y) * ctx.stage.scale < 4;
+      if (click && drag.zone) mapView.signalRegion(drag.zone);
     }
     drag = null;
   },
@@ -132,6 +147,7 @@ export default {
 
   deactivate(ctx) {
     if (drag?.kind === 'marquee') drag.marquee.parent?.removeChild(drag.marquee);
+    if (drag?.kind === 'connect') cancelConnect(drag.pending, ctx);
     ctx.mapView.lensView.highlight(null);
     drag = null;
   },

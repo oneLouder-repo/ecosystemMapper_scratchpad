@@ -1,6 +1,14 @@
 import { Sprite } from '../core/Sprite.js';
 
-/** One actor on the board: a rounded card coloured by its lens category. */
+/**
+ * One actor on the board: a rounded card coloured by its lens category,
+ * with a dock box at its top-left corner: drag from it to draw a connector.
+ *
+ *   signal()        one ping, e.g. when its zone is clicked
+ *   pulsing = true  keep pinging (data viz focus)
+ */
+const SIGNAL_MS = 1100;
+
 export class ActorView extends Sprite {
   interactive = true;
   kind = 'actor';
@@ -10,10 +18,13 @@ export class ActorView extends Sprite {
     super();
     this.id = id;
     this.node.classList.add('actor');
+    this.ping = this.draw('rect', { class: 'actor-ping' });
     this.box = this.draw('rect');
     this.mark = this.draw('path', { class: 'agent-mark' });
     this.text = this.draw('text', { class: 'actor-label', 'text-anchor': 'middle' });
     this.badge = this.draw('text', { class: 'actor-badge', 'text-anchor': 'middle' });
+    this.dock = this.draw('rect', { class: 'actor-dock', width: 16, height: 16, rx: 3, 'data-dock': '' });
+    this.dock.append(Object.assign(document.createElementNS('http://www.w3.org/2000/svg', 'title'), { textContent: 'Drag to connect' }));
   }
 
   update(actor, lens) {
@@ -28,8 +39,12 @@ export class ActorView extends Sprite {
     const agent = actor.kind === 'agent';
     this.node.classList.toggle('unmapped', !category);
     this.node.classList.toggle('agent', agent);
-    // Agents carry a solid corner notch, a placeholder mark for agency.
-    this.mark.setAttribute('d', agent ? `M ${-w / 2} ${-h / 2} h 16 L ${-w / 2} ${-h / 2 + 16} Z` : '');
+    // Agents carry a solid notch in the top-right corner, a placeholder mark for agency.
+    this.mark.setAttribute('d', agent ? `M ${w / 2} ${-h / 2} h -16 L ${w / 2} ${-h / 2 + 16} Z` : '');
+    this.dock.setAttribute('x', -w / 2 - 6);
+    this.dock.setAttribute('y', -h / 2 - 6);
+    for (const [k, v] of Object.entries({ x: -w / 2, y: -h / 2, width: w, height: h, rx: 8 })) this.ping.setAttribute(k, v);
+    this.size = { w, h };
     this.box.style.fill = category?.color ?? '';
     this.#setLabel(actor.label || 'Untitled', w, h);
     this.badge.setAttribute('y', h / 2 - 9);
@@ -62,6 +77,36 @@ export class ActorView extends Sprite {
       this.box.style.strokeOpacity = '';
     }
   }
+
+  /** Ping once: a ring spreads out from the card and fades. */
+  signal() {
+    this.#signalStart = null;
+    this.addEventListener('enterFrame', this.#signal);
+  }
+
+  get pulsing() { return this.#pulsing; }
+  set pulsing(v) {
+    this.#pulsing = v;
+    this.node.classList.toggle('focus', v);
+    if (v) this.signal();
+  }
+
+  #pulsing = false;
+  #signalStart = null;
+  #signal = (e) => {
+    this.#signalStart ??= e.time;
+    const t = (e.time - this.#signalStart) / SIGNAL_MS;
+    if (t >= 1) {
+      this.ping.style.opacity = 0;
+      if (this.#pulsing) { this.#signalStart = e.time; return; }
+      this.removeEventListener('enterFrame', this.#signal);
+      return;
+    }
+    const grow = 4 + t * 22;
+    const { w, h } = this.size ?? { w: 150, h: 58 };
+    for (const [k, v] of Object.entries({ x: -w / 2 - grow, y: -h / 2 - grow, width: w + grow * 2, height: h + grow * 2, rx: 8 + grow })) this.ping.setAttribute(k, v);
+    this.ping.style.opacity = (1 - t) * 0.9;
+  };
 
   // A gentle breathing outline while selected, to show off enterFrame.
   #pulse = (e) => {

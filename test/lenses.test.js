@@ -56,3 +56,35 @@ test('grid columns follow spread', () => {
   assert.equal(columnAt(tosc, { depth: 0.5, spread: -0.9 }).id, 'adopt');
   assert.equal(columnAt(tosc, { depth: 0.5, spread: 0.9 }).id, 'respond');
 });
+
+test('tidy keeps every actor in its zone (and grid column), and spaces them out', async () => {
+  const { tidyPlaces } = await import('../src/lenses/tidy.js');
+  const { seedMap } = await import('../src/seed.js');
+  const actors = Object.values(seedMap().actors).map((a) => ({ id: a.id, place: a.place, w: a.w, h: a.h }));
+  for (const lens of Object.values(lenses)) {
+    const places = tidyPlaces(lens, actors);
+    assert.equal(Object.keys(places).length, actors.length, lens.id);
+    const pts = [];
+    for (const a of actors) {
+      assert.equal(regionAt(lens, places[a.id]).id, regionAt(lens, a.place).id, `${lens.id}: ${a.id} stays in its zone`);
+      if (lens.columns) assert.equal(columnAt(lens, places[a.id]).id, columnAt(lens, a.place).id, `${lens.id}: ${a.id} stays in its column`);
+      pts.push(project(lens, places[a.id]));
+    }
+    let overlaps = 0;
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) if (Math.abs(pts[i].x - pts[j].x) < 150 && Math.abs(pts[i].y - pts[j].y) < 58) overlaps++;
+    assert.ok(overlaps <= 3, `${lens.id}: ${overlaps} overlapping cards`);
+  }
+});
+
+test('data viz lights up an actor’s connections, or a connector’s two ends', async () => {
+  const { relatedTo, workByActor } = await import('../src/tools/DataVizTool.js');
+  const { seedMap } = await import('../src/seed.js');
+  const { seedStrategy } = await import('../src/platform/strategySeed.js');
+  const map = seedMap();
+  const lit = relatedTo(map, 'actor-indig-comm');
+  assert.ok(lit.has('actor-actua') && lit.has('actor-indig-youth') && lit.has('actor-indig-gov'));
+  assert.ok(!lit.has('actor-ised'));
+  const conn = Object.values(map.connectors).find((c) => c.label === 'core funding');
+  assert.deepEqual([...relatedTo(map, conn.id)].sort(), [conn.id, 'actor-actua', 'actor-ised'].sort());
+  assert.ok(workByActor(seedStrategy())['actor-indig-comm']?.length > 0, 'the example strategy has work with Indigenous communities');
+});
