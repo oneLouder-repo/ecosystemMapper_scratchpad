@@ -2,7 +2,7 @@
   "name": "ecosystem-mapper",
   "version": "0.1.0",
   "private": true,
-  "description": "Org Toolbox: planning, ecosystem mapping, data dashboards, podcasts and public sites for small nonprofits.",
+  "description": "Dashi: planning, ecosystem mapping, data dashboards, podcasts and public sites for small nonprofits.",
   "type": "module",
   "scripts": {
     "start": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server.js",

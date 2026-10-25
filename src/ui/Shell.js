@@ -1,5 +1,6 @@
 import { h } from './dom.js';
 import { icon } from './icons.js';
+import { Wordmark } from './Wordmark.js';
 import { enabledPlugins } from '../plugins.js';
 import { ROLES, initials } from '../platform/org.js';
 import { orgList, openOrg, createOrg, currentUser, signInAs, can, signOut, signedInUser, platformUrl } from '../platform/session.js';
@@ -22,7 +23,7 @@ export function Shell(el, { current, org }) {
     h('details', { class: 'dropdown shell-org' },
       h('summary', { class: 'shell-brand', title: 'Switch organisation' },
         Logo(org, 26),
-        h('span', { class: 'shell-org-text' }, h('strong', {}, 'Org Toolbox'), h('span', {}, org.name)),
+        h('span', { class: 'shell-org-text' }, h('strong', { class: 'shell-dashi' }, Wordmark(13, { text: false }), 'Dashi'), h('span', {}, org.name)),
         h('span', { class: 'caret-down', 'aria-hidden': 'true' }, '▾')),
       h('ul', { class: 'menu dropdown-content shell-menu' },
         h('li', { class: 'menu-title' }, 'Organisations'),

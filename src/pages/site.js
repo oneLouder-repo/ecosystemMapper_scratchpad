@@ -120,7 +120,7 @@ function render() {
   const navLink = (key, href, label) => h('a', { href, 'aria-current': current === key ? 'page' : null }, label);
 
   root.replaceChildren(
-    staffView && h('div', { class: 'preview-banner' }, isHosted() ? 'You’re signed in, so this is the public site as visitors see it. ' : 'Sample public site, made by Org Toolbox from live data. ', h('a', { href: 'pages.html' }, 'Back to the toolbox')),
+    staffView && h('div', { class: 'preview-banner' }, isHosted() ? 'You’re signed in, so this is the public site as visitors see it. ' : 'Sample public site, made by Dashi from live data. ', h('a', { href: 'pages.html' }, 'Back to Dashi')),
     h('header', { class: 'site-head' },
       h('div', { class: 'inner' },
         h('a', { class: 'site-brand', href: link({}) }, Logo(org, 36), h('strong', {}, org.name)),

@@ -14,6 +14,7 @@ import { Markdown } from '../ui/markdown.js';
 import { readImage } from '../ui/images.js';
 import { EpisodeCard, ShowCard, Player } from '../site/station.js';
 import { today, short } from '../strategy/dates.js';
+import { PluginHeader } from '../ui/PluginHeader.js';
 
 /**
  * Sites & Pages: the admin for an org's public sites. One place to see
@@ -89,8 +90,9 @@ function newPage(kind) {
 function Sites() {
   const sites = Object.values(org.sites);
   return h('div', {},
-    h('h1', {}, 'Your sites'),
-    h('p', { class: 'lede muted' }, 'Each public site can carry dashboards, information pages, news and your podcast station. They all wear your organisation’s theme.'),
+    PluginHeader('pages'),
+    h('h2', {}, 'Your sites'),
+    h('p', { class: 'muted' }, 'Each public site can carry dashboards, information pages, news and your podcast station. They all wear your organisation’s theme.'),
     h('div', { class: 'site-cards' }, sites.map((s) => {
       const c = siteContent(doc(), s.id, now);
       const dashes = publicDashboards().filter((d) => d.siteId === s.id);

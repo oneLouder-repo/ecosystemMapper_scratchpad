@@ -9,7 +9,7 @@ import { loadOrg } from '../platform/docs.js';
 import { ROLES, staffList, teamList, membersOf } from '../platform/org.js';
 import { orgList, openOrg, createOrg, deleteOrg, renameOrg, platformUrl } from '../platform/session.js';
 import { PALETTES, SHAPES, applyTheme } from '../platform/themes.js';
-import { PLUGINS } from '../plugins.js';
+import { PLUGINS, pausedForOrg } from '../plugins.js';
 
 /**
  * Organisation settings: the org's profile, people, public sites and their
@@ -176,6 +176,8 @@ function Plugins(org) {
         h('h3', {}, icon(p.icon, 24), p.name, h('span', { class: 'spacer' }),
           p.core
             ? h('span', { class: 'badge badge-ghost' }, 'Always on')
+            : pausedForOrg(org, p.id)
+            ? h('span', { class: 'badge badge-warning badge-soft', title: 'Ask the platform admin to switch it on' }, 'Not in your plan')
             : h('input', { type: 'checkbox', class: 'toggle toggle-primary', 'aria-label': `Use ${p.name}`, checked: org.plugins[p.id] !== false,
                 onchange: (e) => set('plugins', { ...org.plugins, [p.id]: e.target.checked }) })),
         h('p', {}, p.blurb)))));

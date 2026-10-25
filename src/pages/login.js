@@ -1,4 +1,5 @@
 import { h } from '../ui/dom.js';
+import { Wordmark } from '../ui/Wordmark.js';
 import { initials } from '../platform/org.js';
 
 /**
@@ -29,7 +30,7 @@ const password = h('input', { class: 'input w-full', type: 'password', name: 'pa
 
 app.replaceChildren(h('div', { class: 'login-wrap' },
   h('div', { class: 'login-box card' },
-    h('p', { class: 'eyebrow' }, 'Org Toolbox'),
+    h('p', { class: 'eyebrow' }, Wordmark(20)),
     h('h1', {}, options.org ? `Sign in to ${options.org.name}` : 'Sign in'),
     options.google && h('a', { class: 'btn w-full google-btn', href: `/auth/google?next=${encodeURIComponent(safeNext)}` },
       h('span', { class: 'g-mark', 'aria-hidden': 'true' }, 'G'), 'Continue with Google'),

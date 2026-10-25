@@ -10,6 +10,7 @@
  *   memberships  who belongs to which org, as which staff record and role
  *   docs         each org's documents (org, strategy, maps, podcasts...), as JSON
  *   media        uploaded files (podcast audio), stored in data/media/
+ *   platform_docs  the platform's own documents (the help library)
  *   sessions     signed-in browsers; handoffs: one-time tokens to carry a
  *                sign-in to another of the platform's hosts
  */
@@ -44,6 +45,10 @@ const SCHEMA = [
      token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
      host TEXT NOT NULL, expires_at INTEGER NOT NULL)`,
   `CREATE TABLE oauth_states (state TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL)`,
+  // Plugins the platform admin has paused for an org, e.g. {"podcasts": true}.
+  `ALTER TABLE orgs ADD COLUMN paused_plugins TEXT NOT NULL DEFAULT '{}'`,
+  // Documents that belong to the platform, not an org (the help library).
+  `CREATE TABLE platform_docs (name TEXT PRIMARY KEY, json TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT)`,
 ];
 
 export function openDb(dataDir) {

@@ -75,3 +75,33 @@ test('collection ops: set and batch undo cleanly', () => {
   assert.equal(store.doc.name, 'Example STEM Outreach Network');
   assert.equal(Object.keys(store.doc.teams).length, 5);
 });
+
+test('strategy reports: treemap layout, workplan progress and roadmap lights', async () => {
+  const { squarify, strategyTree, workplanProgress, roadmap, lightOf } = await import('../src/platform/strategyReports.js');
+  const rects = squarify([{ value: 6 }, { value: 6 }, { value: 4 }, { value: 3 }, { value: 2 }, { value: 2 }, { value: 1 }], { x: 0, y: 0, w: 600, h: 400 });
+  const area = rects.reduce((s, r) => s + r.w * r.h, 0);
+  assert.ok(Math.abs(area - 600 * 400) < 1e-6, 'the rectangles fill the space');
+  for (const r of rects) assert.ok(r.x >= -1e-9 && r.y >= -1e-9 && r.x + r.w <= 600 + 1e-6 && r.y + r.h <= 400 + 1e-6, 'and stay inside it');
+  assert.ok(Math.abs(rects.find((r) => r.item.value === 6).w * rects.find((r) => r.item.value === 6).h - 600 * 400 * 6 / 24) < 1e-6, 'area follows value');
+
+  const doc = seedStrategy();
+  const tree = strategyTree(doc);
+  const leaves = [];
+  const walk = (t) => (t.children.length ? t.children.forEach(walk) : leaves.push(t.node.type));
+  walk(tree);
+  assert.ok(leaves.includes('workplan') && !leaves.includes('task'), 'the treemap stops at workplans');
+
+  const rows = roadmap(doc);
+  assert.equal(rows.length, Object.values(doc.nodes).filter((n) => n.type === 'workplan').length);
+  const tasks = rows.flatMap((r) => r.tasks);
+  assert.equal(tasks.length, Object.values(doc.nodes).filter((n) => n.type === 'task').length, 'every task is on the roadmap once');
+  assert.deepEqual(['done', 'active', 'blocked', 'planned'].map((status) => lightOf({ status })), ['green', 'amber', 'amber', 'red']);
+
+  const wp = rows.find((r) => r.workplan.title === 'Instructor training refresh').workplan;
+  const early = workplanProgress(doc, wp.id, '2026-08-01');
+  assert.equal(early.expected, 0);
+  const late = workplanProgress(doc, wp.id, '2027-03-15');
+  assert.equal(late.expected, 100);
+  assert.equal(late.state, 'behind', 'one task of five done after the end date');
+  assert.equal(late.pct, 20);
+});

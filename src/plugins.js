@@ -89,5 +89,7 @@ export const PLUGINS = [
   },
 ];
 
-/** The plugins this org has switched on. */
-export const enabledPlugins = (org) => PLUGINS.filter((p) => p.core || org.plugins?.[p.id] !== false);
+/** Paused by the platform admin (hosted only): the org can't switch it on itself. */
+export const pausedForOrg = (org, id) => !!org.platform?.paused?.[id];
+/** The plugins this org has switched on (and the platform hasn't paused). */
+export const enabledPlugins = (org) => PLUGINS.filter((p) => p.core || (!pausedForOrg(org, p.id) && org.plugins?.[p.id] !== false));

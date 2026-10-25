@@ -171,3 +171,38 @@ test('passwords are hashed and checked', async () => {
   assert.equal((await call(EX, 'POST', '/api/auth/password', { body: { email: 'ben@example.org', password: 'wrong' } })).status, 401);
   assert.equal((await call(EX, 'POST', '/api/auth/password', { body: { email: 'BEN@example.org', password: 'correct horse battery' } })).status, 200);
 });
+
+test('the platform admin switches plugins on for an org, or pauses them', async () => {
+  const admin = await signIn('admin@localhost', 'localhost');
+  const amara = await signIn('amara@example.org');
+  const plugins = (id, body, cookie = admin) => call('localhost', 'POST', `/api/admin/orgs/${id}/plugins`, { body, cookie });
+  assert.equal((await plugins('org-riverbend', { plugin: 'podcasts', on: true }, amara)).status, 403);
+  // Riverbend had switched podcasts off; switching it on from the console turns it on in their settings too.
+  await plugins('org-riverbend', { plugin: 'podcasts', on: true });
+  const orgs = (await call('localhost', 'GET', '/api/admin/orgs', { cookie: admin })).json;
+  assert.equal(orgs.find((o) => o.id === 'org-riverbend').chosen.podcasts, true);
+  // Pausing keeps the content but hides it, from members and the public.
+  await plugins('org-example', { plugin: 'pages', on: false });
+  const member = (await call(EX, 'GET', '/api/session', { cookie: amara })).json;
+  assert.equal(member.docs.org.platform.paused.pages, true);
+  assert.ok(Object.keys(member.docs.pages.pages).length > 0, 'the pages are still there');
+  assert.equal(Object.keys((await call(EX, 'GET', '/api/session')).json.docs.pages.pages).length, 0, 'but not on the public site');
+  // An org can't unpause itself by writing its own org doc.
+  const doc = { ...member.docs.org, platform: { paused: {} } };
+  assert.equal((await call(EX, 'PUT', '/api/docs/org', { body: doc, cookie: amara })).status, 200);
+  assert.equal((await call(EX, 'GET', '/api/session', { cookie: amara })).json.docs.org.platform.paused.pages, true);
+  await plugins('org-example', { plugin: 'pages', on: true });
+  assert.ok(Object.keys((await call(EX, 'GET', '/api/session')).json.docs.pages.pages).length > 0);
+});
+
+test('only the platform admin edits the help library', async () => {
+  const admin = await signIn('admin@localhost', 'localhost');
+  const amara = await signIn('amara@example.org');
+  assert.equal((await call(EX, 'GET', '/api/help')).json, null, 'the built-in library until someone edits it');
+  assert.equal((await call(EX, 'GET', '/api/session', { cookie: amara })).json.canEditHelp, false);
+  const lib = { version: 1, sections: [{ id: 'podcasting', title: 'Podcasting', icon: 'mic', pages: [{ id: 'start', title: 'Start', body: 'Hello' }] }] };
+  assert.equal((await call(EX, 'PUT', '/api/help', { body: lib, cookie: amara })).status, 403);
+  assert.equal((await call('localhost', 'PUT', '/api/help', { body: { nope: 1 }, cookie: admin })).status, 400);
+  assert.equal((await call('localhost', 'PUT', '/api/help', { body: lib, cookie: admin })).status, 200);
+  assert.deepEqual((await call(RB, 'GET', '/api/help')).json, lib, 'one library for every org');
+});

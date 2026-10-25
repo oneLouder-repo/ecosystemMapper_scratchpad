@@ -51,6 +51,7 @@ export const can = {
   manageOrgs: () => !hosted || !!hosted.user?.isSuper,
   viewAs: () => !hosted || !!hosted.canViewAs,
   signOut: () => !!hosted?.user,
+  editHelp: () => !hosted || !!hosted.canEditHelp,
 };
 export const signedInUser = () => hosted?.user ?? null;
 /** The platform admin page (hosted), where orgs are made and removed. */

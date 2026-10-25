@@ -18,7 +18,7 @@ import { published } from '../src/platform/podcasts.js';
 import { isLive } from '../src/platform/pages.js';
 
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o?.[k] !== undefined).map((k) => [k, o[k]]));
-const pluginOn = (org, id) => org.plugins?.[id] !== false;
+const pluginOn = (org, id) => !org.platform?.paused?.[id] && org.plugins?.[id] !== false;
 
 export function publicDocs(docs, today = new Date().toISOString().slice(0, 10)) {
   const org = docs.org;
@@ -79,7 +79,7 @@ export function publicDocs(docs, today = new Date().toISOString().slice(0, 10)) 
   out.pages = { id: 'pages', pages };
 
   out.org = {
-    ...pick(org, ['id', 'name', 'description', 'mission', 'contact', 'logo', 'theme', 'plugins']),
+    ...pick(org, ['id', 'name', 'description', 'mission', 'contact', 'logo', 'theme', 'plugins', 'platform']),
     sites,
     teams: {},
     staff: Object.fromEntries([...people].filter((id) => org.staff?.[id]).map((id) => [id, pick(org.staff[id], ['id', 'name', 'title', 'avatar'])])),

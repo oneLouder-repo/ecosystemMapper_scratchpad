@@ -1,4 +1,4 @@
-# Org Toolbox (scratchpad)
+# Dashi (scratchpad)
 
 A small, cohesive platform for nonprofits' planning, knowledge and learning work. It holds many organisations; each picks the **plugins** it uses. Open `index.html` (via `npm start`) for the dashboard, then choose a plugin:
 

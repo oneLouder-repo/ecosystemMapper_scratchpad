@@ -38,7 +38,7 @@ export async function start({ port = config.port, quiet = false } = {}) {
   const actual = server.address().port;
   if (!quiet) {
     const orgs = db.prepare('SELECT slug, name FROM orgs ORDER BY name').all();
-    log(`\nOrg Toolbox is running.\n  Platform:      ${urlFor()}`);
+    log(`\nDashi is running.\n  Platform:      ${urlFor()}`);
     for (const o of orgs) log(`  ${o.name.padEnd(30).slice(0, 30)} ${urlFor(orgHost(o.slug))}`);
     log(config.devLogin ? '\nDev sign-in is on: the sign-in page lets you be anyone.' : '');
   }

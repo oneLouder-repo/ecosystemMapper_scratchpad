@@ -13,6 +13,26 @@ export function valueAt(series, date) {
   return found;
 }
 
+/**
+ * The headline facts about a measure: its latest value, how far it is to
+ * its target, and the change over a year. Null when there is no data.
+ */
+export function measureFacts(measure, series) {
+  const points = series?.points ?? [];
+  const last = points.at(-1);
+  if (!last) return null;
+  const yearAgo = points.find((p) => p.date === `${+last.date.slice(0, 4) - 1}${last.date.slice(4)}`);
+  const target = Number(measure.target);
+  return {
+    value: last.value,
+    date: last.date,
+    points: points.slice(-12),
+    target: Number.isFinite(target) && target > 0 ? target : null,
+    ofTarget: Number.isFinite(target) && target > 0 ? Math.round((last.value / target) * 100) : null,
+    change: yearAgo && yearAgo.value ? Math.round(((last.value - yearAgo.value) / Math.abs(yearAgo.value)) * 100) : null,
+  };
+}
+
 export const pointsUntil = (series, date) => (series?.points ?? []).filter((p) => p.date <= date);
 
 /** All the months any series has data for, sorted. */

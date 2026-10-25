@@ -3,7 +3,7 @@ import { icon } from '../ui/icons.js';
 import { Shell, Avatar } from '../ui/Shell.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp, col } from '../core/collections.js';
-import { autosaveDoc } from '../platform/storage.js';
+import { autosaveDoc, isHosted } from '../platform/storage.js';
 import { loadOrg, loadPodcasts } from '../platform/docs.js';
 import { staffList } from '../platform/org.js';
 import {
@@ -12,6 +12,7 @@ import {
 import { putMedia, deleteMedia, audioDuration } from '../platform/media.js';
 import { readImage } from '../ui/images.js';
 import { Cover, Player, fmtDuration } from '../site/station.js';
+import { PluginHeader } from '../ui/PluginHeader.js';
 import { today, short } from '../strategy/dates.js';
 
 /**
@@ -110,6 +111,7 @@ function Station() {
   const publicSites = Object.values(org.sites);
 
   return h('div', {},
+    PluginHeader('podcasts', { actions: stationSite() && h('a', { class: 'btn btn-sm', href: stationUrl(), target: '_blank', rel: 'noopener' }, icon('globe', 14), 'View station') }),
     h('div', { class: 'station-admin-head' },
       CoverUpload({ title: st.name, cover: st.cover }, 112, (cover) => update({ cover }), 'Station art'),
       h('div', { class: 'show-fields' },
@@ -159,7 +161,10 @@ function Station() {
 
     h('section', { class: 'panel castopod-note' },
       h('h2', {}, 'Hosting'),
-      h('p', {}, 'For now, uploads are kept in this browser. When the Node backend arrives, it stores the audio, serves it with range requests so listeners can skip ahead, and publishes each show’s RSS feed for podcast apps. The fields follow ',
+      isHosted()
+        ? h('p', {}, 'Uploads are stored on your Dashi server, which streams them with range requests so listeners can skip ahead. Episodes stay private until they are published. The fields follow ',
+          h('a', { href: 'https://castopod.org', target: '_blank', rel: 'noopener' }, 'Castopod'), '’s model, so moving to a Castopod server later would not mean reshaping your data.')
+        : h('p', {}, 'In this local preview, uploads are kept in this browser. On a Dashi server, the server stores the audio, serves it with range requests so listeners can skip ahead, and publishes each show’s RSS feed for podcast apps. The fields follow ',
         h('a', { href: 'https://castopod.org', target: '_blank', rel: 'noopener' }, 'Castopod'), '’s model, so moving to a Castopod server later would not mean reshaping your data.')),
   );
 }

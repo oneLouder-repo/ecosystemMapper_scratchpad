@@ -1,6 +1,8 @@
 import { h, options } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { initials } from '../platform/org.js';
+import { PLUGINS } from '../plugins.js';
+import { Wordmark } from '../ui/Wordmark.js';
 
 /**
  * The platform's own site (the root domain): the organisations you can
@@ -29,7 +31,7 @@ try {
 async function render() {
   const { user } = session;
   const head = h('header', { class: 'platform-head' },
-    h('strong', {}, 'Org Toolbox'),
+    h('a', { href: '/', class: 'platform-brand', 'aria-label': 'Dashi home' }, Wordmark(22)),
     h('span', { class: 'spacer' }),
     user
       ? [h('span', { class: 'muted' }, user.email), h('button', { class: 'btn btn-sm', onclick: async () => { await call('POST', '/api/auth/logout'); location.reload(); } }, 'Sign out')]
@@ -66,6 +68,14 @@ async function render() {
   f.slug.addEventListener('input', () => { slugEdited = true; });
   const suffix = location.host;
   const u = { email: h('input', { class: 'input input-sm', type: 'email', placeholder: 'Email', required: true }), name: h('input', { class: 'input input-sm', placeholder: 'Name' }) };
+  const OPTIONAL = PLUGINS.filter((p) => !p.core);
+  const pluginToggles = (o) => h('div', { class: 'plugin-toggles' }, OPTIONAL.map((p) => {
+    const on = !o.paused[p.id] && o.chosen[p.id] !== false;
+    return h('label', { class: 'feature-toggle', title: on ? `${p.name} is on for ${o.name}` : o.paused[p.id] ? `Paused by you` : `Switched off by ${o.name}` },
+      h('input', { type: 'checkbox', class: 'toggle toggle-xs toggle-primary', checked: on,
+        onchange: (e) => act(() => call('POST', `/api/admin/orgs/${o.id}/plugins`, { plugin: p.id, on: e.target.checked })) }),
+      icon(p.icon, 14), p.name);
+  }));
   const act = async (fn) => { try { await fn(); await reload(); } catch (err) { alert(err.message); } };
 
   app.replaceChildren(head, h('div', { class: 'page' },
@@ -81,12 +91,14 @@ async function render() {
       h('p', { class: 'muted small' }, 'Their admin can then sign in with that email (with Google, or a password you set below) and add their own staff.')),
     h('section', {},
       h('h2', {}, 'Organisations'),
+      h('p', { class: 'muted small' }, 'Switch a plugin on to add it to an organisation’s plan; switch it off to pause it. A paused plugin keeps its content, but the organisation and its public site can’t use it until you switch it back on.'),
       h('div', { class: 'table-scroll' }, h('table', { class: 'table table-sm' },
-        h('thead', {}, h('tr', {}, ['Name', 'Address', 'Plan', 'People', 'Status', ''].map((t) => h('th', {}, t)))),
+        h('thead', {}, h('tr', {}, ['Name', 'Address', 'Plan', 'Plugins', 'People', 'Status', ''].map((t) => h('th', {}, t)))),
         h('tbody', {}, orgs.map((o) => h('tr', {},
           h('td', {}, h('strong', {}, o.name)),
           h('td', {}, h('a', { href: open(o) }, o.url.replace(/^https?:\/\//, ''))),
           h('td', {}, h('select', { class: 'select select-xs', 'aria-label': `Plan for ${o.name}`, onchange: (e) => act(() => call('PATCH', `/api/admin/orgs/${o.id}`, { plan: e.target.value })) }, options(PLANS, o.plan))),
+          h('td', {}, pluginToggles(o)),
           h('td', {}, o.members),
           h('td', {}, h('label', { class: 'feature-toggle' },
             h('input', { type: 'checkbox', class: 'toggle toggle-xs toggle-primary', checked: o.status === 'active', onchange: (e) => act(() => call('PATCH', `/api/admin/orgs/${o.id}`, { status: e.target.checked ? 'active' : 'suspended' })) }),

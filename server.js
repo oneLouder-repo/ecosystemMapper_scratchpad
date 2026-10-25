@@ -1,4 +1,4 @@
-// Org Toolbox: run `npm start` (or `node server.js`). Settings come from
+// Dashi: run `npm start` (or `node server.js`). Settings come from
 // environment variables or a .env file; see .env.example and DEPLOY.md.
 import { start } from './server/index.js';
 

@@ -1,4 +1,4 @@
-# Running Org Toolbox
+# Running Dashi
 
 The platform is one Node app with no dependencies to install. Its database is a single SQLite file, and uploads are files on disk, both in the `data/` folder. It needs **Node 22.13 or newer**.
 

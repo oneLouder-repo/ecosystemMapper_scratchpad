@@ -66,16 +66,23 @@ export function createApp(db) {
   const membership = (userId, orgId) => q('SELECT * FROM memberships WHERE user_id = ? AND org_id = ?').get(userId, orgId);
   const hostOf = (org) => q('SELECT host FROM domains WHERE org_id = ? ORDER BY host LIMIT 1').get(org.id)?.host ?? orgHost(org.slug);
 
+  /** What the platform admin decides for an org, carried on its org document (read only for the org). */
+  const platformPart = (orgId) => {
+    const o = orgById(orgId);
+    return { plan: o?.plan ?? 'free', paused: JSON.parse(o?.paused_plugins || '{}') };
+  };
+  const withPlatform = (orgId, name, doc) => (name === 'org' && doc ? { ...doc, platform: platformPart(orgId) } : doc);
   function readDocs(orgId) {
     const docs = {};
-    for (const row of q('SELECT name, json FROM docs WHERE org_id = ?').all(orgId)) docs[row.name] = JSON.parse(row.json);
+    for (const row of q('SELECT name, json FROM docs WHERE org_id = ?').all(orgId)) docs[row.name] = withPlatform(orgId, row.name, JSON.parse(row.json));
     return docs;
   }
   const readDoc = (orgId, name) => {
     const row = q('SELECT json FROM docs WHERE org_id = ? AND name = ?').get(orgId, name);
-    return row ? JSON.parse(row.json) : null;
+    return row ? withPlatform(orgId, name, JSON.parse(row.json)) : null;
   };
   function writeDoc(orgId, name, doc, userId = null) {
+    if (name === 'org' && doc?.platform) { doc = { ...doc }; delete doc.platform; }
     q(`INSERT INTO docs (org_id, name, json, version, updated_at, updated_by) VALUES (?, ?, ?, 1, ?, ?)
        ON CONFLICT (org_id, name) DO UPDATE SET json = excluded.json, version = version + 1, updated_at = excluded.updated_at, updated_by = excluded.updated_by`)
       .run(orgId, name, JSON.stringify(doc), now(), userId);
@@ -242,6 +249,7 @@ export function createApp(db) {
         org: a.org && { id: a.org.id, slug: a.org.slug, name: a.org.name, plan: a.org.plan, status: a.org.status },
         role: a.role, staffId: a.staffId, member: a.member, canEdit: a.canEdit, canAdmin: a.canAdmin,
         canViewAs: a.member && (a.isSuper || config.devLogin),
+        canEditHelp: a.isSuper,
         orgs: orgsFor(a.user),
         platformUrl: a.isSuper ? '/auth/root' : null,
         sessionTag: a.tag,
@@ -332,6 +340,23 @@ export function createApp(db) {
       return json(res, 200, { ok: true });
     }
 
+    /* The help library: everyone reads it; the platform admin edits it. */
+    if (path === '/api/help') {
+      if (method === 'GET') {
+        const row = q("SELECT json FROM platform_docs WHERE name = 'help'").get();
+        // Null until the platform admin first edits it: the app then shows its built-in library.
+        return json(res, 200, row ? JSON.parse(row.json) : null);
+      }
+      if (method === 'PUT') {
+        needSuper();
+        const doc = await readJson(req, config.maxJsonMb * 1048576);
+        if (!Array.isArray(doc?.sections)) throw new HttpError(400, 'Not a help library');
+        q(`INSERT INTO platform_docs (name, json, updated_at, updated_by) VALUES ('help', ?, ?, ?)
+           ON CONFLICT (name) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at, updated_by = excluded.updated_by`).run(JSON.stringify(doc), now(), a.user.id);
+        return json(res, 200, { ok: true });
+      }
+    }
+
     /* Signing in. */
     if (path === '/api/auth/options' && method === 'GET') {
       const dev = config.devLogin
@@ -369,13 +394,31 @@ export function createApp(db) {
       needSuper();
       if (path === '/api/admin/orgs' && method === 'GET') {
         return json(res, 200, q('SELECT o.*, (SELECT COUNT(*) FROM memberships m WHERE m.org_id = o.id) AS members FROM orgs o ORDER BY o.name').all()
-          .map((o) => ({ ...o, url: urlFor(hostOf(o), '/') })));
+          .map((o) => {
+            const paused = JSON.parse(o.paused_plugins || '{}');
+            const chosen = readDoc(o.id, 'org')?.plugins ?? {};
+            return { ...o, paused_plugins: undefined, paused, chosen, url: urlFor(hostOf(o), '/') };
+          }));
       }
       if (path === '/api/admin/orgs' && method === 'POST') {
         const body = await readJson(req, 10_000);
         if (!body?.name?.trim()) throw new HttpError(400, 'Give the organisation a name');
         const org = createOrg({ slug: body.slug, name: body.name.trim(), plan: body.plan || 'free', admin: body.adminEmail ? { email: body.adminEmail, name: body.adminName } : null });
         return json(res, 201, { ...org, url: urlFor(hostOf(org), '/') });
+      }
+      if ((m = path.match(/^\/api\/admin\/orgs\/([\w-]+)\/plugins$/)) && method === 'POST') {
+        // Switch a plugin on for an org (and in its own settings), or pause it.
+        const org = orgById(m[1]);
+        if (!org) throw new HttpError(404, 'No such organisation');
+        const { plugin, on } = await readJson(req, 10_000);
+        if (!/^[\w-]{1,40}$/.test(plugin ?? '')) throw new HttpError(400, 'Which plugin?');
+        const paused = JSON.parse(org.paused_plugins || '{}');
+        if (on) delete paused[plugin]; else paused[plugin] = true;
+        q('UPDATE orgs SET paused_plugins = ? WHERE id = ?').run(JSON.stringify(paused), org.id);
+        const doc = readDoc(org.id, 'org');
+        if (doc && on && doc.plugins?.[plugin] === false) writeDoc(org.id, 'org', { ...doc, plugins: { ...doc.plugins, [plugin]: true } }, a.user.id);
+        announce(org.id, 'org', null);
+        return json(res, 200, { paused });
       }
       if ((m = path.match(/^\/api\/admin\/orgs\/([\w-]+)$/))) {
         const org = orgById(m[1]);
