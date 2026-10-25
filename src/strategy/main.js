@@ -3,7 +3,8 @@ import { Shell } from '../ui/Shell.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp } from '../core/collections.js';
 import { autosaveDoc, saveDoc } from '../platform/storage.js';
-import { loadOrg, loadStrategy, loadMap } from '../platform/docs.js';
+import { loadOrg, loadStrategy, loadMaps } from '../platform/docs.js';
+import { loadAllMaps } from '../platform/maps.js';
 import { seedStrategy } from '../platform/strategySeed.js';
 import { childrenOf, rootOf, migrateStrategy, strategyOps } from '../platform/strategy.js';
 import { Tree } from './Tree.js';
@@ -23,7 +24,7 @@ const ctx = {
   store,
   org,
   // Other tools' documents, for assets that point into them.
-  docs: { org, map: loadMap() },
+  docs: (() => { const maps = loadMaps(); return { org, maps, mapContents: loadAllMaps(maps) }; })(),
   collapsed: new Set(),
   get selectedId() {
     const id = decodeURIComponent(location.hash.slice(1));
@@ -52,9 +53,9 @@ app.replaceChildren(
   h('div', { class: 'strategy-bar' },
     h('strong', {}, 'Strategy & Work'),
     h('div', { class: 'spacer' }),
-    h('button', { class: 'secondary', onclick: () => store.undo() }, 'Undo'),
-    h('button', { class: 'secondary', onclick: () => store.redo() }, 'Redo'),
-    h('button', { class: 'secondary', title: 'Replace with the example strategy', onclick: () => {
+    h('button', { class: 'btn btn-sm', onclick: () => store.undo() }, 'Undo'),
+    h('button', { class: 'btn btn-sm', onclick: () => store.redo() }, 'Redo'),
+    h('button', { class: 'btn btn-sm', title: 'Replace with the example strategy', onclick: () => {
       if (!confirm('Load the example strategy? Your current strategy is replaced.')) return;
       store.load(migrateStrategy(seedStrategy()));
       saveDoc('strategy', store.doc);

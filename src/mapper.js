@@ -1,6 +1,6 @@
 import { Stage } from './core/Stage.js';
 import { Store } from './core/Store.js';
-import { createMap, ops } from './core/ops.js';
+import { ops } from './core/ops.js';
 import { MapView } from './display/MapView.js';
 import { lensBounds, loadLenses, unproject } from './lenses/index.js';
 import { ToolRegistry } from './tools/registry.js';
@@ -13,16 +13,27 @@ import { TopBar } from './ui/TopBar.js';
 import { Inspector } from './ui/Inspector.js';
 import { LayersPanel } from './ui/LayersPanel.js';
 import { LabelEditor } from './ui/LabelEditor.js';
-import { autosave, loadLocal } from './persistence/local.js';
 import { seedMap, migrateMap } from './seed.js';
 import { Shell } from './ui/Shell.js';
-import { loadOrSeed } from './platform/storage.js';
-import { seedOrg } from './platform/org.js';
+import { autosaveDoc, saveDoc } from './platform/storage.js';
+import { loadOrg, loadMaps } from './platform/docs.js';
+import { loadMapContent, mapDocName, createMapIn } from './platform/maps.js';
+import { currentUser } from './platform/session.js';
 
-Shell(document.querySelector('#shell'), { current: 'mapper', org: loadOrSeed('org', seedOrg) });
+const org = loadOrg();
+Shell(document.querySelector('#shell'), { current: 'mapper', org });
+
+// Which map: mapper.html#<mapId>, else the first map this org has (making one if none).
+const index = loadMaps();
+let mapId = decodeURIComponent(location.hash.slice(1));
+if (!index.maps[mapId]) {
+  mapId = Object.keys(index.maps)[0] ?? createMapIn(index, { title: 'Our ecosystem', ownerId: currentUser(org)?.id }).id;
+  history.replaceState(null, '', `#${mapId}`);
+}
+window.addEventListener('hashchange', () => location.reload());
 
 const lenses = await loadLenses();
-const store = new Store(migrateMap(loadLocal(), lenses) ?? seedMap());
+const store = new Store(migrateMap(loadMapContent(mapId), lenses));
 const stage = new Stage(document.querySelector('#board'));
 const mapView = new MapView(stage, store, lenses);
 
@@ -74,15 +85,30 @@ const ctx = {
     },
     migrate: (map) => migrateMap(map, lenses),
     loadExample() {
-      store.load(seedMap());
+      store.load({ ...seedMap(), id: mapId, name: index.maps[mapId].title });
       mapView.select([]);
       fitView();
     },
-    newMap() {
-      store.load(createMap({ lensId: store.map.lensId }));
-      mapView.select([]);
+    /** Make a new map in this org and open it. */
+    newMap(title) {
+      const entry = createMapIn(index, { title, ownerId: currentUser(org)?.id, lensId: store.map.lensId });
+      saveDoc(mapDocName(mapId), store.map);
+      location.hash = entry.id;
+    },
+    openMap(id) {
+      saveDoc(mapDocName(mapId), store.map);
+      location.hash = id;
+    },
+    /** Change the map's title, description, owner or members. */
+    updateEntry(patch) {
+      Object.assign(index.maps[mapId], patch, { updatedAt: new Date().toISOString().slice(0, 10) });
+      saveDoc('maps', index);
+      if (patch.title) store.map.name = patch.title;
     },
   },
+  org,
+  index,
+  get mapId() { return mapId; },
 };
 
 ctx.tools = new ToolRegistry(ctx).register(SelectTool).register(ActorTool).register(ConnectTool).register(PanTool);
@@ -95,7 +121,12 @@ LayersPanel(document.querySelector('#layers'), ctx);
 
 ctx.tools.use('select');
 mapView.sync();
-autosave(store);
+autosaveDoc(mapDocName(mapId), store);
+// The map's name and its title in the org's list of maps stay the same.
+store.map.name = index.maps[mapId].title;
+store.addEventListener('change', () => {
+  if (store.map.name && store.map.name !== index.maps[mapId].title) ctx.actions.updateEntry({ title: store.map.name });
+});
 
 // Hold Space to pan with any tool, FigJam-style.
 let toolBeforeSpace = null;

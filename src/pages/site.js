@@ -4,6 +4,8 @@ import { loadOrg, loadStrategy, loadData, loadDashboards } from '../platform/doc
 import { migrateStrategy } from '../platform/strategy.js';
 import { dashboardMonths } from '../platform/dashboards.js';
 import { DashboardView } from '../charts/DashboardView.js';
+import { applyTheme } from '../platform/themes.js';
+import { Logo } from '../ui/Shell.js';
 
 /**
  * A sample public site: site.html?site=<id>. Shows the dashboards that are
@@ -26,6 +28,8 @@ function render() {
   const publicSites = Object.values(org.sites).filter((s) => s.visibility === 'public');
   const shown = Object.values(docs.dashboards.dashboards).filter((d) => d.siteId === siteId && d.visibility === 'public');
   document.title = `${site?.name ?? 'Site'} · ${org.name}`;
+  // The org's own palette and look and feel (Organisation → Public sites and theme).
+  applyTheme(document.documentElement, org.theme);
 
   const body = !site
     ? h('p', { class: 'empty' }, 'There is no site here.')
@@ -48,6 +52,7 @@ function render() {
     h('div', { class: 'preview-banner' }, 'Sample public site, made by Org Toolbox from live program data. ', h('a', { href: 'palette.html#publish' }, 'Back to the toolbox')),
     h('header', { class: 'site-head' },
       h('div', { class: 'inner' },
+        Logo(org, 36),
         h('strong', {}, org.name),
         h('nav', { 'aria-label': 'Public sites' },
           publicSites.map((s) => h('a', { href: `?site=${s.id}`, 'aria-current': s.id === siteId ? 'page' : null }, s.name))))),
@@ -57,7 +62,13 @@ function render() {
         h('p', {}, org.mission, site?.shows ? ` This page shares ${site.shows.charAt(0).toLowerCase()}${site.shows.slice(1)}.` : ''),
         h('p', { class: 'live-dot', style: 'margin-top:12px' }, 'Live program data. Press Play on a dashboard to watch the year change.')),
       body),
-    h('footer', { class: 'site-foot' }, `© ${org.name}. Every chart has a table view for screen readers and printing.`),
+    h('footer', { class: 'site-foot' },
+      h('div', {}, h('strong', {}, org.name), org.description && h('p', {}, org.description)),
+      h('address', {},
+        org.contact.address && h('div', {}, org.contact.address),
+        org.contact.email && h('div', {}, h('a', { href: `mailto:${org.contact.email}` }, org.contact.email)),
+        org.contact.phone && h('div', {}, org.contact.phone)),
+      h('p', { class: 'site-small' }, 'Every chart has a table view for screen readers and printing.')),
   );
   if (first && location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
   first = false;

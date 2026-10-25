@@ -162,7 +162,7 @@ function hover(wrap, chart, points, x, y, m) {
   if (!points.length) return;
   const cross = svg('line', { class: 'crosshair', y1: PAD.t, y2: H - PAD.b, visibility: 'hidden' }, chart);
   const dot = svg('circle', { class: 'hover-dot', r: 5, visibility: 'hidden' }, chart);
-  const tip = h('div', { class: 'tooltip', hidden: true, role: 'status' });
+  const tip = h('div', { class: 'chart-tip', hidden: true, role: 'status' });
   wrap.append(tip);
   const hit = svg('rect', { x: PAD.l - 10, y: 0, width: W - PAD.l - PAD.r + 20, height: H, fill: 'transparent' }, chart);
   hit.addEventListener('pointermove', (e) => {

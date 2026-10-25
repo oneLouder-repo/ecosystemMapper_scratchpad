@@ -9,6 +9,7 @@ import { AssetsPanel } from './Assets.js';
 import { loadDashboards, saveDoc } from '../platform/docs.js';
 import { dashboardFromNode } from '../platform/dashboards.js';
 import { uid } from '../core/ops.js';
+import { currentUser } from '../platform/session.js';
 
 /** The selected node: its fields, its people, and its Gantt chart or timeline. */
 export function Detail(ctx) {
@@ -42,7 +43,7 @@ export function Detail(ctx) {
             h('input', { value: m[k] ?? '', placeholder: k === 'name' ? 'Measure' : k[0].toUpperCase() + k.slice(1), class: `m-${k}`,
               onchange: (e) => update({ measures: n.measures.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)) }) })),
           h('button', { class: 'icon-button', title: 'Remove measure', onclick: () => update({ measures: n.measures.filter((_, j) => j !== i) }) }, '×'))),
-      h('button', { class: 'secondary', onclick: () => update({ measures: [...n.measures, { name: '', target: '', unit: '' }] }) }, 'Add measure')), true);
+      h('button', { class: 'btn btn-sm', onclick: () => update({ measures: [...n.measures, { name: '', target: '', unit: '' }] }) }, 'Add measure')), true);
 
   const fields = {
     framework: () => [text('mission', 'Mission', { area: true, wide: true, rows: 2 }), text('vision', 'Vision', { area: true, wide: true, rows: 2 }), text('values', 'Values', { wide: true })],
@@ -80,8 +81,8 @@ export function Detail(ctx) {
     summary(),
     h('div', { class: 'fields' }, fields(), text('notes', 'Notes', { area: true, wide: true, rows: 3 })),
     h('div', { class: 'detail-actions' },
-      type.children.map((c) => h('button', { class: 'secondary', onclick: () => ctx.addChild(n.id, c) }, `Add ${NODE_TYPES[c].label.toLowerCase()}`)),
-      n.parentId && h('button', { class: 'secondary danger', onclick: () => {
+      type.children.map((c) => h('button', { class: 'btn btn-sm', onclick: () => ctx.addChild(n.id, c) }, `Add ${NODE_TYPES[c].label.toLowerCase()}`)),
+      n.parentId && h('button', { class: 'btn btn-sm btn-ghost btn-error', onclick: () => {
         if (confirm(`Delete “${n.title}” and everything under it? You can undo.`)) {
           select(n.parentId);
           store.apply(strategyOps.removeNode(doc, n.id));
@@ -101,7 +102,7 @@ function DashboardsPanel(ctx, n) {
   const made = Object.values(doc.dashboards).filter((d) => d.sourceNodeId === n.id);
   const create = () => {
     const id = uid('dashboard');
-    doc.dashboards[id] = { ...dashboardFromNode(ctx.store.doc, n.id), id };
+    doc.dashboards[id] = { ...dashboardFromNode(ctx.store.doc, n.id, currentUser(ctx.org)?.id ?? null), id };
     saveDoc('dashboards', doc);
     saveDoc('strategy', ctx.store.doc);
     location.href = `palette.html#${id}`;
@@ -109,7 +110,7 @@ function DashboardsPanel(ctx, n) {
   return h('section', { class: 'panel' },
     h('div', { class: 'panel-head' },
       h('h2', {}, 'Dashboards'),
-      h('button', { onclick: create }, icon('chart', 16), 'Create dashboard')),
+      h('button', { class: 'btn btn-sm btn-primary', onclick: create }, icon('chart', 16), 'Create dashboard')),
     h('p', { class: 'muted' }, n.measures.length
       ? `Makes an accessible dashboard from the ${n.measures.length} measure${n.measures.length > 1 ? 's' : ''} here and below, fed by live program data. You can edit it and publish it to a public site.`
       : 'Add a measure above to put numbers on the dashboard. It will still show the progress of the work.'),

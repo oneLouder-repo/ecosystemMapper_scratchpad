@@ -4,9 +4,9 @@
  * item) or stand on its own (a document, link, citation, media, a person
  * outside the org). Stored on the node as `assets: [Asset]`.
  *
- * Asset { id, kind, label, ref?, url?, detail?, year?, dataUrl? }
- *   `ref` is the id in the other tool's document; `label` is a fallback
- *   used if that item is later deleted.
+ * Asset { id, kind, label, ref?, mapId?, url?, detail?, year?, dataUrl? }
+ *   `ref` is the id in the other plugin's document (for an actor, `mapId`
+ *   says which map); `label` is a fallback used if that item is later deleted.
  *
  * To add a kind (for a future tool): add it here, give it a resolver below
  * and a picker in ui/AssetChooser.js.
@@ -23,17 +23,26 @@ export const ASSET_KINDS = [
 ];
 export const kindById = Object.fromEntries(ASSET_KINDS.map((k) => [k.id, k]));
 
+/** Find an actor: in its own map, or (for assets saved before maps had ids) in any map. */
+function findActor(asset, mapContents = {}) {
+  const own = mapContents[asset.mapId]?.actors[asset.ref];
+  if (own) return { actor: own, mapId: asset.mapId };
+  for (const [mapId, map] of Object.entries(mapContents)) if (map.actors[asset.ref]) return { actor: map.actors[asset.ref], mapId };
+  return null;
+}
+
 /**
- * Resolve an asset against the current documents ({ map, org, strategy }),
+ * Resolve an asset against the current documents ({ mapContents, maps, org, strategy }),
  * so renamed items show their new names. Returns { label, sub, href, missing }.
  */
 export function resolveAsset(asset, docs) {
   switch (asset.kind) {
     case 'actor': {
-      const a = docs.map?.actors[asset.ref];
-      return a
-        ? { label: a.label, sub: `${a.kind === 'agent' ? 'Agent' : 'Actor'} on the ecosystem map`, href: 'mapper.html' }
-        : { label: asset.label, sub: 'No longer on the map', missing: true };
+      const found = findActor(asset, docs.mapContents);
+      if (!found) return { label: asset.label, sub: 'No longer on the map', missing: true };
+      const { actor: a, mapId } = found;
+      const mapTitle = docs.maps?.maps[mapId]?.title ?? 'the ecosystem map';
+      return { label: a.label, sub: `${a.kind === 'agent' ? 'Agent' : 'Actor'} on ${mapTitle}`, href: `mapper.html#${mapId}` };
     }
     case 'staff': {
       const s = docs.org?.staff[asset.ref];
@@ -63,7 +72,7 @@ export function assetsInWorkplan(strategy, workplanId) {
 }
 
 /** Same item used more than once (e.g. one actor across several tasks) counts once. */
-export const assetKey = (a) => (a.ref ? `${a.kind}:${a.ref}` : `${a.kind}:${a.url ?? a.label}`);
+export const assetKey = (a) => (a.ref ? `${a.kind}:${a.mapId ? `${a.mapId}/` : ''}${a.ref}` : `${a.kind}:${a.url ?? a.label}`);
 
 /** Every asset used at or below a node (a plan, objective, goal or workplan), each tagged with where it came from. */
 export function assetsUnder(strategy, id) {

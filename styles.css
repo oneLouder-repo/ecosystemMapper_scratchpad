@@ -1,11 +1,48 @@
-:root {
-  --bg: #f6f7f9;
-  --panel: #ffffff;
-  --ink: #1d2230;
-  --muted: #687089;
-  --line: #dfe3ea;
-  --accent: #3d63dd;
-  --accent-soft: #e5ebff;
+/*
+ * The toolbox's own DaisyUI theme. Staff pages use it (<html data-theme="toolbox">);
+ * public sites use the org's chosen theme instead (src/platform/themes.js).
+ */
+[data-theme='toolbox'] {
+  color-scheme: light;
+  --color-base-100: #ffffff;
+  --color-base-200: #f6f7f9;
+  --color-base-300: #dfe3ea;
+  --color-base-content: #1d2230;
+  --color-primary: #3d63dd;
+  --color-primary-content: #ffffff;
+  --color-secondary: #59607a;
+  --color-secondary-content: #ffffff;
+  --color-accent: #2a9d8f;
+  --color-accent-content: #ffffff;
+  --color-neutral: #1d2230;
+  --color-neutral-content: #ffffff;
+  --color-info: #2a78d6;
+  --color-info-content: #ffffff;
+  --color-success: #2a7d5f;
+  --color-success-content: #ffffff;
+  --color-warning: #b8860b;
+  --color-warning-content: #ffffff;
+  --color-error: #b5442f;
+  --color-error-content: #ffffff;
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.375rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* The app's own names for theme colours, so every style follows the theme. */
+:root, [data-theme] {
+  --bg: var(--color-base-200);
+  --panel: var(--color-base-100);
+  --ink: var(--color-base-content);
+  --muted: color-mix(in oklab, var(--color-base-content) 62%, var(--color-base-100));
+  --line: var(--color-base-300);
+  --accent: var(--color-primary);
+  --accent-soft: color-mix(in oklab, var(--color-primary) 13%, var(--color-base-100));
   --connector: #59607a;
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--ink);
@@ -30,16 +67,11 @@ body.mapper-page #shell { grid-area: shell; }
 
 button, input, select, textarea { font: inherit; color: inherit; }
 
-button {
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: #fff;
-  border-radius: 0;
-  padding: 6px 12px;
-  cursor: pointer;
-}
-button.secondary { background: var(--panel); color: var(--ink); border-color: var(--line); }
+button { cursor: pointer; }
 button:disabled { opacity: 0.45; cursor: default; }
+/* Bare buttons (tree rows, chips, tabs) start plain; styled buttons use DaisyUI's .btn. */
+:where(button:not(.btn)) { border: none; background: none; padding: 0; color: inherit; }
+.btn .icon { flex: none; }
 
 /* Top bar */
 #topbar {
@@ -53,7 +85,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 }
 .brand { font-weight: 650; letter-spacing: 0.01em; margin-right: 12px; }
 .lens-picker { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }
-.lens-picker select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 0; background: var(--panel); }
+.lens-picker select { padding: 5px 8px; border: 1px solid var(--line); border-radius: var(--radius-field); background: var(--panel); }
 .spacer { flex: 1; }
 
 /* Toolbar */
@@ -140,14 +172,15 @@ main { grid-area: board; position: relative; min-width: 0; }
 #sidebar h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; }
 .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; font-size: 13px; }
 .field > span { color: var(--muted); }
-.field input, .field select, .field textarea { padding: 6px 8px; border: 1px solid var(--line); border-radius: 0; background: var(--panel); }
+.field input, .field select, .field textarea { padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-field); background: var(--panel); }
+:where(input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .field output { padding: 2px 0; }
 .muted { color: var(--muted); font-size: 13px; line-height: 1.45; }
 .tips { padding-left: 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
 
 .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .panel-head h2 { margin: 0 !important; }
-.icon-button { background: transparent; color: var(--ink); border: 1px solid transparent; padding: 2px 6px; }
+.icon-button { background: transparent; color: var(--ink); border: 1px solid transparent; padding: 2px 6px; border-radius: var(--radius-field); }
 .icon-button:hover { background: var(--bg); }
 .icon-button.off { opacity: 0.45; }
 .layers { list-style: none; margin: 0; padding: 0; }
@@ -185,3 +218,14 @@ main { grid-area: board; position: relative; min-width: 0; }
 .segmented button + button { border-left: none; }
 .segmented button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
 #inspector > button { margin-bottom: 12px; }
+
+/* Map picker and details */
+.map-picker { max-width: 260px; }
+.map-details h3 { margin: 0 0 8px; font-size: 18px; }
+.map-details .w-full { width: 100%; }
+.member-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+.member { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+
+/* Plain toolbox buttons are white with a hairline, so they show on grey and white panels alike. */
+[data-theme='toolbox'] .btn:not(.btn-primary, .btn-ghost, .btn-error, .btn-success, .btn-active, .btn-link) { --btn-bg: var(--color-base-100); --btn-border: var(--color-base-300); }
+.tabs a, a.tab { text-decoration: none; }

@@ -94,7 +94,7 @@ export function Timeline(ctx, task) {
       e.preventDefault();
       if (!text.value.trim()) return;
       store.apply(strategyOps.addEvent(store.doc, task.id, { date: date.value, kind: kind.value, text: text.value.trim() }));
-    } }, date, kind, text, h('button', { type: 'submit' }, 'Add to timeline')),
+    } }, date, kind, text, h('button', { class: 'btn btn-sm btn-primary', type: 'submit' }, 'Add to timeline')),
     task.events.length > 0 && h('ul', { class: 'event-list' },
       [...task.events].reverse().map((ev) =>
         h('li', {},

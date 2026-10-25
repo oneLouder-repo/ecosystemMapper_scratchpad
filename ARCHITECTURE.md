@@ -239,3 +239,21 @@ Measures on objectives and goals now have stable ids (`migrateStrategy` adds any
 **Assets.** Tasks and workplans hold `assets: [{ id, kind, label, ref?, url?, detail?, year?, dataUrl? }]`. `ref` points into another document (map actor, staff, strategy node); `label` is kept as a fallback if that item is deleted. `assetsUnder(strategy, id)` gathers assets from any level down; `groupAssets` merges repeats. To add an asset kind for a future tool: add it to `ASSET_KINDS`, a resolver in `resolveAsset`, and a picker in `ui/AssetChooser.js`.
 
 **Later, with the server.** Public sites become pages (or HubSpot modules) served from a published snapshot holding only public dashboards and the series they name. Program data arrives from program systems instead of being typed in. Uploaded documents move from data URLs to file storage.
+
+## 10. Orgs, plugins and themes (round 5)
+
+**Orgs load on command.** `platform/session.js` keeps a registry (`org-toolbox:v3:registry`): which orgs exist, which is open, who is signed in to each. Every document is stored under its org (`org-toolbox:v3:<orgId>/<doc>`), so switching org is "change the registry, reload". `platform/docs.js` loads the open org's documents and seeds example orgs with example data; any other org starts empty.
+
+**The org document** now holds the org's settings: name, description, mission, contact, logo, `theme { palette, shape }`, `plugins { id: false }` switches, staff (with avatar, email and followed `interests`), teams and sites. `migrateOrg` fills in new fields on old documents.
+
+**Plugins.** `src/plugins.js` lists them. `core: true` plugins (Organisation, Help) can't be switched off; `nav: false` keeps one out of the header.
+
+**Themes.** A palette is a DaisyUI theme name; a shape (rounded, squared, flat) sets DaisyUI's radius, border and depth variables. `applyTheme(el, theme)` applies both. Staff pages use the toolbox theme (`data-theme="toolbox"`, defined in `styles.css`); public sites use the org's theme. The app's own colour names (`--ink`, `--panel`, `--line`, `--accent`...) are defined from the theme variables, so all the older styles follow the theme too. Chart series keep one validated blue on every theme.
+
+**DaisyUI without a build.** `vendor/daisyui/daisyui.css` is the subset of components used, with Tailwind's responsive variants stripped; `themes.css` holds the offered palettes. DaisyUI's CSS sits in cascade layers, so the app's own (unlayered) CSS always wins; bare `button`s are reset with `:where()` so `.btn` keeps its looks. Watch for class-name clashes with DaisyUI components (`.radio`, `.list`, `.label`, `.tooltip` caught us).
+
+**Ecosystem maps.** An org has many maps: the `maps` index (`title, description, ownerId, memberIds, createdAt, updatedAt`) and one document per map (`map/<id>`). The mapper opens `mapper.html#<mapId>`. Task assets point at actors by `{ mapId, ref }`.
+
+**Radio & Podcasts.** `platform/radio.js` follows Castopod's model (podcasts with handle, category, type and owner; episodes with number, season, type, status and audio enclosure) plus a weekly `schedule` for the station. `podcastRss` writes the feed podcast apps read. Moving to a real Castopod server means syncing these through its API and reading its feeds; the shapes don't change. Sample audio lives in `media/radio/`.
+
+**Help.** `src/help/` draws its diagrams from the lens files (`lenses/crosswalk.js` works out which regions of each lens sit in each micro / meso / macro tier), so the guide stays right when a lens changes.

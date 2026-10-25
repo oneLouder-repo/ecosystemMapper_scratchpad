@@ -46,5 +46,5 @@ export function DataTool(ctx) {
           h('td', {}, h('button', { class: 'icon-button', title: 'Remove month', 'aria-label': `Remove ${monthLabel(p.date)}`,
             onclick: () => save(series.points.filter((q) => q.date !== p.date)) }, '×')))))),
     h('div', { class: 'inline-form' },
-      h('button', { onclick: () => save([...series.points, { date: nextMonth(), value: series.points.at(-1)?.value ?? 0 }]) }, `Add ${monthLabel(nextMonth())}`)));
+      h('button', { class: 'btn btn-sm btn-primary', onclick: () => save([...series.points, { date: nextMonth(), value: series.points.at(-1)?.value ?? 0 }]) }, `Add ${monthLabel(nextMonth())}`)));
 }

@@ -33,6 +33,7 @@ const TREE = {
           children: [
             {
               type: 'objective',
+              id: 'obj-equity',
               title: 'Deepen equity and inclusion in every program',
               measures: [
                 { id: 'm-reach', name: 'Youth reached', target: '500000', unit: 'youth / yr' },
@@ -61,8 +62,8 @@ const TREE = {
                           { id: 'e4', date: '2026-10-01', kind: 'status', text: 'active' },
                           { id: 'e5', date: '2026-10-15', kind: 'milestone', text: 'First session held in Treaty 6' },
                         ], [
-                          asset('as1', 'actor', 'Indigenous communities', { ref: 'actor-indig-comm' }),
-                          asset('as2', 'actor', 'Indigenous governments & organisations', { ref: 'actor-indig-gov' }),
+                          asset('as1', 'actor', 'Indigenous communities', { mapId: 'map-ecosystem', ref: 'actor-indig-comm' }),
+                          asset('as2', 'actor', 'Indigenous governments & organisations', { mapId: 'map-ecosystem', ref: 'actor-indig-gov' }),
                           asset('as3', 'staff', 'Tanis Cardinal', { ref: 's-indig' }),
                           asset('as4', 'literature', 'Battiste, M. (2013). Decolonizing Education: Nourishing the Learning Spirit. Purich.', { year: '2013' }),
                           asset('as5', 'person', 'Elder advisor (name withheld)', { detail: 'Treaty 6 knowledge keeper' }),
@@ -102,6 +103,7 @@ const TREE = {
             },
             {
               type: 'objective',
+              id: 'obj-ecosystem',
               title: 'Strengthen the ecosystem we steward',
               measures: [{ id: 'm-partners', name: 'Active partnerships', target: '120', unit: 'orgs' }],
               children: [
@@ -121,9 +123,9 @@ const TREE = {
                         T('Ecosystem mapping workshop', '2026-08-15', '2026-08-30', 'done', ['s-ed', 's-eval']),
                         T('Publish ecosystem map internally', '2026-09-01', '2026-10-10', 'done', ['s-eval']),
                         T('Partner check-in conversations', '2026-10-01', '2026-12-31', 'active', ['s-part', 's-indig'], [], [
-                          asset('as6', 'actor', 'University & college partners', { ref: 'actor-universities' }),
-                          asset('as7', 'actor', 'Community organisations', { ref: 'actor-community-orgs' }),
-                          asset('as8', 'actor', 'Industry volunteers & mentors', { ref: 'actor-mentors' }),
+                          asset('as6', 'actor', 'University & college partners', { mapId: 'map-ecosystem', ref: 'actor-universities' }),
+                          asset('as7', 'actor', 'Community organisations', { mapId: 'map-ecosystem', ref: 'actor-community-orgs' }),
+                          asset('as8', 'actor', 'Industry volunteers & mentors', { mapId: 'map-ecosystem', ref: 'actor-mentors' }),
                           asset('as9', 'document', 'Partner check-in guide.pdf', { detail: 'PDF · 240 KB' }),
                         ]),
                         T('Refresh map with partner feedback', '2027-01-05', '2027-01-31', 'planned', ['s-eval', 's-part']),
@@ -150,7 +152,7 @@ const TREE = {
                           asset('as10', 'literature', 'Meadows, D. (1999). Leverage Points: Places to Intervene in a System. Sustainability Institute.', { year: '1999' }),
                           asset('as11', 'literature', 'Kania, J., Kramer, M., & Senge, P. (2018). The Water of Systems Change. FSG.', { year: '2018', url: 'https://www.fsg.org/resource/water_of_systems_change/' }),
                           asset('as12', 'link', 'Pipelines to Systems discussion paper', { url: 'https://actua.ca/wp-content/uploads/2026/07/Science-Report-Pipelines-to-Systems-Actua.pdf' }),
-                          asset('as13', 'actor', 'National STEM policy network', { ref: 'actor-policy-net' }),
+                          asset('as13', 'actor', 'National STEM policy network', { mapId: 'map-ecosystem', ref: 'actor-policy-net' }),
                         ]),
                         T('Coalition sign-on letter', '2027-01-15', '2027-02-28', 'planned', ['s-part']),
                       ],
@@ -161,6 +163,7 @@ const TREE = {
             },
             {
               type: 'objective',
+              id: 'obj-learn',
               title: 'Learn in public with shared data',
               measures: [{ id: 'm-views', name: 'Public dashboard views', target: '600', unit: 'views / month' }],
               children: [
@@ -197,14 +200,45 @@ const TREE = {
   ],
 };
 
-export function seedStrategy() {
-  const doc = { id: 'strategy-example', nodes: {} };
+export function seedStrategy(tree = TREE, id = 'strategy-example') {
+  const doc = { id, nodes: {} };
   const add = (spec, parentId = null) => {
     const { children = [], ...data } = spec;
     const op = strategyOps.addNode(doc, { ...data, parentId });
     applyCollectionOp(doc, op);
     for (const child of children) add(child, op.id);
   };
-  add(TREE);
+  add(tree);
   return doc;
 }
+
+/** The smaller second example org. */
+export const seedRiverbendStrategy = () => seedStrategy({
+  type: 'framework',
+  title: 'Riverbend framework',
+  mission: 'Good food, grown and shared by our neighbours.',
+  vision: 'A neighbourhood where nobody eats alone or goes without.',
+  values: 'Dignity · Neighbourliness · Growing together',
+  children: [{
+    type: 'plan', title: 'Plan 2026–2027', start: '2026-04-01', end: '2027-03-31', theme: 'Growing the hub',
+    children: [{
+      type: 'objective', id: 'obj-meals', title: 'Share more good meals',
+      measures: [{ id: 'm-meals', name: 'Meals shared', target: '4000', unit: 'meals / month' }],
+      children: [{
+        type: 'goal', title: 'Good food boxes reach every block',
+        measures: [{ id: 'm-boxes', name: 'Good food boxes delivered', target: '300', unit: 'boxes / month' }],
+        children: [{
+          type: 'workplan', title: 'Box delivery routes', start: '2026-09-01', end: '2027-01-31', staffIds: ['r-vol'], teamIds: ['t-hub'],
+          children: [
+            T('Recruit block captains', '2026-09-01', '2026-10-15', 'done', ['r-vol']),
+            T('Map routes with block captains', '2026-10-01', '2026-11-15', 'active', ['r-vol', 'r-lead']),
+            T('Winter delivery plan', '2026-11-15', '2027-01-15', 'planned', ['r-kitchen']),
+          ],
+        }],
+      }],
+    }],
+  }],
+}, 'strategy-riverbend');
+
+/** A new org starts with just a framework. */
+export const blankStrategy = (orgName = 'Our') => seedStrategy({ type: 'framework', title: `${orgName} framework` }, 'strategy');
