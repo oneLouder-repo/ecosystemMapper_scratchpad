@@ -4,7 +4,7 @@
  *
  * In production this is fed by program systems (registrations, surveys,
  * finance). Here it is seeded with example data and can be edited in the
- * Creative Palette's Data mini-tool; public sites read it live.
+ * Workbench's Data mini-tool; public sites read it live.
  */
 export function valueAt(series, date) {
   if (!series?.points.length) return null;

@@ -78,7 +78,7 @@ export function seedRiverbend() {
     mission: 'Good food, grown and shared by our neighbours.',
     contact: { email: 'info@riverbend.example', phone: '+1 204 555 0142', website: 'https://riverbend.example', address: '12 Mill Road, Winnipeg, MB' },
     theme: { palette: 'garden', shape: 'flat' },
-    plugins: { radio: false },
+    plugins: { podcasts: false },
     staff: staffRecords([
       ['r-lead', 'Maya Desjardins', 'Coordinator', 'admin', ['t-hub']],
       ['r-kitchen', 'Sam Okoye', 'Kitchen Lead', 'staff', ['t-hub']],
@@ -108,6 +108,8 @@ export function migrateOrg(org) {
   org.logo ??= null;
   org.theme = { palette: 'corporate', shape: 'rounded', ...org.theme };
   org.plugins ??= {};
+  // Radio & Podcasts became Podcasts.
+  if ('radio' in org.plugins) { org.plugins.podcasts ??= org.plugins.radio; delete org.plugins.radio; }
   org.staff ??= {};
   org.teams ??= {};
   org.sites ??= {};

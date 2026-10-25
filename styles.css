@@ -65,7 +65,8 @@ body.mapper-page {
 }
 body.mapper-page #shell { grid-area: shell; }
 
-button, input, select, textarea { font: inherit; color: inherit; }
+/* In DaisyUI's base layer, so its sized controls (.btn-sm, .select-sm…) keep their own font size. */
+@layer base { button, input, select, textarea { font: inherit; color: inherit; } }
 
 button { cursor: pointer; }
 button:disabled { opacity: 0.45; cursor: default; }
@@ -229,3 +230,4 @@ main { grid-area: board; position: relative; min-width: 0; }
 /* Plain toolbox buttons are white with a hairline, so they show on grey and white panels alike. */
 [data-theme='toolbox'] .btn:not(.btn-primary, .btn-ghost, .btn-error, .btn-success, .btn-active, .btn-link) { --btn-bg: var(--color-base-100); --btn-border: var(--color-base-300); }
 .tabs a, a.tab { text-decoration: none; }
+a.btn { text-decoration: none; }

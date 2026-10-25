@@ -36,9 +36,9 @@ export const PLUGINS = [
   },
   {
     id: 'palette',
-    name: 'Creative Palette',
+    name: 'Workbench',
     href: 'palette.html',
-    icon: 'palette',
+    icon: 'workbench',
     blurb: 'Mini-tools for bringing others into the data dialogue: design dashboards from your strategy, keep program data current, and publish to public sites.',
     stats: ({ dashboards }) => {
       const list = Object.values(dashboards?.dashboards ?? {});
@@ -46,12 +46,26 @@ export const PLUGINS = [
     },
   },
   {
-    id: 'radio',
-    name: 'Radio & Podcasts',
-    href: 'radio.html',
-    icon: 'radio',
-    blurb: 'Your own podcasts and online radio station: publish episodes, build a weekly programme, share feeds. Shaped to work with Castopod.',
-    stats: ({ radio }) => `${count(radio?.podcasts)} shows · ${Object.values(radio?.episodes ?? {}).filter((e) => e.status === 'published').length} episodes`,
+    id: 'podcasts',
+    name: 'Podcasts',
+    href: 'podcasts.html',
+    icon: 'mic',
+    blurb: 'Your own podcast station: shows organised by season, uploaded .mp3 or .wav episodes, featured shows, RSS feeds, and a public station page skinned to your look.',
+    stats: ({ podcasts }) => {
+      const shows = Object.values(podcasts?.podcasts ?? {});
+      return `${shows.length} shows · ${shows.filter((s) => s.featured).length} featured · ${Object.values(podcasts?.episodes ?? {}).filter((e) => e.status === 'published').length} episodes`;
+    },
+  },
+  {
+    id: 'pages',
+    name: 'Sites & Pages',
+    href: 'pages.html',
+    icon: 'news',
+    blurb: 'Run your public sites: information pages and news articles beside your dashboards and podcast station, with live embeds.',
+    stats: ({ pages }) => {
+      const list = Object.values(pages?.pages ?? {});
+      return `${list.filter((p) => p.kind === 'page').length} pages · ${list.filter((p) => p.kind === 'article').length} articles · ${list.filter((p) => p.status === 'draft').length} drafts`;
+    },
   },
   {
     id: 'org',

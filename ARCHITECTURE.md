@@ -234,7 +234,7 @@ Measures on objectives and goals now have stable ids (`migrateStrategy` adds any
 
 **Charts** (`src/charts`). `renderWidget(widget, { strategy, data, asOf, months })` draws one widget as it stood at month `asOf`. `DashboardView` puts a `Player` above the grid; the player only changes `asOf` and redraws, so every widget type gets time travel for free. To add a widget type, add a renderer in `charts/widgets.js` and an entry in `WIDGET_TYPES`.
 
-**Creative Palette** (`src/palette`). A page with a list of mini-tools; each is a function `(ctx) → element` in `MINI_TOOLS`. Add a mini-tool by writing one function and one entry.
+**Workbench** (`src/palette`). A page with a list of mini-tools; each is a function `(ctx) → element` in `MINI_TOOLS`. Add a mini-tool by writing one function and one entry.
 
 **Assets.** Tasks and workplans hold `assets: [{ id, kind, label, ref?, url?, detail?, year?, dataUrl? }]`. `ref` points into another document (map actor, staff, strategy node); `label` is kept as a fallback if that item is deleted. `assetsUnder(strategy, id)` gathers assets from any level down; `groupAssets` merges repeats. To add an asset kind for a future tool: add it to `ASSET_KINDS`, a resolver in `resolveAsset`, and a picker in `ui/AssetChooser.js`.
 
@@ -254,6 +254,12 @@ Measures on objectives and goals now have stable ids (`migrateStrategy` adds any
 
 **Ecosystem maps.** An org has many maps: the `maps` index (`title, description, ownerId, memberIds, createdAt, updatedAt`) and one document per map (`map/<id>`). The mapper opens `mapper.html#<mapId>`. Task assets point at actors by `{ mapId, ref }`.
 
-**Radio & Podcasts.** `platform/radio.js` follows Castopod's model (podcasts with handle, category, type and owner; episodes with number, season, type, status and audio enclosure) plus a weekly `schedule` for the station. `podcastRss` writes the feed podcast apps read. Moving to a real Castopod server means syncing these through its API and reading its feeds; the shapes don't change. Sample audio lives in `media/radio/`.
+**Podcasts** (round 6; was Radio & Podcasts). `platform/podcasts.js` follows Castopod's model (shows with handle, category, type and owner; episodes with number, season, type, status and audio enclosure), with `seasons` and `featured` on each show and a `station` (name, the site that hosts it, and its `look`). There is no live radio: every episode is an uploaded .mp3 or .wav. `stationView(doc, today)` gives the public page its three parts (the current episode, featured shows, the archive by show and season); `published()` keeps drafts and future-dated episodes off it and out of `podcastRss`. Uploads go to IndexedDB through `platform/media.js` (`putMedia` → id, `mediaUrl(id)`); an episode's `audio` has either a `url` (bundled samples in `media/podcasts/`) or a `mediaId`. With the Node backend, `media.js` becomes upload and URL calls, the server streams audio with range requests and serves each feed.
+
+## 11. Sites & Pages and the public site (round 6)
+
+**Pages.** `platform/pages.js` holds pages (in a site's menu) and articles (dated news), each on one site, with a `slug` unique within that site. Bodies are a light markdown parsed to a small tree by `parseMarkdown` (pure, tested in Node); `ui/markdown.js` builds DOM from it, setting text as text, so a body can never inject HTML, and `safeHref` refuses `javascript:` and other schemes. A line that is only `[[dashboard:id]]`, `[[episode:id]]` or `[[show:id]]` embeds live content; the renderer asks the page for the element.
+
+**The public site.** `pages/site.js` routes on the query string (`page`, `view=news`, `view=station`, `show`, `episode`) and builds its menu from the site's pages, News when it has articles, and the station when it hosts one. Links inside the site use `history.pushState`, and the player (`site/station.js` `Player`) lives outside the redrawn area, so audio keeps playing between pages and through live updates. Skinning is two layers: the org theme (`applyTheme`) and the station look, set as `look-player-*`, `look-art-*` and `look-hero-*` classes on `body`. The same station components preview inside the admin plugins.
 
 **Help.** `src/help/` draws its diagrams from the lens files (`lenses/crosswalk.js` works out which regions of each lens sit in each micro / meso / macro tier), so the guide stays right when a lens changes.

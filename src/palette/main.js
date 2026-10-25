@@ -13,7 +13,7 @@ import { DataTool } from './DataTool.js';
 import { PublishTool } from './PublishTool.js';
 
 /**
- * The Creative Palette: a suite of mini-tools for bringing people into the
+ * The Workbench: a suite of mini-tools for bringing people into the
  * data dialogue. Each mini-tool is a function (ctx) → element, listed in
  * MINI_TOOLS. To add one, write the function and add an entry; it gets the
  * same ctx (the org, strategy, data and dashboards, plus helpers).
@@ -40,7 +40,7 @@ Shell(document.querySelector('#shell'), { current: 'palette', org });
 
 const app = document.querySelector('#app');
 app.classList.add('palette');
-const side = h('nav', { class: 'palette-side', 'aria-label': 'Creative Palette' });
+const side = h('nav', { class: 'palette-side', 'aria-label': 'Workbench' });
 const main = h('section', { class: 'palette-main' });
 app.replaceChildren(side, main);
 
