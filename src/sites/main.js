@@ -10,6 +10,8 @@ import { published } from '../platform/podcasts.js';
 import { pluginOn, staffList } from '../platform/org.js';
 import { currentUser } from '../platform/session.js';
 import { DashboardView } from '../charts/DashboardView.js';
+import { CalculatorView } from '../charts/CalculatorView.js';
+import { StoryView } from '../charts/StoryView.js';
 import { Markdown } from '../ui/markdown.js';
 import { readImage } from '../ui/images.js';
 import { EpisodeCard, ShowCard, Player } from '../site/station.js';
@@ -135,6 +137,8 @@ function Editor(p) {
     if (kind === 'dashboard') { const d = docs.dashboards.dashboards[id]; return d ? DashboardView(d, docs) : null; }
     if (kind === 'episode') { const e = docs.podcasts.episodes[id]; return e ? EpisodeCard(ctx, e, { embed: true }) : null; }
     if (kind === 'show') { const s = docs.podcasts.podcasts[id]; return s ? ShowCard(ctx, s) : null; }
+    if (kind === 'calculator') { const c = docs.dashboards.calculators[id]; return c ? CalculatorView(c, docs) : null; }
+    if (kind === 'story') { const s = docs.dashboards.stories[id]; return s ? StoryView(s, docs) : null; }
     return null;
   };
   const drawPreview = () => {
@@ -149,6 +153,10 @@ function Editor(p) {
       if (kind === 'dashboard') { const d = docs.dashboards.dashboards[id]; return !d ? `No dashboard “${id}”.` : d.visibility !== 'public' ? `“${d.title}” is private, so the public site leaves it out.` : null; }
       if (kind === 'episode') { const e = docs.podcasts.episodes[id]; return !e ? `No episode “${id}”.` : !published(e, now) ? `“${e.title}” isn’t published yet, so the public site leaves it out.` : null; }
       if (kind === 'show') return docs.podcasts.podcasts[id] ? null : `No show “${id}”.`;
+      if (kind === 'calculator' || kind === 'story') {
+        const x = docs.dashboards[kind === 'story' ? 'stories' : 'calculators'][id];
+        return !x ? `No ${kind} “${id}”.` : x.visibility !== 'public' ? `“${x.title}” is private, so the public site leaves it out.` : null;
+      }
       return null;
     }).filter(Boolean);
     warnings.replaceChildren(...notes.map((n) => h('div', { role: 'status', class: 'alert alert-warning alert-soft' }, n)));
@@ -185,6 +193,8 @@ function Editor(p) {
   const embedMenu = h('select', { class: 'select select-sm', 'aria-label': 'Insert live content', onchange: (e) => { if (e.target.value) insert(e.target.value); e.target.value = ''; } },
     h('option', { value: '' }, 'Insert…'),
     h('optgroup', { label: 'Dashboards' }, Object.values(docs.dashboards.dashboards).map((d) => h('option', { value: `[[dashboard:${d.id}]]` }, `${d.title}${d.visibility === 'public' ? '' : ' (private)'}`))),
+    h('optgroup', { label: 'Impact calculators' }, Object.values(docs.dashboards.calculators).map((c) => h('option', { value: `[[calculator:${c.id}]]` }, `${c.title}${c.visibility === 'public' ? '' : ' (private)'}`))),
+    h('optgroup', { label: 'Data stories' }, Object.values(docs.dashboards.stories).map((s) => h('option', { value: `[[story:${s.id}]]` }, `${s.title}${s.visibility === 'public' ? '' : ' (private)'}`))),
     pluginOn(org, 'podcasts') && h('optgroup', { label: 'Podcast episodes' }, liveEpisodes().map((e) => h('option', { value: `[[episode:${e.id}]]` }, `${docs.podcasts.podcasts[e.podcastId]?.title}: ${e.title}`))),
     pluginOn(org, 'podcasts') && h('optgroup', { label: 'Podcast shows' }, Object.values(docs.podcasts.podcasts).map((s) => h('option', { value: `[[show:${s.id}]]` }, s.title))));
 

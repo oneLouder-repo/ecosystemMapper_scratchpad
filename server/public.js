@@ -6,7 +6,7 @@
  *   org         profile, contact, logo, theme, plugins, sites that aren't
  *               private, and the names and pictures of people the public
  *               content mentions (hosts, authors)
- *   dashboards  public ones on a public site
+ *   dashboards  public ones on a public site, and public impact calculators and data stories
  *   strategy    just the items those dashboards chart (measures, and the
  *               tasks under a progress widget, with titles and status only)
  *   data        just the series those dashboards chart
@@ -16,6 +16,7 @@
  */
 import { published } from '../src/platform/podcasts.js';
 import { isLive } from '../src/platform/pages.js';
+import { measuresOf } from '../src/platform/dashboards.js';
 
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o?.[k] !== undefined).map((k) => [k, o[k]]));
 const pluginOn = (org, id) => !org.platform?.paused?.[id] && org.plugins?.[id] !== false;
@@ -32,13 +33,19 @@ export function publicDocs(docs, today = new Date().toISOString().slice(0, 10)) 
   const dashboards = Object.fromEntries(Object.entries(docs.dashboards?.dashboards ?? {})
     .filter(([, d]) => d.visibility === 'public' && onSite(d.siteId))
     .map(([id, d]) => [id, pick(d, ['id', 'title', 'description', 'visibility', 'siteId', 'sourceNodeId', 'widgets'])]));
-  out.dashboards = { id: 'dashboards', dashboards };
+  const shown = (coll, keys) => Object.fromEntries(Object.entries(docs.dashboards?.[coll] ?? {})
+    .filter(([, d]) => d.visibility === 'public' && onSite(d.siteId))
+    .map(([id, d]) => [id, pick(d, keys)]));
+  const calculators = shown('calculators', ['id', 'title', 'intro', 'budget', 'outcomes', 'amounts', 'visibility', 'siteId']);
+  const stories = shown('stories', ['id', 'title', 'summary', 'visibility', 'siteId', 'steps']);
+  out.dashboards = { id: 'dashboards', dashboards, calculators, stories };
   const measureIds = new Set();
   const nodeIds = new Set();
   for (const d of Object.values(dashboards)) for (const w of d.widgets ?? []) {
     if (w.measureId) measureIds.add(w.measureId);
     if (w.nodeId) nodeIds.add(w.nodeId);
   }
+  for (const x of [...Object.values(calculators), ...Object.values(stories)]) measuresOf(x).forEach((id) => measureIds.add(id));
   const nodes = docs.strategy?.nodes ?? {};
   const keep = new Set();
   for (const n of Object.values(nodes)) if ((n.measures ?? []).some((m) => measureIds.has(m.id))) keep.add(n.id);
@@ -87,8 +94,9 @@ export function publicDocs(docs, today = new Date().toISOString().slice(0, 10)) 
   return out;
 }
 
-/** Is this uploaded file part of something public (a published episode)? */
+/** Is this uploaded file part of something public (a published episode, a public story's clip)? */
 export function mediaIsPublic(docs, mediaId, today) {
   const pub = publicDocs(docs, today);
-  return Object.values(pub.podcasts?.episodes ?? {}).some((e) => e.audio?.mediaId === mediaId);
+  return Object.values(pub.podcasts?.episodes ?? {}).some((e) => e.audio?.mediaId === mediaId)
+    || Object.values(pub.dashboards?.stories ?? {}).some((s) => s.steps?.some((st) => st.audio?.mediaId === mediaId));
 }

@@ -12,6 +12,8 @@
  *   [[dashboard:<id>]]   a public dashboard
  *   [[episode:<id>]]     a podcast episode with a player
  *   [[show:<id>]]        a podcast show card
+ *   [[calculator:<id>]]  an impact calculator (Workbench)
+ *   [[story:<id>]]       a data story (Workbench)
  */
 import { loadOrSeed } from './storage.js';
 
@@ -19,7 +21,7 @@ export const PAGE_KINDS = [
   { id: 'page', label: 'Page', blurb: 'An information page in the site menu' },
   { id: 'article', label: 'Article', blurb: 'A dated news or blog post' },
 ];
-export const EMBEDS = ['dashboard', 'episode', 'show'];
+export const EMBEDS = ['dashboard', 'episode', 'show', 'calculator', 'story'];
 
 export const slugify = (s = '') => s.toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_-]+/g, '-') || 'page';
 

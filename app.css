@@ -865,3 +865,66 @@ body.login-page, body.platform-page { background: var(--bg); min-height: 100vh; 
 .roadmap a:hover, .report-table a:hover, .overview-plans a:hover { text-decoration: underline; }
 .roadmap-objective h2 a, .roadmap-goal h3 a { color: var(--ink); }
 .report-group h2 a { color: var(--ink); }
+
+/* Impact calculators and data stories (Workbench, and public sites). */
+.tool-picker { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 16px; }
+.tool-picker .select { max-width: 320px; }
+.maker-layout { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.maker-controls { display: flex; flex-direction: column; gap: 4px; }
+.maker-controls .fieldset { padding: 0 0 6px; }
+.maker-controls .input, .maker-controls .select, .maker-controls .textarea { width: 100%; }
+.maker-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.maker-preview { position: sticky; top: 0; min-width: 0; }
+.story-maker .maker-preview { position: static; }
+.outcome-list { border: 0; padding: 0; margin: 4px 0 8px; display: flex; flex-direction: column; gap: 10px; }
+.outcome-row { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-box); background: var(--panel); }
+.outcome-nums { display: flex; gap: 8px; align-items: end; }
+.outcome-nums label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); flex: 1; }
+.outcome-nums .input { width: 100%; }
+.small { font-size: 13px; }
+
+.calculator { background: var(--color-base-100); color: var(--color-base-content); border: 1px solid var(--line); border-radius: var(--radius-box); padding: 24px; margin: 0 0 24px; }
+.calculator header h2 { margin: 0 0 6px; font-size: 24px; text-transform: none; letter-spacing: 0; color: var(--color-base-content); }
+.calculator header p { margin: 0 0 16px; color: var(--muted); line-height: 1.5; }
+.calc-controls { display: flex; align-items: center; gap: 16px; }
+.calc-amount { display: flex; align-items: center; gap: 4px; font-size: 28px; font-weight: 700; }
+.calc-money { width: 7.5em; font-size: 22px; font-weight: 700; height: auto; padding: 4px 10px; }
+.calc-range { flex: 1; min-width: 0; }
+.calc-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
+.calc-sentence { font-size: 22px; line-height: 1.35; margin: 16px 0 6px; max-width: 34em; }
+.calc-sentence strong, .calc-more strong { color: var(--color-primary); font-size: 1.25em; }
+.calc-more { list-style: none; padding: 0; margin: 0 0 6px; font-size: 18px; line-height: 1.5; }
+.calc-basis { font-size: 13px; color: var(--muted); margin: 14px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
+
+.story { margin: 0 0 24px; }
+.story-head h2 { margin: 0 0 6px; }
+.story-head p { color: var(--muted); margin: 0 0 12px; }
+.story-body { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 28px; align-items: start; }
+.story-steps { display: flex; flex-direction: column; gap: 32vh; padding: 8vh 0 30vh; }
+.story-step { background: var(--color-base-100); border: 1px solid var(--line); border-radius: var(--radius-box); padding: 18px 20px; opacity: 0.45; transition: opacity 0.3s; }
+.story-step.on { opacity: 1; box-shadow: inset 3px 0 0 var(--color-primary); }
+.story-step h3 { margin: 4px 0 8px; font-size: 19px; }
+.story-step p { margin: 0 0 10px; line-height: 1.55; }
+.story-count { font-size: 12px; color: var(--muted); }
+.story-listen { margin-top: 4px; }
+.story-stage { position: sticky; top: 12vh; }
+.story-stage .story-chart { margin: 0; animation: story-in 0.35s ease-out; }
+@keyframes story-in { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .story-step { transition: none; } .story-stage .story-chart { animation: none; } }
+.story-step-edit { border: 1px solid var(--line); border-radius: var(--radius-box); padding: 8px 12px 10px; margin: 6px 0; background: var(--panel); }
+.story-step-edit legend { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; padding: 0 4px; }
+.step-tools { display: inline-flex; gap: 2px; }
+.story-audio-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.story-audio-row .input { flex: 1; }
+.story-page .story-steps { gap: 40vh; }
+.story-card strong { font-size: 17px; }
+
+@media (max-width: 900px) {
+  .maker-layout { grid-template-columns: 1fr; }
+  .maker-preview { position: static; }
+  .story-body { grid-template-columns: 1fr; }
+  .story-stage { grid-row: 1; top: 0; z-index: 1; background: var(--color-base-200); padding: 6px 0; }
+  .story-stage .story-chart { max-height: 42vh; overflow: hidden; }
+  .story-steps { gap: 24vh; padding-top: 4vh; }
+  .calc-controls { flex-direction: column; align-items: stretch; }
+}

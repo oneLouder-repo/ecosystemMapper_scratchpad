@@ -12,7 +12,7 @@ import { blankOrg, migrateOrg } from './org.js';
 import { migrateStrategy, measureIndex } from './strategy.js';
 import { blankStrategy } from './strategySeed.js';
 import { seedData } from './data.js';
-import { seedDashboards } from './dashboards.js';
+import { seedDashboards, migrateDashboards } from './dashboards.js';
 import { blankPodcasts, migratePodcasts } from './podcasts.js';
 import { loadPages as loadPagesFor } from './pages.js';
 import { loadMapIndex, loadAllMaps } from './maps.js';
@@ -23,7 +23,14 @@ const seedFor = (doc) => SEEDS[activeOrg()]?.[doc];
 export const loadOrg = () => migrateOrg(loadOrSeed('org', seedFor('org') ?? (() => blankOrg({ id: activeOrg(), name: 'New org' }))));
 export const loadStrategy = () => migrateStrategy(loadOrSeed('strategy', seedFor('strategy') ?? blankStrategy));
 export const loadData = () => loadOrSeed('data', () => seedData(Object.keys(measureIndex(loadStrategy()))));
-export const loadDashboards = () => loadOrSeed('dashboards', () => seedDashboards(loadStrategy()));
+// Example orgs get the example calculators and stories when an older document has none.
+export function loadDashboards() {
+  const doc = loadOrSeed('dashboards', () => seedDashboards(loadStrategy()));
+  if (doc.calculators && doc.stories) return doc;
+  migrateDashboards(doc, seedFor('strategy') ? loadStrategy() : null);
+  saveDoc('dashboards', doc);
+  return doc;
+}
 export const loadPodcasts = () => migratePodcasts(loadOrSeed('podcasts', seedFor('podcasts') ?? blankPodcasts));
 export const loadPages = () => loadPagesFor(activeOrg());
 export const loadMaps = () => loadMapIndex(seedFor('maps'));

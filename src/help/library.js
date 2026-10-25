@@ -148,6 +148,15 @@ The **Strategic data** tab in Strategy & Work shows every measure's latest value
 
 **Data postcards** turn one measure into a picture in your colours, with alt text, for newsletters, social posts and slides. Pick a measure, add a headline, and download the PNG.`,
         },
+        {
+          id: 'calculators-stories',
+          title: 'Impact calculators and data stories',
+          body: `An **impact calculator** is a slider for your site: "a gift of $50 means 3 more youth in a program". Give what the work costs a year and pick the measures it moves. The cost of one comes from your program data, so it stays current. Type a yearly count or a cost of its own on an outcome to override it.
+
+A **data story** tells what the numbers mean one step at a time. Each step has a few words, a chart that changes as readers scroll, and an audio clip if you have one.
+
+Both publish like dashboards: make one public and choose a site. Calculators show on the site's home page and stories are listed there. Put either in a page with \`[[calculator:id]]\` or \`[[story:id]]\`, or use the Insert menu in the page editor.`,
+        },
       ],
     },
     {
