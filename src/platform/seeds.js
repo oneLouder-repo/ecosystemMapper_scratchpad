@@ -13,6 +13,7 @@ import { seedPages, seedRiverbendPages } from './pages.js';
 import { mapEntry, mapDocName } from './maps.js';
 import { createMap } from '../core/ops.js';
 import { seedMap } from '../seed.js';
+import { seedStudio } from './studio.js';
 
 const exampleMaps = () => {
   const main = { ...seedMap(), id: 'map-ecosystem' };
@@ -53,6 +54,7 @@ export function exampleDocs(orgId) {
     maps: maps.index,
   };
   if (seed.podcasts) docs.podcasts = seed.podcasts();
+  docs.studio = seedStudio(strategy, { staff: Object.keys(docs.org.staff) });
   for (const [id, map] of Object.entries(maps.contents)) docs[mapDocName(id)] = map;
   return docs;
 }

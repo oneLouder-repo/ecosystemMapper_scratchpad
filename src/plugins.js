@@ -35,6 +35,14 @@ export const PLUGINS = [
     },
   },
   {
+    id: 'studio',
+    name: 'Planning Studio',
+    href: 'studio.html',
+    icon: 'studio',
+    blurb: 'Facilitate strategic planning online: a shared SOAR whiteboard, the plan’s context and team, a results framework, and a canvas for wiring ideas into objectives and goals.',
+    stats: ({ studio }) => `${Object.keys(studio?.plans ?? {}).length} plans in the studio · ${Object.keys(studio?.cards ?? {}).length} SOAR cards`,
+  },
+  {
     id: 'palette',
     name: 'Workbench',
     href: 'palette.html',

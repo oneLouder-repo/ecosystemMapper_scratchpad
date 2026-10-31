@@ -1,0 +1,68 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { seedStudio, mergeStudio, sendToPlan, plansOf, canWire, blankStudio } from '../src/platform/studio.js';
+import { seedStrategy } from '../src/platform/strategySeed.js';
+import { migrateStrategy, childrenOf } from '../src/platform/strategy.js';
+import { applyCollectionOp, col } from '../src/core/collections.js';
+import { settle } from '../src/studio/Results.js';
+
+const strategy = () => migrateStrategy(seedStrategy());
+
+test('the example studio plans the long-range plan, with a SOAR in every quadrant', () => {
+  const s = strategy();
+  const doc = seedStudio(s, { staff: ['s-ed', 's-eval'] });
+  const [planId] = Object.keys(doc.plans);
+  assert.equal(s.nodes[planId].type, 'plan');
+  assert.match(s.nodes[planId].title, /2026/);
+  for (const q of ['s', 'o', 'a', 'r']) assert.ok(Object.values(doc.cards).some((c) => c.quadrant === q), q);
+  assert.ok(Object.values(doc.wires).every((w) => canWire(doc.blocks[w.from], doc.blocks[w.to])), 'every example wire is allowed');
+  assert.deepEqual(plansOf(s).map((p) => p.depth), [0, 1]);
+});
+
+test('merging keeps the newer of each card, and deletions stick', () => {
+  const base = blankStudio();
+  base.cards.a = { id: 'a', text: 'old', at: 1 };
+  base.cards.b = { id: 'b', text: 'mine', at: 1 };
+  const theirs = structuredClone(base);
+  theirs.cards.a = { id: 'a', text: 'new', at: 5 };
+  theirs.cards.c = { id: 'c', text: 'theirs', at: 3 };
+  delete theirs.cards.b;
+  theirs.gone.b = 4;
+  const mine = structuredClone(base);
+  mine.cards.d = { id: 'd', text: 'also mine', at: 6 };
+  const out = mergeStudio(mine, theirs);
+  assert.equal(out.cards.a.text, 'new');
+  assert.equal(out.cards.b, undefined, 'their delete wins over an older card');
+  assert.equal(out.cards.c.text, 'theirs');
+  assert.equal(out.cards.d.text, 'also mine');
+  // A card changed after someone deleted it comes back.
+  mine.cards.b = { id: 'b', text: 'edited later', at: 9 };
+  assert.equal(mergeStudio(mine, theirs).cards.b.text, 'edited later');
+  assert.deepEqual(mergeStudio(out, out), out, 'merging is stable');
+});
+
+test('send to plan makes objectives and goals, then updates them', () => {
+  const s = strategy();
+  const doc = seedStudio(s, { staff: [] });
+  const [planId] = Object.keys(doc.plans);
+  const first = sendToPlan(doc, s, planId);
+  assert.equal(first.loose, 0);
+  // The example objective and one goal are already in the plan, so they update; the co-design goal is new.
+  assert.equal(first.updated, 2);
+  assert.equal(first.made, 1);
+  applyCollectionOp(s, col.batch(first.strategyOps));
+  applyCollectionOp(doc, col.batch(first.studioOps));
+  const goals = childrenOf(s, 'obj-equity').map((n) => n.title);
+  assert.ok(goals.includes('Co-design programs with Indigenous partners'));
+  const coDesign = childrenOf(s, 'obj-equity').find((n) => n.title.startsWith('Co-design'));
+  assert.match(coDesign.notes, /Opportunities: Indigenous-led programs/);
+  assert.equal(childrenOf(s, 'obj-equity').filter((n) => /girls/i.test(n.title)).length, 1, 'the goal already in the plan isn’t duplicated');
+  const again = sendToPlan(doc, s, planId);
+  assert.equal(again.made, 0, 'sending again updates rather than duplicates');
+  assert.equal(again.updated, 3);
+});
+
+test('results that land on others push them down the grid', () => {
+  const cards = [{ id: 'a', x: 0, y: 0, w: 4, h: 3 }, { id: 'b', x: 2, y: 2, w: 4, h: 3 }, { id: 'c', x: 2, y: 5, w: 4, h: 2 }];
+  assert.deepEqual(settle(cards, 'a'), [['b', { y: 3 }], ['c', { y: 6 }]]);
+});

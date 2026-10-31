@@ -160,6 +160,32 @@ Both publish like dashboards: make one public and choose a site. Calculators sho
       ],
     },
     {
+      id: 'studio',
+      title: 'Planning Studio',
+      icon: 'studio',
+      blurb: 'Facilitate a strategic plan together: SOAR, context, results, and wiring ideas into objectives and goals.',
+      pages: [
+        {
+          id: 'studio-flow',
+          title: 'From SOAR to a plan',
+          body: `The Planning Studio works on the plans in your strategic framework (the same ones as in Strategy & Work). Each plan has:
+
+- **Plan home:** its dates, the mission and vision it serves, its operating context and its planning team.
+- **SOAR board:** a shared whiteboard. Double-click a quadrant to add a card, drag cards by their top strip, and click the dot to vote. Everyone with the plan open sees changes as they save.
+- **Strengths, Opportunities, Aspirations:** the same cards as lists, most dotted first, where you can say more and link assets with the asset chooser.
+- **Results:** a grid of result cards, each with an indicator, baseline, target, source and how often it is measured. Link a Strategy & Work measure to use its live data.
+- **Assemble:** drag cards, context, results and assets onto the canvas, add goals and objectives, and patch outlets into inlets. **Send to plan** makes the objectives and goals in Strategy & Work. Sending again updates them rather than making copies.`,
+        },
+        {
+          id: 'studio-live',
+          title: 'Running a live session',
+          body: `Share the plan's SOAR board link with everyone in the session. Each card remembers who added it and when it last changed, so people working at the same time only overwrite each other if they change the very same card at the same moment. The **Live** chip pulses when someone else's change arrives.
+
+Ctrl+Z (or ⌘+Z) undoes your own last change.`,
+        },
+      ],
+    },
+    {
       id: 'public-sites',
       title: 'Public sites',
       icon: 'globe',
