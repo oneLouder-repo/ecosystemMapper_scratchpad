@@ -19,6 +19,7 @@ export const ICONS = {
   unlock: 'M6 11 H18 V20 H6 Z M8.5 11 V8 A3.5 3.5 0 0 1 15.2 6.5',
   plus: 'M12 5 V19 M5 12 H19',
   check: 'M5 12.5 L10 17.5 L19 7',
+  download: 'M12 4 V15 M7 10.5 L12 15.5 L17 10.5 M5 20 H19',
   chevronDown: 'M6 9 L12 15 L18 9',
   chevronRight: 'M9 6 L15 12 L9 18',
   close: 'M6 6 L18 18 M18 6 L6 18',

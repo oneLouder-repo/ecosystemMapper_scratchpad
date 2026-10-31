@@ -21,16 +21,19 @@
  */
 import { randomBytes, scrypt as scryptCb, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
-import { createWriteStream, mkdirSync, rmSync, renameSync, unlinkSync } from 'node:fs';
+import { createWriteStream, createReadStream, mkdirSync, rmSync, renameSync, unlinkSync, statSync } from 'node:fs';
+import { crc32 as zlibCrc32 } from 'node:zlib';
 import { join, normalize, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import { Transform } from 'node:stream';
+import { Transform, Readable } from 'node:stream';
 import { config, urlFor, orgHost } from './config.js';
 import { now } from './db.js';
 import { HttpError, send, json, redirect, page, readJson, parseCookies, cookie, sendFile } from './http.js';
 import { publicDocs, mediaIsPublic } from './public.js';
 import { uploadRoutes } from './uploads.js';
 import { PROVIDERS, authorizeUrl, finish } from './oauth.js';
+import { zipStream, zipSize } from '../src/core/zip.js';
+import { showArchive } from '../src/platform/showArchive.js';
 import { blankOrg, migrateOrg } from '../src/platform/org.js';
 import { blankStrategy } from '../src/platform/strategySeed.js';
 
@@ -533,6 +536,56 @@ export function createApp(db) {
     throw new HttpError(404, 'Not found');
   }
 
+  /**
+   * A featured show as a .zip to listen to offline (see src/platform/showArchive.js).
+   * Anyone can download a featured show that is on the public station;
+   * members can download any show. Audio streams straight from disk into
+   * the archive, so even a show of several GB needs no extra memory.
+   */
+  async function showZip(req, res, a, showId) {
+    if (!a.org) return send(res, 404, 'Not found');
+    const all = readDocs(a.org.id);
+    const docs = a.member ? all : publicDocs(all, today());
+    const pods = docs.podcasts;
+    const show = pods?.podcasts?.[showId];
+    if (!show || (!a.member && !show.featured)) return send(res, 404, 'Not found');
+    const fileOf = (e) => {
+      if (e.audio?.mediaId) {
+        const row = q('SELECT id FROM media WHERE id = ? AND org_id = ?').get(e.audio.mediaId, a.org.id);
+        return row ? join(config.dataDir, 'media', a.org.id, row.id) : null;
+      }
+      const rel = normalize(String(e.audio?.url ?? '')).replace(/^([/\\])+/, '');
+      const file = join(config.root, rel);
+      return rel.startsWith(`media${sep}`) && file.startsWith(join(config.root, 'media') + sep) ? file : null;
+    };
+    const sizes = new Map();
+    const sizeOf = (e) => {
+      if (!sizes.has(e.id)) { const f = fileOf(e); let n = -1; try { n = f ? statSync(f).size : -1; } catch { /* missing */ } sizes.set(e.id, n); }
+      return sizes.get(e.id);
+    };
+    const plan = showArchive({ doc: pods, org: docs.org, showId, today: today(), audioSize: sizeOf, sourceUrl: urlFor(a.t.host, `/?site#show=${showId}`) });
+    const enc = new TextEncoder();
+    const entries = [
+      ...plan.texts.map((t) => { const data = enc.encode(t.text); return { name: t.name, size: data.length, data }; }),
+      ...plan.binaries.map((b) => ({ name: b.name, size: b.bytes.length, data: b.bytes })),
+      // Episodes whose audio is missing are left out rather than breaking the download.
+      ...plan.audio.filter((x) => x.size >= 0).map((x) => ({ name: x.name, size: x.size, data: createReadStream(fileOf(x.episode), { highWaterMark: 1 << 20 }) })),
+    ];
+    res.writeHead(200, {
+      'content-type': 'application/zip',
+      'content-length': zipSize(entries),
+      'content-disposition': `attachment; filename="${plan.filename}"`,
+      'cache-control': a.member ? 'private, no-store' : 'public, max-age=600',
+    });
+    if (req.method === 'HEAD') return res.end();
+    try {
+      await pipeline(Readable.from(zipStream(entries, { crc: zlibCrc32 })), res);
+    } catch (err) {
+      if (err.code !== 'ERR_STREAM_PREMATURE_CLOSE') console.warn('Show download stopped:', err.message);
+      for (const e of entries) e.data.destroy?.();
+    }
+  }
+
   /* Files: the app's pages and modules, and uploaded media. */
   const PUBLIC_DIRS = ['src/', 'vendor/', 'media/'];
   function files(req, res, a, path) {
@@ -546,6 +599,7 @@ export function createApp(db) {
         headers: { 'content-disposition': `inline; filename="${row.filename.replace(/"/g, '')}"` },
       });
     }
+    if ((m = path.match(/^\/podcasts\/([\w-]+)\.zip$/))) return showZip(req, res, a, m[1]);
     if (path === '/favicon.ico') return send(res, 204);
     if (path === '/') {
       // The root site is the platform's own page; an org's address is its app (for members) or its public site.

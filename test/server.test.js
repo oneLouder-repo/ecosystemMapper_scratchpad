@@ -246,3 +246,34 @@ test('large uploads arrive in chunks, resume after a gap, and are checked before
   assert.equal((await call(EX, 'POST', `/api/uploads/${fake.json.id}/complete`, { cookie: amara })).status, 415);
   assert.equal((await call(EX, 'GET', `/api/uploads/${fake.json.id}`, { cookie: amara })).status, 404);
 });
+
+test('a featured show downloads as a zip that plays offline; other shows stay with members', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { writeFileSync } = await import('node:fs');
+  const { json: s } = await call(EX, 'GET', '/api/session');
+  const shows = Object.values(s.docs.podcasts.podcasts);
+  const featured = shows.find((p) => p.featured);
+  const other = shows.find((p) => !p.featured);
+  const head = await call(EX, 'HEAD', `/podcasts/${featured.id}.zip`);
+  assert.equal(head.status, 200);
+  const res = await call(EX, 'GET', `/podcasts/${featured.id}.zip`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers['content-type'], 'application/zip');
+  assert.equal(Number(res.headers['content-length']), res.raw.length, 'the size is known up front');
+  assert.match(res.headers['content-disposition'], /attachment; filename=".+\.zip"/);
+  const file = join(dataDir, 'show.zip');
+  writeFileSync(file, res.raw);
+  const listing = execFileSync('unzip', ['-l', file]).toString();
+  assert.match(listing, /index\.html/);
+  assert.match(listing, /player\.js/);
+  assert.match(listing, /show\.json/);
+  assert.match(listing, /audio\/S\d\dE\d\d .+\.mp3/);
+  execFileSync('unzip', ['-tq', file]);
+  const index = execFileSync('unzip', ['-p', file, '*/index.html']).toString();
+  assert.match(index, new RegExp(featured.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(index, /window\.SHOW = /);
+  assert.equal((await call(EX, 'GET', `/podcasts/${other.id}.zip`)).status, 404, 'not featured: not for visitors');
+  const amara = await signIn('amara@example.org');
+  assert.equal((await call(EX, 'HEAD', `/podcasts/${other.id}.zip`, { cookie: amara })).status, 200, 'members can take any show');
+  assert.equal((await call(RB, 'GET', `/podcasts/${featured.id}.zip`)).status, 404, 'only at its own org');
+});
