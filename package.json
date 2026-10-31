@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server.js",
     "dev": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning --watch-path=server server.js",
-    "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.js\""
+    "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.js\"",
+    "audit": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server/audit-cli.js",
+    "backup": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning -e \"import('./server/config.js').then(async ({config})=>{const {openDb}=await import('./server/db.js');const {backupNow}=await import('./server/backup.js');console.log(backupNow(openDb(config.dataDir)))})\""
   },
   "engines": {
     "node": ">=22.13"

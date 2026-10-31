@@ -297,3 +297,22 @@ test('sessions are stored hashed, pages carry security headers, sign-in guessing
   }
   assert.equal((await call(EX, 'POST', '/api/auth/password', { body: { email: 'TARGET@example.org', password: 'x' } })).status, 429);
 });
+
+test('the security audit is for the platform admin, proves sessions are hashed, and spots secrets in documents', async () => {
+  assert.equal((await call(EX, 'GET', '/api/admin/audit', { cookie: await signIn('amara@example.org') })).status, 403);
+  const admin = await signIn('admin@localhost', 'localhost');
+  srv.app.writeDoc('org-riverbend', 'notes', { text: 'wifi password: hunter2hunter2' });
+  const { json: audit } = await call('localhost', 'GET', '/api/admin/audit', { cookie: admin });
+  const check = (title) => audit.checks.find((c) => c.title === title);
+  assert.equal(check('Sign-in tokens are hashed').status, 'pass');
+  assert.match(check('Sign-in tokens are hashed').detail, /your own session/);
+  assert.equal(check('Passwords are hashed').status, 'pass');
+  assert.equal(check('No secrets in documents').status, 'warn');
+  assert.match(check('No secrets in documents').detail, /Riverbend.*notes/);
+  assert.ok(!JSON.stringify(audit).includes('hunter2'), 'never repeats the secret');
+  assert.equal(check('Staff details stay private').status, 'pass');
+
+  const before = (await call('localhost', 'GET', '/api/admin/backups', { cookie: admin })).json.length;
+  assert.equal((await call('localhost', 'POST', '/api/admin/backups', { cookie: admin })).status, 201);
+  assert.equal((await call('localhost', 'GET', '/api/admin/backups', { cookie: admin })).json.length, before + 1);
+});

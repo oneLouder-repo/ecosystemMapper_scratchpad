@@ -16,7 +16,7 @@
  *                sign-in to another of the platform's hosts
  */
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SCHEMA = [
@@ -61,6 +61,8 @@ const SCHEMA = [
 export function openDb(dataDir) {
   mkdirSync(join(dataDir, 'media'), { recursive: true });
   const db = new DatabaseSync(join(dataDir, 'toolbox.db'));
+  // Only the server's own account may read the data.
+  try { chmodSync(dataDir, 0o700); chmodSync(join(dataDir, 'toolbox.db'), 0o600); } catch { /* not on this system */ }
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   // Schema versions: add new statements to SCHEMA; each runs once.
   db.exec('CREATE TABLE IF NOT EXISTS schema_version (n INTEGER NOT NULL)');

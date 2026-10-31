@@ -1161,3 +1161,21 @@ body.studio-page { height: 100vh; display: flex; flex-direction: column; overflo
 .soar-canvas .soar-card { position: absolute; border-style: solid; border-color: var(--q); border-radius: 6px; background: color-mix(in oklab, var(--q) 14%, #fffdf3); box-shadow: 0 2px 6px rgb(0 0 0 / 0.12); cursor: grab; z-index: 2; transform: none; }
 .soar-canvas .soar-card.dragging { cursor: grabbing; z-index: 50; box-shadow: 0 12px 28px rgb(0 0 0 / 0.25); }
 .soar-canvas .soar-card textarea { cursor: text; }
+
+/* Platform admin → Security audit. */
+.audit-summary .sum-fail .stat-value { color: var(--color-error); }
+.audit-summary .sum-warn .stat-value { color: var(--color-warning); }
+.audit-summary .sum-pass .stat-value { color: var(--color-success); }
+.audit-group h3 { font-size: 13px; font-weight: 750; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 22px 0 8px; }
+.audit-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line-soft, var(--line)); border-radius: var(--radius-box); background: var(--panel); }
+.audit-item { display: grid; grid-template-columns: 92px 1fr; gap: 12px; padding: 12px 14px; align-items: start; }
+.audit-item + .audit-item { border-top: 1px solid var(--line-soft, var(--line)); }
+.audit-item .badge { gap: 4px; justify-self: start; margin-top: 1px; }
+.audit-item p { margin: 2px 0 0; font-size: 13.5px; color: var(--muted); }
+.audit-item .audit-fix { color: var(--ink); font-weight: 600; }
+.audit-item .audit-fix::before { content: '→ '; color: var(--accent); }
+.audit-fail { background: color-mix(in oklab, var(--color-error) 5%, transparent); }
+.backup-card { margin-top: 24px; }
+.backup-list { list-style: none; padding: 0; margin: 0 0 10px; font-size: 14px; }
+.backup-list li { display: flex; justify-content: space-between; max-width: 360px; padding: 4px 0; border-bottom: 1px dashed var(--line-soft, var(--line)); }
+@media (max-width: 600px) { .audit-item { grid-template-columns: 1fr; gap: 6px; } }

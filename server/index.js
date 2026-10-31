@@ -9,6 +9,7 @@ import { config, urlFor, orgHost } from './config.js';
 import { openDb } from './db.js';
 import { createApp, hashPassword } from './app.js';
 import { exampleDocs } from '../src/platform/seeds.js';
+import { scheduleBackups } from './backup.js';
 
 export async function start({ port = config.port, quiet = false } = {}) {
   const db = openDb(config.dataDir);
@@ -33,7 +34,26 @@ export async function start({ port = config.port, quiet = false } = {}) {
     log('Added the example organisations.');
   }
 
-  const server = createServer((req, res) => app.handle(req, res));
+  // A database snapshot now if there's none from today, then daily.
+  const backups = scheduleBackups(db, log);
+
+  // /healthz answers the host's health checks without touching sessions.
+  const server = createServer((req, res) => {
+    if (req.url === '/healthz') {
+      try { db.prepare('SELECT 1').get(); res.writeHead(200, { 'content-type': 'text/plain' }).end('ok'); } catch { res.writeHead(503).end('database unavailable'); }
+      return;
+    }
+    app.handle(req, res);
+  });
+  // Hosts stop the app with SIGTERM when deploying: finish what's in flight, close the database cleanly.
+  const stop = (signal) => {
+    log(`\n${signal}: stopping.`);
+    clearInterval(backups);
+    server.close(() => { try { db.close(); } catch { /* closed */ } process.exit(0); });
+    server.closeIdleConnections?.();
+    setTimeout(() => process.exit(0), 10_000).unref();
+  };
+  if (!quiet) for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => stop(sig));
   await new Promise((resolve) => server.listen(port, resolve));
   const actual = server.address().port;
   if (!quiet) {

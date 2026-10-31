@@ -31,6 +31,8 @@ import { now } from './db.js';
 import { HttpError, send, json, redirect, page, readJson, parseCookies, cookie, sendFile, clientIp, securityHeaders } from './http.js';
 import { publicDocs, mediaIsPublic } from './public.js';
 import { uploadRoutes } from './uploads.js';
+import { runAudit } from './audit.js';
+import { backupNow, listBackups } from './backup.js';
 import { PROVIDERS, authorizeUrl, finish } from './oauth.js';
 import { zipStream, zipSize } from '../src/core/zip.js';
 import { showArchive } from '../src/platform/showArchive.js';
@@ -477,6 +479,9 @@ export function createApp(db) {
           return json(res, 200, { ok: true });
         }
       }
+      if (path === '/api/admin/audit' && method === 'GET') return json(res, 200, runAudit(db, { req, cookieName: COOKIE }));
+      if (path === '/api/admin/backups' && method === 'GET') return json(res, 200, listBackups());
+      if (path === '/api/admin/backups' && method === 'POST') return json(res, 201, backupNow(db));
       if (path === '/api/admin/users' && method === 'GET') {
         return json(res, 200, q('SELECT id, email, name, is_super, password_hash IS NOT NULL AS has_password, created_at FROM users ORDER BY name').all().map((u) => ({
           ...u,

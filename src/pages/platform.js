@@ -10,7 +10,7 @@ import { SideNav } from '../ui/SideNav.js';
  * open and, for the platform admin, the console to add organisations,
  * set their plan, suspend or remove them, and manage people's sign-in.
  * The console uses the same sidebar as the plugins, one section at a time:
- * #orgs (default), #add, #people.
+ * #orgs (default), #add, #people, #security (the audit and backups).
  */
 const app = document.querySelector('#app');
 const call = async (method, url, body) => {
@@ -81,7 +81,7 @@ async function render() {
   }));
   const act = async (fn) => { try { await fn(); await reload(); } catch (err) { alert(err.message); } };
 
-  const route = ['orgs', 'add', 'people'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'orgs';
+  const route = ['orgs', 'add', 'people', 'security'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'orgs';
   const active = orgs.filter((o) => o.status === 'active').length;
   const stat = (label, value, hint) => h('div', { class: 'stat' }, h('div', { class: 'stat-title' }, label), h('div', { class: 'stat-value' }, value), hint && h('div', { class: 'stat-desc' }, hint));
   const side = SideNav({ label: 'Platform admin', sections: [
@@ -89,6 +89,7 @@ async function render() {
       { label: 'Organisations', sub: `${orgs.length} on the platform`, icon: 'org', href: '#orgs', on: route === 'orgs' },
       { label: 'Add an organisation', icon: 'plus', href: '#add', on: route === 'add' },
       { label: 'People who can sign in', sub: `${users.length} people`, icon: 'person', href: '#people', on: route === 'people' },
+      { label: 'Security audit', sub: 'Checks and backups', icon: 'lock', href: '#security', on: route === 'security' },
     ] },
     { title: 'Open an organisation', items: session.orgs.map((o) => ({ label: o.name, sub: o.url.replace(/^https?:\/\//, ''), lead: h('span', { class: 'logo-initials', style: 'width:20px;height:20px;font-size:9px' }, initials(o.name)), href: open(o) })) },
   ] });
@@ -102,6 +103,7 @@ async function render() {
     allOrgs);
   sections.add = () => addOrg;
   sections.people = () => people;
+  sections.security = () => Security();
   window.onhashchange = () => render();
 
   const addOrg = h('section', { class: 'card card-border bg-base-100 platform-card' }, h('div', { class: 'card-body' },
@@ -153,6 +155,63 @@ async function render() {
   app.replaceChildren(side, main);
   document.querySelector('.platform-head')?.remove();
   app.before(head);
+}
+
+/**
+ * The security audit (server/audit.js) and database backups. The checks run
+ * each time this opens; nothing they find (a password in a document, say)
+ * is shown, only where it is.
+ */
+const STATUS = {
+  fail: { label: 'Fix', cls: 'badge-error', icon: 'close' },
+  warn: { label: 'Look at', cls: 'badge-warning', icon: 'eye' },
+  pass: { label: 'OK', cls: 'badge-success', icon: 'check' },
+  info: { label: 'Note', cls: 'badge-ghost', icon: 'help' },
+};
+function Security() {
+  const body = h('div', { class: 'audit' }, h('p', { class: 'muted' }, 'Running the checks…'));
+  const backups = h('div', {});
+  const size = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.ceil(n / 1024)} KB`);
+  const when = (iso) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
+  async function run() {
+    const { checks, summary, at } = await call('GET', '/api/admin/audit');
+    const groups = [...new Set(checks.map((c) => c.area))];
+    body.replaceChildren(h('div', {},
+      h('div', { class: 'stats stats-border platform-stats audit-summary' },
+        [['fail', 'To fix'], ['warn', 'To look at'], ['pass', 'Passed']].map(([k, label]) => h('div', { class: `stat sum-${k}` },
+          h('div', { class: 'stat-title' }, label), h('div', { class: 'stat-value' }, summary[k])))),
+      h('p', { class: 'muted small' }, `Checked ${when(at)}. `, h('button', { class: 'btn btn-xs', onclick: run }, 'Run again')),
+      groups.map((g) => h('section', { class: 'audit-group' },
+        h('h3', {}, g),
+        h('ul', { class: 'audit-list' }, checks.filter((c) => c.area === g).map((c) => {
+          const st = STATUS[c.status];
+          return h('li', { class: `audit-item audit-${c.status}` },
+            h('span', { class: `badge badge-sm ${st.cls}` }, icon(st.icon, 12), st.label),
+            h('div', {}, h('strong', {}, c.title), h('p', {}, c.detail), c.fix && h('p', { class: 'audit-fix' }, c.fix)));
+        }))))));
+  }
+  async function loadBackups() {
+    const list = await call('GET', '/api/admin/backups');
+    backups.replaceChildren(list.length
+      ? h('ul', { class: 'backup-list' }, list.slice(0, 7).map((b) => h('li', {}, h('span', {}, when(b.at)), h('span', { class: 'muted' }, size(b.size)))))
+      : h('p', { class: 'empty' }, 'No snapshots yet.'));
+  }
+  const now = h('button', { class: 'btn btn-sm', onclick: async () => {
+    now.disabled = true;
+    try { await call('POST', '/api/admin/backups'); await Promise.all([loadBackups(), run()]); } catch (err) { alert(err.message); }
+    now.disabled = false;
+  } }, icon('download', 14), 'Back up now');
+  run().catch((err) => body.replaceChildren(h('p', { class: 'empty' }, err.message)));
+  loadBackups().catch(() => {});
+  return h('div', {},
+    h('h2', {}, 'Security audit'),
+    h('p', { class: 'muted small' }, 'Checks on how the platform is set up and what it stores: settings, how passwords and sign-ins are kept, what visitors can see, and backups. The same checks run from the command line with npm run audit.'),
+    body,
+    h('section', { class: 'card card-border bg-base-100 platform-card backup-card' }, h('div', { class: 'card-body' },
+      h('h2', { class: 'card-title' }, 'Database backups'),
+      h('p', { class: 'muted small' }, 'A snapshot of the database is taken every day and kept for two weeks, in the data folder’s backups. Uploaded audio isn’t in it; the host’s disk snapshots cover that.'),
+      backups, h('div', {}, now))));
 }
 
 async function reload() {
