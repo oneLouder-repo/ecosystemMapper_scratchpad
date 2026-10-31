@@ -12,9 +12,11 @@ import { Detail } from './Detail.js';
 import { Overview } from './Overview.js';
 import { StrategicData, Completion, Roadmap } from './Reports.js';
 import { PluginHeader } from '../ui/PluginHeader.js';
+import { SideNav, swapSide } from '../ui/SideNav.js';
+import { short } from './dates.js';
 
 /**
- * Strategy & Work, in tabs:
+ * Strategy & Work, in sections listed down the shared sidebar:
  *
  *   #overview     the framework at a glance, with a treemap down to workplans
  *   #framework    the interactive framework: the strategy as a tree on the
@@ -82,12 +84,22 @@ const tools = h('div', { class: 'plugin-header-actions' },
       ctx.select(rootOf(store.doc).id);
     } }, 'Example'));
 const app = document.querySelector('#app');
-app.classList.add('strategy');
-app.replaceChildren(head, framework, report);
+app.classList.add('strategy', 'frame');
+let side = h('nav');
+app.replaceChildren(side, h('div', { class: 'strategy-column' }, head, framework, report));
+
+function drawSide(tab) {
+  const plans = Object.values(store.doc.nodes).filter((n) => n.type === 'plan').sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  side = swapSide(side, SideNav({ label: 'Strategy & Work', sections: [
+    { title: 'Strategy & Work', items: TABS.map((t) => ({ label: t.label, icon: t.icon, href: `#${t.id}`, on: t.id === tab && !(tab === 'framework' && plans.some((p) => p.id === ctx.selectedId)) })) },
+    plans.length && { title: 'Plans', items: plans.map((p) => ({ label: p.title, sub: [p.start, p.end].filter(Boolean).map(short).join(' – '), icon: 'doc', href: `#${p.id}`, on: tab === 'framework' && ctx.selectedId === p.id })) },
+  ] }));
+}
 
 function render() {
   const tab = ctx.tab;
-  head.replaceChildren(PluginHeader('strategy', { tabs: TABS, current: tab, actions: tab === 'framework' ? tools : null }));
+  drawSide(tab);
+  head.replaceChildren(PluginHeader('strategy', { title: tab === 'overview' ? null : `${TABS.find((t) => t.id === tab).label}`, actions: tab === 'framework' ? tools : null }));
   framework.hidden = tab !== 'framework';
   report.hidden = tab === 'framework';
   if (tab !== 'framework') {

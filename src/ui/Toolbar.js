@@ -2,8 +2,8 @@ import { h } from './dom.js';
 import { icon } from './icons.js';
 
 /**
- * The tools down the left of the board. Nothing here stays switched on
- * except Data viz:
+ * The mapper's tools, as a menu in the sidebar. Nothing here stays
+ * switched on except Data viz:
  *   Select          the usual pointer
  *   Actor, Agent    click to add one, or drag one onto the board
  *   Connect         draw one connector, then back to Select
@@ -11,21 +11,26 @@ import { icon } from './icons.js';
  */
 export function Toolbar(el, ctx) {
   const { tools } = ctx;
-  const toolButton = (tool) => h('button', {
-    class: `tool${tool === tools.active && !tool.oneShot ? ' active' : ''}${tool === tools.active && tool.oneShot ? ' armed' : ''}`,
-    title: `${tool.label}${tool.key ? ` (${tool.key.toUpperCase()})` : ''}${tool.hint ? `: ${tool.hint}` : ''}`,
-    'aria-pressed': tool.oneShot ? null : String(tool === tools.active),
-    onclick: () => tools.toggle(tool.id),
-  }, h('span', { class: 'tool-icon' }, icon(tool.icon)), h('span', { class: 'tool-label' }, tool.label));
+  el.classList.add('menu', 'side-menu', 'tool-menu');
+  const label = (text, key) => h('span', { class: 'side-text' }, text, key && h('small', {}, key));
+  const toolButton = (tool) => {
+    const on = tool === tools.active;
+    return h('li', {}, h('button', {
+      type: 'button',
+      class: `tool${on && !tool.oneShot ? ' active menu-active' : ''}${on && tool.oneShot ? ' armed menu-active' : ''}`,
+      title: `${tool.label}${tool.key ? ` (${tool.key.toUpperCase()})` : ''}${tool.hint ? `: ${tool.hint}` : ''}`,
+      'aria-pressed': tool.oneShot ? null : String(on),
+      onclick: () => tools.toggle(tool.id),
+    }, icon(tool.icon, 18), label(tool.label, tool.key?.toUpperCase())));
+  };
 
   const render = () => {
     const t = (id) => tools.tools.get(id);
     el.replaceChildren(
       toolButton(t('select')),
-      AddButton(ctx, 'actor', 'Actor', 'A'),
-      AddButton(ctx, 'agent', 'Agent', 'Shift+A'),
+      AddButton(ctx, 'actor', 'Actor', 'A', label),
+      AddButton(ctx, 'agent', 'Agent', 'Shift+A', label),
       toolButton(t('connect')),
-      h('hr', { class: 'tool-sep' }),
       toolButton(t('dataviz')),
     );
   };
@@ -34,13 +39,14 @@ export function Toolbar(el, ctx) {
 }
 
 /** Click to add an actor (or agent) in view; drag to drop one exactly where you want it. */
-function AddButton(ctx, kind, label, key) {
+function AddButton(ctx, kind, text, key, label) {
   let drag = null;
   let suppressClick = false;
   const board = ctx.stage.svgEl;
   const overBoard = (x, y) => board.contains(document.elementFromPoint(x, y));
 
   const button = h('button', {
+    type: 'button',
     class: 'tool tool-add',
     title: `Add ${kind === 'agent' ? 'an agent' : 'an actor'} (${key}). Or drag it onto the board.`,
     onclick: () => {
@@ -78,6 +84,6 @@ function AddButton(ctx, kind, label, key) {
         ctx.actions.addActorAt(w.x, w.y, kind);
       }
     },
-  }, h('span', { class: 'tool-icon' }, icon(kind)), h('span', { class: 'tool-label' }, label));
-  return button;
+  }, icon(kind, 18), label(text, key));
+  return h('li', {}, button);
 }

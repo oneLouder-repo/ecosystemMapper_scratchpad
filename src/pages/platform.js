@@ -3,11 +3,14 @@ import { icon } from '../ui/icons.js';
 import { initials } from '../platform/org.js';
 import { PLUGINS } from '../plugins.js';
 import { Wordmark } from '../ui/Wordmark.js';
+import { SideNav } from '../ui/SideNav.js';
 
 /**
  * The platform's own site (the root domain): the organisations you can
  * open and, for the platform admin, the console to add organisations,
  * set their plan, suspend or remove them, and manage people's sign-in.
+ * The console uses the same sidebar as the plugins, one section at a time:
+ * #orgs (default), #add, #people.
  */
 const app = document.querySelector('#app');
 const call = async (method, url, body) => {
@@ -53,7 +56,7 @@ async function render() {
           o.status !== 'active' && h('span', { class: 'badge badge-warning badge-sm' }, o.status))))
       : h('p', { class: 'empty' }, 'You aren’t in any organisation yet. Ask its admin to add your email to the staff list.'));
 
-  if (!user.isSuper) return app.replaceChildren(head, h('div', { class: 'page' }, yours));
+  if (!user.isSuper) return app.replaceChildren(head, h('div', { class: 'page-main' }, h('div', { class: 'page' }, yours)));
 
   const [orgs, users] = await Promise.all([call('GET', '/api/admin/orgs'), call('GET', '/api/admin/users')]);
   const f = {
@@ -78,19 +81,40 @@ async function render() {
   }));
   const act = async (fn) => { try { await fn(); await reload(); } catch (err) { alert(err.message); } };
 
-  app.replaceChildren(head, h('div', { class: 'page' },
+  const route = ['orgs', 'add', 'people'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'orgs';
+  const active = orgs.filter((o) => o.status === 'active').length;
+  const stat = (label, value, hint) => h('div', { class: 'stat' }, h('div', { class: 'stat-title' }, label), h('div', { class: 'stat-value' }, value), hint && h('div', { class: 'stat-desc' }, hint));
+  const side = SideNav({ label: 'Platform admin', sections: [
+    { title: 'Platform admin', items: [
+      { label: 'Organisations', sub: `${orgs.length} on the platform`, icon: 'org', href: '#orgs', on: route === 'orgs' },
+      { label: 'Add an organisation', icon: 'plus', href: '#add', on: route === 'add' },
+      { label: 'People who can sign in', sub: `${users.length} people`, icon: 'person', href: '#people', on: route === 'people' },
+    ] },
+    { title: 'Open an organisation', items: session.orgs.map((o) => ({ label: o.name, sub: o.url.replace(/^https?:\/\//, ''), lead: h('span', { class: 'logo-initials', style: 'width:20px;height:20px;font-size:9px' }, initials(o.name)), href: open(o) })) },
+  ] });
+  const sections = {};
+  sections.orgs = () => h('div', {},
+    h('div', { class: 'stats stats-border platform-stats' },
+      stat('Organisations', orgs.length, `${active} active`),
+      stat('People', users.length, `${users.filter((x) => x.is_super).length} platform admins`),
+      stat('Members', orgs.reduce((n, o) => n + (o.members ?? 0), 0), 'across every organisation')),
     yours,
-    h('section', {},
-      h('h2', {}, 'Add an organisation'),
+    allOrgs);
+  sections.add = () => addOrg;
+  sections.people = () => people;
+  window.onhashchange = () => render();
+
+  const addOrg = h('section', { class: 'card card-border bg-base-100 platform-card' }, h('div', { class: 'card-body' },
+      h('h2', { class: 'card-title' }, 'Add an organisation'),
       h('form', { class: 'inline-form platform-form', onsubmit: (e) => {
         e.preventDefault();
         act(() => call('POST', '/api/admin/orgs', { name: f.name.value, slug: f.slug.value, plan: f.plan.value, adminEmail: f.adminEmail.value || null, adminName: f.adminName.value || null }));
       } },
         f.name, h('span', { class: 'slug-field' }, f.slug, h('span', { class: 'muted' }, `.${suffix}`)), f.plan, f.adminEmail, f.adminName,
         h('button', { class: 'btn btn-sm btn-primary', type: 'submit' }, icon('plus', 14), 'Add')),
-      h('p', { class: 'muted small' }, 'Their admin can then sign in with that email (with Google, or a password you set below) and add their own staff.')),
-    h('section', {},
-      h('h2', {}, 'Organisations'),
+      h('p', { class: 'muted small' }, 'Their admin can then sign in with that email (with Google, or a password you set below) and add their own staff.')));
+  const allOrgs = h('section', {},
+      h('h2', {}, 'Manage organisations'),
       h('p', { class: 'muted small' }, 'Switch a plugin on to add it to an organisation’s plan; switch it off to pause it. A paused plugin keeps its content, but the organisation and its public site can’t use it until you switch it back on.'),
       h('div', { class: 'table-scroll' }, h('table', { class: 'table table-sm' },
         h('thead', {}, h('tr', {}, ['Name', 'Address', 'Plan', 'Plugins', 'People', 'Status', ''].map((t) => h('th', {}, t)))),
@@ -105,8 +129,8 @@ async function render() {
             o.status)),
           h('td', {}, h('button', { class: 'btn btn-xs btn-ghost btn-error', onclick: () => {
             if (prompt(`This deletes ${o.name} and everything in it, for good. Type its address (${o.slug}) to confirm.`) === o.slug) act(() => call('DELETE', `/api/admin/orgs/${o.id}`));
-          } }, 'Delete')))))))),
-    h('section', {},
+          } }, 'Delete'))))))));
+  const people = h('section', {},
       h('h2', {}, 'People who can sign in'),
       h('p', { class: 'muted small' }, 'People join an organisation when its admin lists their email in its staff list. Here you can give someone a password (for those without Google) or add another platform admin.'),
       h('div', { class: 'table-scroll' }, h('table', { class: 'table table-sm' },
@@ -121,7 +145,14 @@ async function render() {
             if (pw) act(() => call('POST', `/api/admin/users/${x.id}/password`, { password: pw }));
           } }, 'Set password'))))))),
       h('form', { class: 'inline-form', onsubmit: (e) => { e.preventDefault(); act(() => call('POST', '/api/admin/users', { email: u.email.value, name: u.name.value, isSuper: true })); } },
-        u.email, u.name, h('button', { class: 'btn btn-sm', type: 'submit' }, 'Add a platform admin')))));
+        u.email, u.name, h('button', { class: 'btn btn-sm', type: 'submit' }, 'Add a platform admin')));
+
+  app.classList.add('frame');
+  document.body.classList.add('app-page');
+  const main = h('section', { class: 'page-main' }, h('div', { class: 'page' }, sections[route]()));
+  app.replaceChildren(side, main);
+  document.querySelector('.platform-head')?.remove();
+  app.before(head);
 }
 
 async function reload() {

@@ -1,6 +1,7 @@
 import { h, options } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { Shell, Avatar, Logo } from '../ui/Shell.js';
+import { SideNav } from '../ui/SideNav.js';
 import { readImage } from '../ui/images.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp, col } from '../core/collections.js';
@@ -13,33 +14,38 @@ import { PLUGINS, pausedForOrg } from '../plugins.js';
 
 /**
  * Organisation settings: the org's profile, people, public sites and their
- * theme, plugins, and the orgs on this platform. Tabs live in the URL hash.
+ * theme, plugins, and the orgs on this platform. The sections are listed in
+ * the shared sidebar and live in the URL hash.
  */
 const store = new Store(loadOrg(), applyCollectionOp);
 autosaveDoc('org', store, 150);
 const app = document.querySelector('#app');
 const TABS = [
-  ['profile', 'Profile'],
-  ['people', 'People and teams'],
-  ['sites', 'Public sites and theme'],
-  ['plugins', 'Plugins'],
-  ['platform', 'Organisations'],
+  ['profile', 'Profile', 'org'],
+  ['people', 'People and teams', 'person'],
+  ['sites', 'Public sites and theme', 'globe'],
+  ['plugins', 'Plugins', 'workbench'],
+  ['platform', 'Organisations', 'settings'],
 ];
+app.classList.add('frame');
+const main = h('section', { class: 'page-main' });
 const tab = () => (TABS.some(([id]) => id === location.hash.slice(1)) ? location.hash.slice(1) : 'profile');
 const set = (key, value) => store.apply(col.set(key, value));
 
 function render() {
   const org = store.doc;
   Shell(document.querySelector('#shell'), { current: 'org', org });
-  const scroll = window.scrollY;
+  const scroll = main.scrollTop;
   const focused = app.contains(document.activeElement) ? document.activeElement.name : null;
-  app.replaceChildren(
+  const side = SideNav({ label: 'Organisation', sections: [
+    { title: 'Organisation', items: TABS.map(([id, label, ic]) => ({ label, icon: ic, href: `#${id}`, on: tab() === id })) },
+  ] });
+  main.replaceChildren(
     h('div', { class: 'page' },
       h('div', { class: 'org-head' }, Logo(org, 56), h('div', {}, h('h1', {}, org.name), h('p', { class: 'lede' }, org.description || org.mission))),
-      h('div', { role: 'tablist', class: 'tabs tabs-border settings-tabs' },
-        TABS.map(([id, label]) => h('a', { role: 'tab', href: `#${id}`, class: `tab${tab() === id ? ' tab-active' : ''}`, 'aria-selected': String(tab() === id) }, label))),
       { profile: Profile, people: People, sites: Sites, plugins: Plugins, platform: Platform }[tab()](org)));
-  window.scrollTo(0, scroll);
+  app.replaceChildren(side, main);
+  main.scrollTop = scroll;
   if (focused) app.querySelector(`[name="${focused}"]`)?.focus();
 }
 

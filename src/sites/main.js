@@ -1,6 +1,7 @@
 import { h, options } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { Shell } from '../ui/Shell.js';
+import { SideNav, swapSide } from '../ui/SideNav.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp, col } from '../core/collections.js';
 import { autosaveDoc } from '../platform/storage.js';
@@ -37,8 +38,8 @@ Shell(document.querySelector('#shell'), { current: 'pages', org });
 const docs = { org, strategy: loadStrategy(), data: loadData(), dashboards: loadDashboards(), podcasts: loadPodcasts() };
 
 const app = document.querySelector('#app');
-app.classList.add('palette', 'sites-app');
-const side = h('nav', { class: 'palette-side', 'aria-label': 'Sites and pages' });
+app.classList.add('palette', 'sites-app', 'frame');
+let side = h('nav');
 const main = h('section', { class: 'palette-main' });
 const player = Player(() => docs.podcasts);
 player.el.classList.add('admin-player');
@@ -56,20 +57,16 @@ function renderSide() {
   const r = route();
   const list = (kind) => Object.values(doc().pages).filter((p) => p.kind === kind)
     .sort((a, b) => (kind === 'article' ? b.publishedAt.localeCompare(a.publishedAt) : (a.siteId ?? '').localeCompare(b.siteId ?? '') || a.order - b.order));
-  const item = (p) => h('button', { class: `mini-tool${r === p.id ? ' on' : ''}`, onclick: () => (location.hash = p.id) },
-    h('span', { class: `status-dot ${isLive(p, now) ? 'live' : p.status}`, title: isLive(p, now) ? 'Published' : p.status === 'draft' ? 'Draft' : 'Scheduled' }),
-    h('span', {}, p.title, h('small', {}, [org.sites[p.siteId]?.name ?? 'No site', p.kind === 'article' ? short(p.publishedAt) : p.inNav ? 'in menu' : null].filter(Boolean).join(' · '))));
-  side.replaceChildren(
-    h('div', { class: 'mini-tools' },
-      h('button', { class: `mini-tool${r === 'sites' ? ' on' : ''}`, onclick: () => (location.hash = 'sites') },
-        icon('globe', 20), h('span', {}, 'Your sites', h('small', {}, 'What each one shows')))),
-    h('h2', {}, 'Pages'),
-    h('div', { class: 'mini-tools' }, list('page').map(item),
-      h('button', { class: 'mini-tool', onclick: () => newPage('page') }, icon('plus', 20), h('span', {}, 'New page'))),
-    h('h2', {}, 'News articles'),
-    h('div', { class: 'mini-tools' }, list('article').map(item),
-      h('button', { class: 'mini-tool', onclick: () => newPage('article') }, icon('plus', 20), h('span', {}, 'New article'))),
-  );
+  const item = (p) => ({
+    label: p.title, href: `#${p.id}`, on: r === p.id,
+    lead: h('span', { class: 'side-lead' }, h('span', { class: `status-dot ${isLive(p, now) ? 'live' : p.status}`, title: isLive(p, now) ? 'Published' : p.status === 'draft' ? 'Draft' : 'Scheduled' })),
+    sub: [org.sites[p.siteId]?.name ?? 'No site', p.kind === 'article' ? short(p.publishedAt) : p.inNav ? 'in menu' : null].filter(Boolean).join(' · '),
+  });
+  side = swapSide(side, SideNav({ label: 'Sites and pages', sections: [
+    { title: 'Sites', items: [{ label: 'Your sites', sub: 'What each one shows', icon: 'globe', href: '#sites', on: r === 'sites' }] },
+    { title: 'Pages', action: { label: 'New page', onclick: () => newPage('page') }, items: [...list('page').map(item), { label: 'New page', icon: 'plus', onclick: () => newPage('page') }] },
+    { title: 'News articles', action: { label: 'New article', onclick: () => newPage('article') }, items: [...list('article').map(item), { label: 'New article', icon: 'plus', onclick: () => newPage('article') }] },
+  ] }));
 }
 
 function render() {

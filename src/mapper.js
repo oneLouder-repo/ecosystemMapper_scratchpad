@@ -16,6 +16,8 @@ import { LayersPanel } from './ui/LayersPanel.js';
 import { LabelEditor } from './ui/LabelEditor.js';
 import { seedMap, migrateMap } from './seed.js';
 import { Shell } from './ui/Shell.js';
+import { SideNav } from './ui/SideNav.js';
+import { h } from './ui/dom.js';
 import { autosaveDoc, saveDoc } from './platform/storage.js';
 import { loadOrg, loadMaps } from './platform/docs.js';
 import { loadMapContent, mapDocName, createMapIn } from './platform/maps.js';
@@ -157,6 +159,11 @@ const ctx = {
       mapView.select([]);
       fitView();
     },
+    addLayer() {
+      // Active first, so the layers list draws with the new one chosen.
+      ctx.ui.activeLayerId = uid('layer');
+      store.apply(ops.addLayer({ id: ctx.ui.activeLayerId, name: `Layer ${store.map.layers.length + 1}` }));
+    },
     /** Make a new map in this org and open it. */
     newMap(title) {
       const entry = createMapIn(index, { title, ownerId: currentUser(org)?.id, lensId: store.map.lensId });
@@ -182,10 +189,21 @@ const ctx = {
 ctx.tools = new ToolRegistry(ctx).register(SelectTool).register(ConnectTool).register(PanTool).register(DataVizTool);
 ctx.ui.editLabel = LabelEditor(ctx);
 
-Toolbar(document.querySelector('#toolbar'), ctx);
+// The sidebar every plugin shares: this org's maps, the tools, and the layers.
+const toolMenu = h('ul');
+const layersEl = h('div', { class: 'side-layers' });
+const side = SideNav({ label: 'Ecosystem Mapper', sections: [
+  { title: 'Maps', action: { label: 'New map', onclick: () => { const title = prompt('Name of the new map', 'Untitled map'); if (title?.trim()) ctx.actions.newMap(title.trim()); } },
+    items: Object.values(index.maps).map((m) => ({ label: m.title, icon: 'mapper', href: `#${m.id}`, on: m.id === mapId })) },
+  { title: 'Tools', menu: toolMenu },
+  { title: 'Layers', action: { label: 'Add layer', onclick: () => ctx.actions.addLayer() }, body: layersEl, className: 'side-layers-section' },
+] });
+side.id = 'toolbar';
+document.querySelector('#toolbar').replaceWith(side);
+Toolbar(toolMenu, ctx);
 TopBar(document.querySelector('#topbar'), ctx);
 Inspector(document.querySelector('#inspector'), ctx);
-LayersPanel(document.querySelector('#layers'), ctx);
+LayersPanel(layersEl, ctx);
 
 ctx.tools.use('select');
 mapView.sync();

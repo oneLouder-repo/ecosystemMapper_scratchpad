@@ -1,6 +1,7 @@
 import { h, options } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { Shell, Avatar } from '../ui/Shell.js';
+import { SideNav, swapSide } from '../ui/SideNav.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp, col } from '../core/collections.js';
 import { autosaveDoc, isHosted } from '../platform/storage.js';
@@ -32,8 +33,8 @@ autosaveDoc('podcasts', store, 150);
 Shell(document.querySelector('#shell'), { current: 'podcasts', org });
 
 const app = document.querySelector('#app');
-app.classList.add('podcasts-app');
-const side = h('nav', { class: 'palette-side', 'aria-label': 'Station and shows' });
+app.classList.add('podcasts-app', 'frame');
+let side = h('nav');
 const main = h('section', { class: 'palette-main' });
 const player = Player(() => store.doc);
 player.setLink(({ episode }) => `#${store.doc.episodes[episode]?.podcastId ?? 'station'}`);
@@ -51,18 +52,13 @@ const stationUrl = (extra = {}) => `site.html?${new URLSearchParams({ site: doc(
 
 function render() {
   const r = route();
-  side.replaceChildren(
-    h('h2', {}, 'Station'),
-    h('div', { class: 'mini-tools' },
-      h('button', { class: `mini-tool${r === 'station' ? ' on' : ''}`, onclick: () => (location.hash = 'station') },
-        icon('mic', 20), h('span', {}, doc().station.name, h('small', {}, 'Public page, look, featured shows')))),
-    h('h2', {}, 'Shows'),
-    h('div', { class: 'mini-tools' },
-      showsInOrder(doc()).map((p) =>
-        h('button', { class: `mini-tool${r === p.id ? ' on' : ''}`, onclick: () => (location.hash = p.id) },
-          Cover(p, 32), h('span', {}, p.title, h('small', {}, `${n(episodesOf(doc(), p.id).length, 'episode')}${p.featured ? ' · featured' : ''}`)))),
-      h('button', { class: 'mini-tool', onclick: newShow }, icon('plus', 20), h('span', {}, 'New show'))),
-  );
+  side = swapSide(side, SideNav({ label: 'Station and shows', sections: [
+    { title: 'Station', items: [{ label: doc().station.name, sub: 'Public page, look, featured shows', icon: 'mic', href: '#station', on: r === 'station' }] },
+    { title: 'Shows', action: { label: 'New show', onclick: newShow }, items: [
+      ...showsInOrder(doc()).map((p) => ({ label: p.title, sub: `${n(episodesOf(doc(), p.id).length, 'episode')}${p.featured ? ' · featured' : ''}`, lead: Cover(p, 24), href: `#${p.id}`, on: r === p.id })),
+      { label: 'New show', icon: 'plus', onclick: newShow },
+    ] },
+  ] }));
   const scroll = main.scrollTop;
   const focused = main.contains(document.activeElement) ? document.activeElement.name : null;
   main.replaceChildren(doc().podcasts[r] ? Show(doc().podcasts[r]) : Station());

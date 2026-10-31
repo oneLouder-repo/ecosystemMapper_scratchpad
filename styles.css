@@ -60,7 +60,7 @@ body {
 body.mapper-page {
   height: 100vh;
   display: grid;
-  grid-template: 'shell shell shell' 44px 'top top top' 52px 'tools board side' 1fr / 76px 1fr 280px;
+  grid-template: 'shell shell shell' 44px 'tools top top' 52px 'tools board side' 1fr / auto 1fr 280px;
   overflow: hidden;
 }
 body.mapper-page #shell { grid-area: shell; }
@@ -90,15 +90,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 .spacer { flex: 1; }
 
 /* Toolbar */
-#toolbar {
-  grid-area: tools;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 8px;
-  background: var(--panel);
-  border-right: 1px solid var(--line);
-}
+#toolbar { grid-area: tools; }
 .tool {
   display: flex;
   flex-direction: column;
@@ -192,7 +184,7 @@ main { grid-area: board; position: relative; min-width: 0; }
 
 @media (max-width: 760px) {
   body.mapper-page { grid-template: 'shell' 44px 'top' 52px 'tools' auto 'board' 1fr / 1fr; }
-  #toolbar { flex-direction: row; border-right: none; border-bottom: 1px solid var(--line); }
+  #toolbar.side-nav { width: auto; max-height: 30vh; border-right: 0; border-bottom: 1px solid var(--line); }
   #sidebar { display: none; }
   #topbar .brand { display: none; }
 }

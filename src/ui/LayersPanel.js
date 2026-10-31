@@ -1,7 +1,7 @@
 import { h } from './dom.js';
 import { icon } from './icons.js';
 
-/** Lists layers: pick the active one, show or hide, lock, rename, add. */
+/** Lists layers: pick the active one, show or hide, lock, rename. */
 export function LayersPanel(el, ctx) {
   const { store, ops, ui } = ctx;
 
@@ -10,15 +10,8 @@ export function LayersPanel(el, ctx) {
     const { layers } = store.map;
     if (!layers.some((l) => l.id === ui.activeLayerId)) ui.activeLayerId = layers[0]?.id;
 
+    // The heading and Add button are the sidebar section's.
     el.replaceChildren(
-      h('div', { class: 'panel-head' },
-        h('h2', {}, 'Layers'),
-        h('button', { class: 'icon-button', title: 'Add layer', onclick: () => {
-          const op = store.apply(ops.addLayer({ name: `Layer ${layers.length + 1}` }));
-          ui.activeLayerId = op.id;
-          render();
-        } }, icon('plus', 18)),
-      ),
       h('ul', { class: 'layers' },
         [...layers].reverse().map((layer) =>
           h('li', { class: layer.id === ui.activeLayerId ? 'active' : '' },

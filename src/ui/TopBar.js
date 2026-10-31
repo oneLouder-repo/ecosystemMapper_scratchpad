@@ -22,18 +22,8 @@ export function TopBar(el, ctx) {
   const undo = h('button', { class: 'btn btn-sm', title: 'Undo (Ctrl+Z)', onclick: () => store.undo() }, 'Undo');
   const redo = h('button', { class: 'btn btn-sm', title: 'Redo (Ctrl+Shift+Z)', onclick: () => store.redo() }, 'Redo');
 
-  const mapSelect = h('select', { 'aria-label': 'Map', class: 'map-picker', onchange: (e) => {
-    if (e.target.value === '__new') {
-      const title = prompt('Name of the new map', 'Untitled map');
-      if (title?.trim()) ctx.actions.newMap(title.trim());
-      else e.target.value = ctx.mapId;
-    } else ctx.actions.openMap(e.target.value);
-  } },
-    options(Object.values(ctx.index.maps).map((m) => ({ id: m.id, label: m.title })), ctx.mapId),
-    h('option', { value: '__new' }, '+ New map…'));
-
   el.append(
-    h('label', { class: 'lens-picker' }, h('span', {}, 'Map'), mapSelect),
+    h('strong', { class: 'topbar-title' }, ctx.index.maps[ctx.mapId]?.title),
     h('button', { class: 'btn btn-sm btn-ghost', title: 'Title, description, owner and members', onclick: () => MapDetails(ctx) }, 'Details'),
     h('label', { class: 'lens-picker' }, h('span', {}, 'Lens'), lensSelect),
     h('div', { class: 'join' },

@@ -1,6 +1,7 @@
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { Shell } from '../ui/Shell.js';
+import { SideNav, swapSide } from '../ui/SideNav.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp, col } from '../core/collections.js';
 import { autosaveDoc, onDocChange } from '../platform/storage.js';
@@ -55,8 +56,8 @@ const tools = MINI_TOOLS.filter((t) => !t.when || t.when(org));
 Shell(document.querySelector('#shell'), { current: 'palette', org });
 
 const app = document.querySelector('#app');
-app.classList.add('palette');
-const side = h('nav', { class: 'palette-side', 'aria-label': 'Workbench' });
+app.classList.add('palette', 'frame');
+let side = h('nav');
 const main = h('section', { class: 'palette-main' });
 app.replaceChildren(side, main);
 
@@ -90,18 +91,16 @@ function render() {
   const route = ctx.route;
   const dashList = Object.values(dashboards.doc.dashboards);
   const tool = tools.find((t) => t.id === route) ?? (dashboards.doc.dashboards[route] ? tools.find((t) => t.id === 'dashboards') : tools[0]);
-  side.replaceChildren(
-    h('h2', {}, 'Workbench'),
-    h('div', { class: 'mini-tools' },
-      tools.map((t) =>
-        h('button', { class: `mini-tool${t === tool ? ' on' : ''}`, 'aria-current': t === tool ? 'page' : null, onclick: () => ctx.go(t.id) },
-          icon(t.icon, 20), h('span', {}, t.name, h('small', {}, t.blurb)))),
-      COMING.map((t) => h('div', { class: 'mini-tool soon' }, icon('plus', 20), h('span', {}, t.name, h('small', {}, 'Coming soon'))))),
-    h('h2', {}, 'Dashboards'),
-    h('ul', { class: 'dash-list' },
-      dashList.map((d) => h('li', {}, h('a', { href: `#${d.id}`, class: route === d.id ? 'on' : '' },
-        h('span', {}, d.title), h('span', { class: `badge ${d.visibility}` }, d.visibility))))),
-  );
+  const next = SideNav({ label: 'Workbench', sections: [
+    { title: 'Workbench', items: [
+      ...tools.map((t) => ({ label: t.name, sub: t.blurb, icon: t.icon, href: `#${t.id}`, on: t === tool, badge: t.isNew ? 'New' : null, badgeClass: 'badge-primary badge-soft' })),
+      ...COMING.map((t) => ({ label: t.name, sub: 'Coming soon', icon: 'plus', disabled: true, title: t.blurb })),
+    ] },
+    { title: 'Dashboards', action: { label: 'New dashboard', onclick: () => ctx.create() }, items: dashList.map((d) => ({
+      label: d.title, href: `#${d.id}`, on: route === d.id, badge: d.visibility, badgeClass: d.visibility === 'public' ? 'badge-success badge-soft' : 'badge-ghost',
+    })) },
+  ] });
+  side = swapSide(side, next);
 
   // Keep the focused field and scroll position across the redraw.
   const scroll = main.scrollTop;

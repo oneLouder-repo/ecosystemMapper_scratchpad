@@ -928,3 +928,50 @@ body.login-page, body.platform-page { background: var(--bg); min-height: 100vh; 
   .story-steps { gap: 24vh; padding-top: 4vh; }
   .calc-controls { flex-direction: column; align-items: stretch; }
 }
+
+/* The shared plugin sidebar (ui/SideNav.js), on DaisyUI's menu. */
+.side-nav { position: relative; width: 260px; background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; overflow-x: hidden; padding: 10px 0 24px; transition: width 0.15s; min-height: 0; }
+.side-nav.folded { width: 58px; }
+.side-fold { position: absolute; top: 8px; right: 8px; z-index: 1; font-size: 16px; }
+.side-nav.folded .side-fold { position: static; display: flex; margin: 0 auto 6px; transform: rotate(180deg); }
+.side-section + .side-section { margin-top: 10px; }
+.side-title { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 44px 4px 16px; min-height: 26px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.side-section + .side-section .side-title { padding-right: 10px; }
+.side-menu { width: 100%; padding: 0 8px; font-size: 14px; }
+.side-menu li > :where(a, button) { display: flex; align-items: center; gap: 10px; padding: 7px 10px; text-align: left; width: 100%; color: var(--ink); }
+.side-menu li > :where(a, button) .icon { flex: none; }
+.side-menu li > .menu-active { background: var(--accent-soft) !important; color: var(--ink) !important; box-shadow: inset 3px 0 0 var(--accent); }
+.side-text { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
+.side-text small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-dot { width: 18px; height: 18px; flex: none; display: grid; place-items: center; }
+.side-dot::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.side-body { padding: 0 16px; }
+.side-nav.folded :where(.side-title, .side-text, .side-body, .badge) { display: none; }
+.side-nav.folded .side-menu { padding: 0 6px; }
+.side-nav.folded .side-menu li > :where(a, button) { justify-content: center; padding: 8px 0; }
+.side-nav.folded .side-section + .side-section { border-top: 1px solid var(--line); padding-top: 8px; }
+/* Every plugin page: the shell on top, then the sidebar beside the content. */
+#app.frame { flex: 1; min-height: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); }
+#app.frame > .side-nav { grid-row: 1 / -1; }
+@media (max-width: 760px) {
+  #app.frame { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  #app.frame > .side-nav { grid-row: auto; width: auto; max-height: 34vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  .side-fold { display: none; }
+}
+.side-lead { width: 18px; height: 18px; flex: none; display: grid; place-items: center; }
+/* The mapper's tools and layers in the shared sidebar. */
+.tool-menu .tool { flex-direction: row; border: 0; }
+.tool-menu .tool.active, .tool-menu .tool.armed { color: var(--ink); }
+.tool-menu .tool-add { cursor: grab; }
+.side-layers .layers li { border-radius: var(--radius-field); }
+.topbar-title { font-size: 15px; margin-right: 4px; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.strategy-column { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.strategy-column > .strategy-body { flex: 1; min-height: 0; }
+.strategy-head .plugin-header { padding-bottom: 14px; }
+body.app-page { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+.page-main { overflow: auto; min-width: 0; min-height: 0; }
+.page-main > .page { margin: 0 auto; }
+.platform-stats { width: 100%; background: var(--panel); margin-bottom: 8px; }
+.platform-card { max-width: 900px; }
+body.platform-page.app-page .platform-head { flex: none; }
+.side-menu a, .side-menu a:hover { text-decoration: none; }
