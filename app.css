@@ -706,8 +706,11 @@ body.login-page, body.platform-page { background: var(--bg); min-height: 100vh; 
 .login-form { display: flex; flex-direction: column; gap: 4px; }
 .login-form .fieldset { padding: 0; }
 .login-error { color: var(--color-error); min-height: 1.2em; margin: 4px 0; font-size: 14px; }
-.google-btn { gap: 10px; }
-.g-mark { font-weight: 800; color: #4285f4; }
+.provider-btn { gap: 10px; margin-bottom: 8px; }
+.provider-mark { font-weight: 800; width: 18px; text-align: center; }
+.provider-google .provider-mark { color: #4285f4; }
+.provider-facebook .provider-mark { color: #1877f2; font-family: Georgia, serif; font-size: 18px; }
+.provider-microsoft .provider-mark { color: #5e5e5e; }
 .small { font-size: 13px; }
 .dev-login { width: min(460px, 100%); }
 .dev-users { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow: auto; }

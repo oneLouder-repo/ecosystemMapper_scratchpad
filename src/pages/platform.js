@@ -139,7 +139,7 @@ async function render() {
           h('td', {}, h('strong', {}, x.name), x.is_super ? h('span', { class: 'badge badge-sm badge-primary', style: 'margin-left:6px' }, 'platform admin') : null),
           h('td', {}, x.email),
           h('td', {}, x.memberships.map((m) => `${m.name} (${m.role})`).join(', ') || '—'),
-          h('td', {}, [x.google && 'Google', x.has_password && 'password'].filter(Boolean).join(', ') || 'not yet'),
+          h('td', {}, [...(x.providers ?? (x.google ? ['Google'] : [])), x.has_password && 'password'].filter(Boolean).join(', ') || 'not yet'),
           h('td', {}, h('button', { class: 'btn btn-xs', onclick: () => {
             const pw = prompt(`New password for ${x.email} (at least 10 characters). Share it with them safely.`);
             if (pw) act(() => call('POST', `/api/admin/users/${x.id}/password`, { password: pw }));

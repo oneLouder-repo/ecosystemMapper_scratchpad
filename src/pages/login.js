@@ -24,6 +24,9 @@ try {
   throw new Error('No server');
 }
 
+/** A letter in each provider's colour, beside its name (no logos to license). */
+const MARKS = { google: 'G', facebook: 'f', microsoft: '⊞' };
+
 const message = h('p', { class: 'login-error', role: 'alert' });
 const email = h('input', { class: 'input w-full', type: 'email', name: 'email', autocomplete: 'username', required: true, placeholder: 'you@example.org' });
 const password = h('input', { class: 'input w-full', type: 'password', name: 'password', autocomplete: 'current-password', required: true });
@@ -32,9 +35,9 @@ app.replaceChildren(h('div', { class: 'login-wrap' },
   h('div', { class: 'login-box card' },
     h('p', { class: 'eyebrow' }, Wordmark(20)),
     h('h1', {}, options.org ? `Sign in to ${options.org.name}` : 'Sign in'),
-    options.google && h('a', { class: 'btn w-full google-btn', href: `/auth/google?next=${encodeURIComponent(safeNext)}` },
-      h('span', { class: 'g-mark', 'aria-hidden': 'true' }, 'G'), 'Continue with Google'),
-    options.google && h('div', { class: 'divider' }, 'or'),
+    (options.providers ?? []).map((p) => h('a', { class: `btn w-full provider-btn provider-${p.id}`, href: `/auth/${p.id}?next=${encodeURIComponent(safeNext)}` },
+      h('span', { class: 'provider-mark', 'aria-hidden': 'true' }, MARKS[p.id] ?? p.label[0]), `Continue with ${p.label}`)),
+    options.providers?.length > 0 && h('div', { class: 'divider' }, 'or'),
     h('form', { class: 'login-form', onsubmit: async (e) => {
       e.preventDefault();
       message.textContent = '';

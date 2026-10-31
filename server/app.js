@@ -30,6 +30,7 @@ import { now } from './db.js';
 import { HttpError, send, json, redirect, page, readJson, parseCookies, cookie, sendFile } from './http.js';
 import { publicDocs, mediaIsPublic } from './public.js';
 import { uploadRoutes } from './uploads.js';
+import { PROVIDERS, authorizeUrl, finish } from './oauth.js';
 import { blankOrg, migrateOrg } from '../src/platform/org.js';
 import { blankStrategy } from '../src/platform/strategySeed.js';
 
@@ -376,7 +377,8 @@ export function createApp(db) {
             orgs: q('SELECT o.name, m.role FROM memberships m JOIN orgs o ON o.id = m.org_id WHERE m.user_id = ? ORDER BY o.name').all(u.id).map((r) => `${r.name} (${r.role})`),
           }))
         : null;
-      return json(res, 200, { google: !!config.google, password: true, dev, org: a.org && { name: a.org.name } });
+      const providers = Object.values(config.providers).map((x) => ({ id: x.id, label: x.label }));
+      return json(res, 200, { providers, google: !!config.providers.google, password: true, dev, org: a.org && { name: a.org.name } });
     }
     if (path === '/api/auth/password' && method === 'POST') {
       throttle(req);
@@ -458,6 +460,7 @@ export function createApp(db) {
           ...u,
           memberships: q('SELECT o.id, o.name, m.role FROM memberships m JOIN orgs o ON o.id = m.org_id WHERE m.user_id = ?').all(u.id),
           google: !!q("SELECT 1 FROM identities WHERE user_id = ? AND provider = 'google'").get(u.id),
+          providers: q('SELECT provider FROM identities WHERE user_id = ?').all(u.id).map((r) => PROVIDERS[r.provider]?.label ?? r.provider),
         })));
       }
       if (path === '/api/admin/users' && method === 'POST') {
@@ -479,6 +482,7 @@ export function createApp(db) {
 
   async function auth(req, res, a, path, url) {
     const p = url.searchParams;
+    let m;
     if (path === '/auth/handoff') {
       const row = q('SELECT * FROM handoffs WHERE token = ?').get(p.get('token') ?? '');
       if (row) q('DELETE FROM handoffs WHERE token = ?').run(row.token);
@@ -497,35 +501,34 @@ export function createApp(db) {
       if (!a.user) return redirect(res, urlFor(config.baseDomain, '/login.html'));
       return handoff(res, a.user.id, config.baseDomain, '/');
     }
-    if (path === '/auth/google') {
-      if (!config.google) return page(res, 404, 'Google sign-in is not set up', 'Ask the platform admin to add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
-      const state = token();
-      q('INSERT INTO oauth_states (state, data, expires_at) VALUES (?, ?, ?)').run(state, JSON.stringify({ host: a.t.host, next: safeNext(p.get('next')) }), Date.now() + 10 * 60_000);
-      const params = new URLSearchParams({
-        client_id: config.google.clientId, redirect_uri: urlFor(config.baseDomain, '/auth/google/callback'),
-        response_type: 'code', scope: 'openid email profile', state, prompt: 'select_account',
-      });
-      return redirect(res, `https://accounts.google.com/o/oauth2/v2/auth?${params}`);
-    }
-    if (path === '/auth/google/callback') {
+    if ((m = path.match(/^\/auth\/(\w+)(\/callback)?$/)) && PROVIDERS[m[1]]) {
+      const id = m[1];
+      const provider = config.providers[id];
+      if (!provider) return page(res, 404, `${PROVIDERS[id].label} sign-in is not set up`, `Ask the platform admin to add ${PROVIDERS[id].env.join(' and ')}.`);
+      const redirectUri = urlFor(config.baseDomain, `/auth/${id}/callback`);
+      if (!m[2]) {
+        const state = token();
+        q('INSERT INTO oauth_states (state, data, expires_at) VALUES (?, ?, ?)').run(state, JSON.stringify({ host: a.t.host, next: safeNext(p.get('next')), provider: id }), Date.now() + 10 * 60_000);
+        return redirect(res, authorizeUrl(provider, { redirectUri, state }));
+      }
       const st = q('SELECT * FROM oauth_states WHERE state = ?').get(p.get('state') ?? '');
       if (st) q('DELETE FROM oauth_states WHERE state = ?').run(st.state);
-      if (!st || st.expires_at < Date.now() || !p.get('code')) return page(res, 400, 'Sign-in didn’t finish', 'Try again.', { href: '/login.html', label: 'Sign in' });
-      const { host, next } = JSON.parse(st.data);
-      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ code: p.get('code'), client_id: config.google.clientId, client_secret: config.google.clientSecret, redirect_uri: urlFor(config.baseDomain, '/auth/google/callback'), grant_type: 'authorization_code' }),
-      });
-      if (!tokenRes.ok) return page(res, 502, 'Google didn’t confirm the sign-in', 'Try again in a moment.', { href: '/login.html', label: 'Sign in' });
-      const { access_token: accessToken } = await tokenRes.json();
-      const info = await (await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { authorization: `Bearer ${accessToken}` } })).json();
-      if (!info.sub || !info.email || info.email_verified === false) return page(res, 400, 'No verified email', 'Google didn’t share a verified email address.');
-      const linked = q("SELECT user_id FROM identities WHERE provider = 'google' AND subject = ?").get(info.sub);
+      const saved = st ? JSON.parse(st.data) : null;
+      if (!st || st.expires_at < Date.now() || !p.get('code') || (saved.provider ?? 'google') !== id) return page(res, 400, 'Sign-in didn’t finish', 'Try again.', { href: '/login.html', label: 'Sign in' });
+      let info;
+      try {
+        info = await finish(provider, { code: p.get('code'), redirectUri });
+      } catch (err) {
+        console.warn(`Sign-in with ${provider.label} failed:`, err.message);
+        return page(res, 502, `${provider.label} didn’t confirm the sign-in`, 'Try again in a moment.', { href: '/login.html', label: 'Sign in' });
+      }
+      if (!info.sub || !info.email || !info.verified) return page(res, 400, 'No verified email', `${provider.label} didn’t share a verified email address. Sign in another way, or check the email on that account.`);
+      const linked = q('SELECT user_id FROM identities WHERE provider = ? AND subject = ?').get(id, String(info.sub));
       let user = linked ? userById(linked.user_id) : userByEmail(info.email);
       if (!user && info.email.toLowerCase() === config.superAdmin.email) user = ensureUser({ email: info.email, name: info.name, isSuper: true });
       if (!user) return page(res, 403, `No account for ${info.email}`, 'Ask your organisation’s admin to add you, with this email, to the staff list in Organisation settings.');
-      if (!linked) q("INSERT OR IGNORE INTO identities (provider, subject, user_id) VALUES ('google', ?, ?)").run(info.sub, user.id);
-      return handoff(res, user.id, knownHost(host) ? host : config.baseDomain, next);
+      if (!linked) q('INSERT OR IGNORE INTO identities (provider, subject, user_id) VALUES (?, ?, ?)').run(id, String(info.sub), user.id);
+      return handoff(res, user.id, knownHost(saved.host) ? saved.host : config.baseDomain, saved.next);
     }
     throw new HttpError(404, 'Not found');
   }

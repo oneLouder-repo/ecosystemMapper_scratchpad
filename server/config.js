@@ -5,6 +5,7 @@
  */
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { enabledProviders } from './oauth.js';
 
 const env = process.env;
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -32,9 +33,8 @@ export const config = {
     name: env.SUPER_ADMIN_NAME || 'Platform admin',
     password: env.SUPER_ADMIN_PASSWORD || '',
   },
-  google: env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
-    ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
-    : null,
+  /** Sign-in with Google, Facebook, Microsoft…: each switched on by its keys (see server/oauth.js). */
+  providers: enabledProviders(env),
   sessionDays: Number(env.SESSION_DAYS) || 30,
   maxJsonMb: 15,
   /** The largest single upload (podcast audio), sent in 8 MB chunks. */
