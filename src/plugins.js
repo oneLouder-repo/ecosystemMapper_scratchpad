@@ -4,6 +4,8 @@
  * then add an entry here; it shows up on the dashboard, in the header and
  * in Organisation settings, where an org can switch it off.
  *
+ * `tone` is the plugin's own colour: its icon in the header, and the
+ * buttons, links and highlights on its pages.
  * `core: true` plugins can't be switched off.
  * `stats(docs)` returns a short line for the dashboard card from the
  * loaded documents (see platform/docs.js loadAll).
@@ -13,6 +15,7 @@ const count = (o) => Object.keys(o ?? {}).length;
 export const PLUGINS = [
   {
     id: 'mapper',
+    tone: '#13897a',
     name: 'Ecosystem Mapper',
     href: 'mapper.html',
     icon: 'mapper',
@@ -24,6 +27,7 @@ export const PLUGINS = [
   },
   {
     id: 'strategy',
+    tone: '#3d63dd',
     name: 'Strategy & Work',
     href: 'strategy.html',
     icon: 'strategy',
@@ -36,6 +40,7 @@ export const PLUGINS = [
   },
   {
     id: 'studio',
+    tone: '#7a4cc4',
     name: 'Planning Studio',
     href: 'studio.html',
     icon: 'studio',
@@ -44,6 +49,7 @@ export const PLUGINS = [
   },
   {
     id: 'palette',
+    tone: '#c25a14',
     name: 'Workbench',
     href: 'palette.html',
     icon: 'workbench',
@@ -55,6 +61,7 @@ export const PLUGINS = [
   },
   {
     id: 'podcasts',
+    tone: '#c03a64',
     name: 'Podcasts',
     href: 'podcasts.html',
     icon: 'mic',
@@ -66,6 +73,7 @@ export const PLUGINS = [
   },
   {
     id: 'pages',
+    tone: '#3a8a3f',
     name: 'Sites & Pages',
     href: 'pages.html',
     icon: 'news',
@@ -77,6 +85,7 @@ export const PLUGINS = [
   },
   {
     id: 'org',
+    tone: '#56657f',
     name: 'Organisation',
     href: 'org.html',
     icon: 'org',
@@ -87,6 +96,7 @@ export const PLUGINS = [
   },
   {
     id: 'help',
+    tone: '#56657f',
     name: 'Help',
     href: 'help.html',
     icon: 'help',
@@ -101,3 +111,7 @@ export const PLUGINS = [
 export const pausedForOrg = (org, id) => !!org.platform?.paused?.[id];
 /** The plugins this org has switched on (and the platform hasn't paused). */
 export const enabledPlugins = (org) => PLUGINS.filter((p) => p.core || (!pausedForOrg(org, p.id) && org.plugins?.[p.id] !== false));
+
+/** Each page's colour: a plugin's tone, or Dashi's own for the dashboard and the rest. */
+export const DASHI_TONE = '#d0621b';
+export const toneFor = (id) => PLUGINS.find((p) => p.id === id)?.tone ?? DASHI_TONE;

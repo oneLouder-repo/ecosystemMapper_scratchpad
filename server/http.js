@@ -14,6 +14,7 @@ export const TYPES = {
   '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav',
   '.txt': 'text/plain; charset=utf-8',
+  '.woff2': 'font/woff2',
 };
 
 export class HttpError extends Error {

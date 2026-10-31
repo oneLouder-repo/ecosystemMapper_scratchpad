@@ -1,7 +1,7 @@
 import { h } from './dom.js';
 import { icon } from './icons.js';
 import { Wordmark } from './Wordmark.js';
-import { enabledPlugins } from '../plugins.js';
+import { enabledPlugins, toneFor } from '../plugins.js';
 import { ROLES, initials } from '../platform/org.js';
 import { orgList, openOrg, createOrg, currentUser, signInAs, can, signOut, signedInUser, platformUrl } from '../platform/session.js';
 
@@ -14,10 +14,13 @@ export function Shell(el, { current, org }) {
   const me = currentUser(org);
   const role = ROLES.find((r) => r.id === me?.roleId);
   const link = (id, href, label, iconName) =>
-    h('a', { href, title: label, class: `shell-link${id === current ? ' active' : ''}`, 'aria-current': id === current ? 'page' : null },
+    h('a', { href, title: label, class: `shell-link${id === current ? ' active' : ''}`, style: `--tone:${toneFor(id)}`, 'aria-current': id === current ? 'page' : null },
       icon(iconName, 18), h('span', {}, label));
   const account = signedInUser();
 
+  // The page takes its plugin's colour (buttons, links, highlights).
+  document.body.dataset.plugin = current;
+  document.body.style.setProperty('--color-primary', toneFor(current));
   el.classList.add('shell');
   el.replaceChildren(
     h('details', { class: 'dropdown shell-org' },
