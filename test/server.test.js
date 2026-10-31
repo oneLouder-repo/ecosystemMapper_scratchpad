@@ -9,7 +9,15 @@ import { join } from 'node:path';
 const dataDir = mkdtempSync(join(tmpdir(), 'toolbox-test-'));
 Object.assign(process.env, { DATA_DIR: dataDir, DEV_LOGIN: 'true', SEED_EXAMPLES: 'true', BASE_DOMAIN: 'localhost', NODE_ENV: 'test' });
 let srv;
-before(async () => { srv = await (await import('../server/index.js')).start({ port: 0, quiet: true }); });
+// DNS for the custom-domain tests: what each name resolves to.
+const dns = { txt: {}, cname: {}, a: { localhost: ['203.0.113.7'] } };
+const resolver = {
+  resolveTxt: async (n) => dns.txt[n] ?? [],
+  resolveCname: async (n) => dns.cname[n] ?? [],
+  resolve4: async (n) => dns.a[n] ?? [],
+  resolve6: async () => [],
+};
+before(async () => { srv = await (await import('../server/index.js')).start({ port: 0, quiet: true, resolver }); });
 after(() => { srv.server.closeAllConnections?.(); srv.server.close(); srv.db.close(); rmSync(dataDir, { recursive: true, force: true }); });
 
 /** A request to the test server, as if to `host`. */
@@ -324,4 +332,98 @@ test('hosts can check health, and Caddy can ask which addresses are ours', async
   assert.equal((await call('dashi', 'GET', '/tls-ask?domain=localhost')).status, 200);
   assert.equal((await call('dashi', 'GET', '/tls-ask?domain=nobody.localhost')).status, 404);
   assert.equal((await call('dashi', 'GET', '/tls-ask?domain=evil.com')).status, 404);
+});
+
+test('plans set what an org can add; the platform admin changes them', async () => {
+  const admin = await signIn('admin@localhost', 'localhost');
+  const { json: org } = await call('localhost', 'POST', '/api/admin/orgs', { cookie: admin, body: { name: 'Tiny Group', slug: 'tiny', plan: 'free', adminEmail: 'lead@tiny.example' } });
+  const lead = await signIn('lead@tiny.example', 'tiny.localhost');
+  const { json: session } = await call('tiny.localhost', 'GET', '/api/session', { cookie: lead });
+  assert.equal(session.docs.org.platform.tier, 'free');
+  assert.equal(session.docs.org.platform.paused.strategy, true, 'Free has no strategy plugin');
+  assert.equal(session.limits.uploadMb, 10);
+
+  // Free includes no strategic frameworks.
+  const strategy = session.docs.strategy;
+  strategy.nodes['fw-1'] = { id: 'fw-1', type: 'framework', parentId: null, order: 9, title: 'A framework' };
+  const refused = await call('tiny.localhost', 'PUT', '/api/docs/strategy', { cookie: lead, body: strategy });
+  assert.equal(refused.status, 403);
+  assert.match(refused.json.error, /Free plan doesn’t include strategic frameworks/);
+
+  // Five people on Free: a sixth with an email is refused.
+  const orgDoc = session.docs.org;
+  for (let i = 0; i < 5; i++) orgDoc.staff[`s-${i}`] = { id: `s-${i}`, name: `P${i}`, email: `p${i}@tiny.example`, roleId: 'staff', teamIds: [] };
+  assert.equal((await call('tiny.localhost', 'PUT', '/api/docs/org', { cookie: lead, body: orgDoc })).status, 403);
+
+  // No social sign-in on Free.
+  assert.deepEqual((await call('tiny.localhost', 'GET', '/api/auth/options')).json.providers, []);
+
+  // The admin gives Free one framework for everyone; then it saves.
+  const { json: plans } = await call('localhost', 'GET', '/api/admin/plans', { cookie: admin });
+  assert.equal(plans.plans.basic.limits.plans, 2);
+  await call('localhost', 'PUT', '/api/admin/plans', { cookie: admin, body: { free: { limits: { frameworks: 5 } } } });
+  assert.equal((await call('tiny.localhost', 'PUT', '/api/docs/strategy', { cookie: lead, body: strategy })).status, 200);
+
+  // A Custom org's own limits, over the tier's.
+  await call('localhost', 'PATCH', `/api/admin/orgs/${org.id}`, { cookie: admin, body: { plan: 'basic', limits: { limits: { users: 40 } } } });
+  assert.equal((await call('tiny.localhost', 'PUT', '/api/docs/org', { cookie: lead, body: orgDoc })).status, 200);
+  const { json: mine } = await call('tiny.localhost', 'GET', '/api/plan', { cookie: lead });
+  assert.equal(mine.plan.limits.users, 40);
+  assert.equal(mine.usage.users, 6);
+  await call('localhost', 'PUT', '/api/admin/plans', { cookie: admin, body: {} });
+});
+
+test('anyone can sign up for a free org on the platform site, and asks for a bigger plan', async () => {
+  const { json: info } = await call('localhost', 'GET', '/api/platform');
+  assert.equal(info.plans.standard.label, 'Standard');
+  assert.ok(info.site.hero.title);
+  assert.equal((await call('example.localhost', 'POST', '/api/signup', { body: { orgName: 'X' } })).status, 404, 'only on the platform site');
+  assert.equal((await call('localhost', 'POST', '/api/signup', { body: { orgName: 'Bots', slug: 'bots', email: 'b@b.example', password: 'longenough1', website: 'spam' } })).status, 400);
+  const res = await call('localhost', 'POST', '/api/signup', { body: { orgName: 'Lakeside Arts Collective', slug: 'lakeside', name: 'Rosa', email: 'rosa@lakeside.example', password: 'a good long one', plan: 'standard' } });
+  assert.equal(res.status, 201);
+  assert.ok(res.headers['set-cookie'], 'signed in');
+  assert.match(res.json.open, /auth\/switch/);
+  const cookie = res.headers['set-cookie'][0].split(';')[0];
+  assert.equal((await call('localhost', 'GET', '/api/session', { cookie })).json.user.email, 'rosa@lakeside.example');
+  assert.equal((await call('localhost', 'POST', '/api/signup', { body: { orgName: 'Again', slug: 'again', email: 'rosa@lakeside.example', password: 'a good long one' } })).status, 409);
+  const admin = await signIn('admin@localhost', 'localhost');
+  const reqs = (await call('localhost', 'GET', '/api/admin/requests', { cookie: admin })).json;
+  const r = reqs.find((x) => x.email === 'rosa@lakeside.example');
+  assert.equal(r.kind, 'signup');
+  assert.equal(r.data.plan, 'standard');
+  assert.equal(r.org_plan, 'free', 'starts on Free until the admin moves it');
+});
+
+test('a Custom org adds its own domain, proves it with DNS, and is then served there', async () => {
+  const exAdmin = await signIn('amara@example.org');
+  const rbAdmin = await signIn('mira@riverbend.example', RB).catch(() => null);
+  if (rbAdmin) {
+    const r = await call(RB, 'POST', '/api/domains', { cookie: rbAdmin, body: { host: 'riverbend.org' } });
+    assert.equal(r.status, 403, 'Standard has no custom domain');
+  }
+  const add = await call(EX, 'POST', '/api/domains', { cookie: exAdmin, body: { host: 'https://www.example-stem.org/' } });
+  assert.equal(add.status, 201);
+  assert.equal(add.json.host, 'www.example-stem.org');
+  assert.equal(add.json.status, 'pending');
+  const txt = add.json.records.find((x) => x.type === 'TXT');
+  assert.equal(add.json.records.find((x) => x.type === 'CNAME').value, 'localhost');
+  assert.equal((await call('www.example-stem.org', 'GET', '/api/session')).status, 404, 'not served until it works');
+  assert.equal((await call('dashi', 'GET', '/tls-ask?domain=www.example-stem.org')).status, 404);
+
+  dns.txt[txt.name] = [[txt.value]];
+  let check = await call(EX, 'POST', '/api/domains/www.example-stem.org/check', { cookie: exAdmin });
+  assert.equal(check.json.status, 'verified');
+  dns.cname['www.example-stem.org'] = ['localhost.'];
+  check = await call(EX, 'POST', '/api/domains/www.example-stem.org/check', { cookie: exAdmin });
+  assert.equal(check.json.status, 'active');
+  assert.equal((await call('www.example-stem.org', 'GET', '/api/session')).json.org.id, 'org-example');
+  assert.equal((await call('dashi', 'GET', '/tls-ask?domain=www.example-stem.org')).status, 200);
+
+  // A bare domain gets A records to the platform's address.
+  const apex = await call(EX, 'POST', '/api/domains', { cookie: exAdmin, body: { host: 'example-stem.org' } });
+  assert.deepEqual(apex.json.records.filter((x) => x.type === 'A').map((x) => x.value), ['203.0.113.7']);
+  assert.equal((await call(EX, 'POST', '/api/domains', { cookie: exAdmin, body: { host: 'not a domain' } })).status, 400);
+  assert.equal((await call(EX, 'POST', '/api/domains', { cookie: exAdmin, body: { host: 'www.example-stem.org' } })).status, 409);
+  await call(EX, 'DELETE', '/api/domains/www.example-stem.org', { cookie: exAdmin });
+  assert.equal((await call('www.example-stem.org', 'GET', '/api/session')).status, 404);
 });

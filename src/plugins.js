@@ -78,6 +78,19 @@ export const PLUGINS = [
     },
   },
   {
+    id: 'library',
+    short: 'Library',
+    tone: '#7a5a2f',
+    name: 'Library',
+    href: 'library.html',
+    icon: 'book',
+    blurb: 'Your documents in one place: files with proper references, Dashi docs written and exported to Word or PDF, and annotated bibliographies with weekly briefs.',
+    stats: ({ library }) => {
+      const items = Object.values(library?.items ?? {});
+      return `${items.length} documents · ${items.filter((d) => d.kind === 'doc').length} Dashi docs · ${Object.keys(library?.bibs ?? {}).length} bibliographies`;
+    },
+  },
+  {
     id: 'pages',
     short: 'Sites',
     tone: '#3a8a3f',

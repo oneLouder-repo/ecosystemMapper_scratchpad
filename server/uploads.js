@@ -30,10 +30,17 @@ export function sniffAudio(buf) {
   return null;
 }
 
-export function uploadRoutes({ q, newId }) {
+/**
+ * `limitsOf(org)` gives the org's plan limits ({ uploadMb, storageMb }), each
+ * capped by the server's own settings.
+ */
+export function uploadRoutes({ q, newId, limitsOf = () => ({}) }) {
   const dirOf = (orgId) => join(config.dataDir, 'uploads', orgId);
   const partOf = (u) => join(dirOf(u.org_id), `${u.id}.part`);
-  const limit = () => config.maxUploadMb * 1048576;
+  const caps = (org) => {
+    const l = limitsOf(org);
+    return { uploadMb: Math.min(config.maxUploadMb, l.uploadMb ?? Infinity), storageMb: l.storageMb ?? config.orgStorageMb };
+  };
 
   /** Bytes an org already keeps: its media plus uploads in progress. */
   const used = (orgId) => (q('SELECT COALESCE(SUM(size), 0) AS n FROM media WHERE org_id = ?').get(orgId).n)
@@ -70,9 +77,10 @@ export function uploadRoutes({ q, newId }) {
       const size = Number(body?.size);
       const filename = String(body?.filename ?? 'upload').replace(/[^\w.\- ]+/g, '_').slice(0, 120) || 'upload';
       if (!Number.isSafeInteger(size) || size <= 0) throw new HttpError(400, 'How big is the file?');
-      if (size > limit()) throw new HttpError(413, `Files can be up to ${config.maxUploadMb} MB.`);
+      const cap = caps(a.org);
+      if (size > cap.uploadMb * 1048576) throw new HttpError(413, `Files can be up to ${cap.uploadMb} MB on your plan.`);
       if (!/\.(mp3|wav)$/i.test(filename) && !/^audio\/(mpeg|mp3|wav|x-wav|wave|vnd\.wave)$/.test(String(body?.type ?? ''))) throw new HttpError(415, 'Upload an .mp3 or .wav file');
-      if (used(a.org.id) + size > config.orgStorageMb * 1048576) throw new HttpError(507, `Your organisation’s storage (${config.orgStorageMb / 1024} GB) is full. Remove old episodes or ask about a larger plan.`);
+      if (used(a.org.id) + size > cap.storageMb * 1048576) throw new HttpError(507, `Your organisation’s storage (${cap.storageMb >= 1024 ? `${+(cap.storageMb / 1024).toFixed(1)} GB` : `${cap.storageMb} MB`}) is full. Remove old files or ask about a larger plan.`);
       const id = newId('up');
       mkdirSync(dirOf(a.org.id), { recursive: true });
       q('INSERT INTO uploads (id, org_id, filename, size, received, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, 0, ?, ?, ?)')

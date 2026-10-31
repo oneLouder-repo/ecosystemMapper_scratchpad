@@ -4,13 +4,15 @@ import { initials } from '../platform/org.js';
 import { PLUGINS } from '../plugins.js';
 import { Wordmark } from '../ui/Wordmark.js';
 import { SideNav } from '../ui/SideNav.js';
+import { salesPage } from './sales.js';
+import { PLAN_IDS, PLAN_PLUGINS, LIMITS, FEATURES, amount } from '../platform/plans.js';
 
 /**
  * The platform's own site (the root domain): the organisations you can
  * open and, for the platform admin, the console to add organisations,
  * set their plan, suspend or remove them, and manage people's sign-in.
  * The console uses the same sidebar as the plugins, one section at a time:
- * #orgs (default), #add, #people, #security (the audit and backups).
+ * #orgs (default), #add, #people, #plans, #requests, #site (the sales site's words), #security (the audit and backups).
  */
 const app = document.querySelector('#app');
 const call = async (method, url, body) => {
@@ -40,12 +42,8 @@ async function render() {
       ? [h('span', { class: 'muted' }, user.email), h('button', { class: 'btn btn-sm', onclick: async () => { await call('POST', '/api/auth/logout'); location.reload(); } }, 'Sign out')]
       : h('a', { class: 'btn btn-sm btn-primary', href: '/login.html?next=/' }, 'Sign in'));
 
-  if (!user) {
-    return app.replaceChildren(head, h('section', { class: 'platform-hero' },
-      h('h1', {}, 'Planning, mapping and sharing for small nonprofits'),
-      h('p', {}, 'Ecosystem maps, strategy and work plans, data dashboards, a podcast station and public pages, for each organisation, in one place.'),
-      h('a', { class: 'btn btn-primary', href: '/login.html?next=/' }, 'Sign in')));
-  }
+  // Not signed in: Dashi's own public site (sales.js).
+  if (!user) return salesPage(app, 'home');
 
   const yours = h('section', {},
     h('h2', {}, user.isSuper ? 'All organisations' : 'Your organisations'),
@@ -58,7 +56,8 @@ async function render() {
 
   if (!user.isSuper) return app.replaceChildren(head, h('div', { class: 'page-main' }, h('div', { class: 'page' }, yours)));
 
-  const [orgs, users] = await Promise.all([call('GET', '/api/admin/orgs'), call('GET', '/api/admin/users')]);
+  const [orgs, users, requests] = await Promise.all([call('GET', '/api/admin/orgs'), call('GET', '/api/admin/users'), call('GET', '/api/admin/requests')]);
+  const openRequests = requests.filter((r) => r.status === 'open').length;
   const f = {
     name: h('input', { class: 'input input-sm', placeholder: 'Organisation name', required: true }),
     slug: h('input', { class: 'input input-sm', placeholder: 'address', required: true, pattern: '[a-z0-9\\-]+' }),
@@ -73,15 +72,16 @@ async function render() {
   const u = { email: h('input', { class: 'input input-sm', type: 'email', placeholder: 'Email', required: true }), name: h('input', { class: 'input input-sm', placeholder: 'Name' }) };
   const OPTIONAL = PLUGINS.filter((p) => !p.core);
   const pluginToggles = (o) => h('div', { class: 'plugin-toggles' }, OPTIONAL.map((p) => {
-    const on = !o.paused[p.id] && o.chosen[p.id] !== false;
-    return h('label', { class: 'feature-toggle', title: on ? `${p.name} is on for ${o.name}` : o.paused[p.id] ? `Paused by you` : `Switched off by ${o.name}` },
-      h('input', { type: 'checkbox', class: 'toggle toggle-xs toggle-primary', checked: on,
+    const inPlan = o.included?.[p.id] !== false;
+    const on = inPlan && !o.paused[p.id] && o.chosen[p.id] !== false;
+    return h('label', { class: 'feature-toggle', title: !inPlan ? `Not in the ${o.plan} plan. Change the plan, or give it under Own limits.` : on ? `${p.name} is on for ${o.name}` : o.paused[p.id] ? `Paused by you` : `Switched off by ${o.name}` },
+      h('input', { type: 'checkbox', class: 'toggle toggle-xs toggle-primary', checked: on, disabled: !inPlan,
         onchange: (e) => act(() => call('POST', `/api/admin/orgs/${o.id}/plugins`, { plugin: p.id, on: e.target.checked })) }),
       icon(p.icon, 14), p.name);
   }));
   const act = async (fn) => { try { await fn(); await reload(); } catch (err) { alert(err.message); } };
 
-  const route = ['orgs', 'add', 'people', 'security'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'orgs';
+  const route = ['orgs', 'add', 'people', 'plans', 'requests', 'site', 'security'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'orgs';
   const active = orgs.filter((o) => o.status === 'active').length;
   const stat = (label, value, hint) => h('div', { class: 'stat' }, h('div', { class: 'stat-title' }, label), h('div', { class: 'stat-value' }, value), hint && h('div', { class: 'stat-desc' }, hint));
   const side = SideNav({ label: 'Platform admin', sections: [
@@ -89,6 +89,9 @@ async function render() {
       { label: 'Organisations', sub: `${orgs.length} on the platform`, icon: 'org', href: '#orgs', on: route === 'orgs' },
       { label: 'Add an organisation', icon: 'plus', href: '#add', on: route === 'add' },
       { label: 'People who can sign in', sub: `${users.length} people`, icon: 'person', href: '#people', on: route === 'people' },
+      { label: 'Plans', sub: 'What each tier includes', icon: 'star', href: '#plans', on: route === 'plans' },
+      { label: 'Requests', sub: 'Sign-ups, plan changes, messages', icon: 'news', href: '#requests', on: route === 'requests', badge: openRequests ? String(openRequests) : null, badgeClass: 'badge-primary' },
+      { label: 'Sales site', sub: 'The words on Dashi’s own site', icon: 'globe', href: '#site', on: route === 'site' },
       { label: 'Security audit', sub: 'Checks and backups', icon: 'lock', href: '#security', on: route === 'security' },
     ] },
     { title: 'Open an organisation', items: session.orgs.map((o) => ({ label: o.name, sub: o.url.replace(/^https?:\/\//, ''), lead: h('span', { class: 'logo-initials', style: 'width:20px;height:20px;font-size:9px' }, initials(o.name)), href: open(o) })) },
@@ -104,6 +107,9 @@ async function render() {
   sections.add = () => addOrg;
   sections.people = () => people;
   sections.security = () => Security();
+  sections.plans = () => Plans();
+  sections.requests = () => Requests(requests, act);
+  sections.site = () => SalesSite();
   window.onhashchange = () => render();
 
   const addOrg = h('section', { class: 'card card-border bg-base-100 platform-card' }, h('div', { class: 'card-body' },
@@ -119,13 +125,16 @@ async function render() {
       h('h2', {}, 'Manage organisations'),
       h('p', { class: 'muted small' }, 'Switch a plugin on to add it to an organisation’s plan; switch it off to pause it. A paused plugin keeps its content, but the organisation and its public site can’t use it until you switch it back on.'),
       h('div', { class: 'table-scroll' }, h('table', { class: 'table table-sm' },
-        h('thead', {}, h('tr', {}, ['Name', 'Address', 'Plan', 'Plugins', 'People', 'Status', ''].map((t) => h('th', {}, t)))),
+        h('thead', {}, h('tr', {}, ['Name', 'Address', 'Plan', 'Plugins', 'Use', 'Status', ''].map((t) => h('th', {}, t)))),
         h('tbody', {}, orgs.map((o) => h('tr', {},
           h('td', {}, h('strong', {}, o.name)),
-          h('td', {}, h('a', { href: open(o) }, o.url.replace(/^https?:\/\//, ''))),
+          h('td', {}, h('a', { href: open(o) }, o.url.replace(/^https?:\/\//, '')),
+            (o.domains ?? []).filter((d) => d.status !== 'active').map((d) => h('div', { class: 'small muted' }, `${d.host} (${d.status}) `,
+              h('button', { class: 'btn btn-xs btn-ghost', title: 'Switch this domain on without the DNS check', onclick: () => act(() => call('POST', `/api/admin/domains/${d.host}/activate`)) }, 'Switch on')))),
           h('td', {}, h('select', { class: 'select select-xs', 'aria-label': `Plan for ${o.name}`, onchange: (e) => act(() => call('PATCH', `/api/admin/orgs/${o.id}`, { plan: e.target.value })) }, options(PLANS, o.plan))),
           h('td', {}, pluginToggles(o)),
-          h('td', {}, o.members),
+          h('td', { class: 'small' }, `${o.members} people`, h('br'), `${o.usage?.storageMb ?? 0} MB`,
+            h('details', { class: 'limits-edit' }, h('summary', { class: 'link-button' }, Object.keys(o.limits?.limits ?? {}).length ? 'Own limits ✓' : 'Own limits'), LimitsEditor(o, act))),
           h('td', {}, h('label', { class: 'feature-toggle' },
             h('input', { type: 'checkbox', class: 'toggle toggle-xs toggle-primary', checked: o.status === 'active', onchange: (e) => act(() => call('PATCH', `/api/admin/orgs/${o.id}`, { status: e.target.checked ? 'active' : 'suspended' })) }),
             o.status)),
@@ -212,6 +221,128 @@ function Security() {
       h('h2', { class: 'card-title' }, 'Database backups'),
       h('p', { class: 'muted small' }, 'A snapshot of the database is taken every day and kept for two weeks, in the data folder’s backups. Uploaded audio isn’t in it; the host’s disk snapshots cover that.'),
       backups, h('div', {}, now))));
+}
+
+/* ---------------------------------------------------------------- plans */
+const PLAN_LABEL = (id) => id[0].toUpperCase() + id.slice(1);
+
+/** What each tier includes: plugins, limits and features, for every org on it. */
+function Plans() {
+  const box = h('div', {}, h('p', { class: 'muted' }, 'Loading…'));
+  let plans;
+  let overrides;
+  const status = h('span', { class: 'muted small', role: 'status' });
+  const save = async () => {
+    try {
+      // Only what differs from Dashi's defaults is stored, so later defaults still apply.
+      await call('PUT', '/api/admin/plans', overrides);
+      status.textContent = 'Saved. Every organisation on these plans has the change now.';
+    } catch (err) { status.textContent = err.message; }
+  };
+  const setPart = (id, part, key, value) => {
+    overrides[id] ??= {};
+    overrides[id][part] = { ...(overrides[id][part] ?? {}), [key]: value };
+    plans[id][part][key] = value;
+  };
+  const limitInput = (id, l) => h('input', { class: 'input input-xs plan-num', type: 'number', min: 0, value: plans[id].limits[l.id] ?? '', placeholder: 'No limit', 'aria-label': `${l.label} on ${plans[id].label}`,
+    onchange: (e) => setPart(id, 'limits', l.id, e.target.value === '' ? null : Number(e.target.value)) });
+  const check = (id, part, key, label) => h('input', { type: 'checkbox', class: 'checkbox checkbox-xs', checked: !!plans[id][part][key], 'aria-label': `${label} on ${plans[id].label}`,
+    onchange: (e) => setPart(id, part, key, e.target.checked) });
+  call('GET', '/api/admin/plans').then((r) => {
+    ({ plans, overrides } = r);
+    box.replaceChildren(
+      h('div', { class: 'table-scroll' }, h('table', { class: 'table table-sm plans-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, ''), PLAN_IDS.map((id) => h('th', {}, plans[id].label)))),
+        h('tbody', {},
+          h('tr', {}, h('th', {}, 'Price a month ($)'), PLAN_IDS.map((id) => h('td', {}, h('input', { class: 'input input-xs plan-num', type: 'number', min: 0, value: plans[id].price.monthly ?? '', placeholder: 'Ask',
+            onchange: (e) => setPart(id, 'price', 'monthly', e.target.value === '' ? null : Number(e.target.value)) })))),
+          h('tr', {}, h('th', {}, 'Tagline'), PLAN_IDS.map((id) => h('td', {}, h('textarea', { class: 'textarea textarea-xs', rows: 3, onchange: (e) => { overrides[id] = { ...(overrides[id] ?? {}), tagline: e.target.value }; } }, plans[id].tagline)))),
+          h('tr', { class: 'group' }, h('th', { colspan: 5 }, 'Plugins')),
+          PLAN_PLUGINS.map((pid) => h('tr', {}, h('th', {}, PLUGINS.find((p) => p.id === pid)?.name ?? pid), PLAN_IDS.map((id) => h('td', {}, check(id, 'plugins', pid, pid))))),
+          h('tr', { class: 'group' }, h('th', { colspan: 5 }, 'Limits (empty: no limit)')),
+          LIMITS.map((l) => h('tr', {}, h('th', {}, l.label, l.unit ? h('small', { class: 'muted' }, ` ${l.unit}`) : null), PLAN_IDS.map((id) => h('td', {}, limitInput(id, l))))),
+          h('tr', { class: 'group' }, h('th', { colspan: 5 }, 'Features')),
+          FEATURES.map((f) => h('tr', {}, h('th', {}, f.label), PLAN_IDS.map((id) => h('td', {}, check(id, 'features', f.id, f.label)))))))),
+      h('div', { class: 'inline-form' }, h('button', { class: 'btn btn-sm btn-primary', onclick: save }, 'Save plans'),
+        h('button', { class: 'btn btn-sm btn-ghost', onclick: async () => { if (confirm('Go back to Dashi’s default plans?')) { overrides = {}; await save(); location.reload(); } } }, 'Back to the defaults'), status));
+  }).catch((err) => box.replaceChildren(h('p', { class: 'empty' }, err.message)));
+  return h('div', {},
+    h('h2', {}, 'Plans'),
+    h('p', { class: 'muted small' }, 'What each tier includes. A change applies at once to every organisation on that plan, and the pricing page shows it. Organisations already over a new limit keep what they have; they just can’t add more.'),
+    box);
+}
+
+/** A Custom (or any) org's own limits, over its tier's. */
+function LimitsEditor(o, act) {
+  const own = structuredClone(o.limits ?? {});
+  own.limits ??= {};
+  own.features ??= {};
+  own.plugins ??= {};
+  const row = (l) => h('label', { class: 'limit-row' }, h('span', {}, l.label), h('input', { class: 'input input-xs plan-num', type: 'number', min: 0, value: own.limits[l.id] ?? '', placeholder: 'plan’s',
+    onchange: (e) => { if (e.target.value === '') delete own.limits[l.id]; else own.limits[l.id] = Number(e.target.value); } }));
+  const feat = (f, part, label) => h('label', { class: 'limit-row' }, h('span', {}, label), h('select', { class: 'select select-xs', onchange: (e) => { if (e.target.value === '') delete own[part][f]; else own[part][f] = e.target.value === 'on'; } },
+    options([{ id: '', label: 'Plan’s' }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }], own[part][f] == null ? '' : own[part][f] ? 'on' : 'off')));
+  return h('div', { class: 'limits-panel' },
+    h('p', { class: 'muted small' }, `Limits for ${o.name} alone, over the ${PLAN_LABEL(o.plan)} plan’s. Leave a field empty to use the plan’s.`),
+    LIMITS.map(row),
+    FEATURES.map((f) => feat(f.id, 'features', f.label)),
+    PLAN_PLUGINS.map((pid) => feat(pid, 'plugins', PLUGINS.find((p) => p.id === pid)?.name ?? pid)),
+    h('button', { class: 'btn btn-xs btn-primary', onclick: () => act(() => call('PATCH', `/api/admin/orgs/${o.id}`, { limits: own })) }, 'Save'));
+}
+
+/* ------------------------------------------------------------- requests */
+function Requests(requests, act) {
+  const KIND = { signup: 'Sign-up', upgrade: 'Plan change', contact: 'Message' };
+  const shown = requests.filter((r) => r.status === 'open');
+  const done = requests.filter((r) => r.status !== 'open');
+  const card = (r) => h('li', { class: `request ${r.status}` },
+    h('div', { class: 'request-head' },
+      h('span', { class: 'badge badge-sm badge-soft' }, KIND[r.kind] ?? r.kind),
+      h('strong', {}, r.org_name ?? r.data.org ?? r.name ?? r.email),
+      h('span', { class: 'muted small' }, new Date(r.created_at).toLocaleString()),
+      h('span', { class: 'spacer' }),
+      r.status === 'open'
+        ? [r.org_id && r.data.plan && r.data.plan !== r.org_plan && h('button', { class: 'btn btn-xs btn-primary', onclick: () => act(async () => { await call('PATCH', `/api/admin/orgs/${r.org_id}`, { plan: r.data.plan }); await call('PATCH', `/api/admin/requests/${r.id}`, { status: 'done' }); }) }, `Move to ${PLAN_LABEL(r.data.plan)}`),
+           h('button', { class: 'btn btn-xs', onclick: () => act(() => call('PATCH', `/api/admin/requests/${r.id}`, { status: 'done' })) }, 'Done'),
+           h('button', { class: 'btn btn-xs btn-ghost', onclick: () => act(() => call('PATCH', `/api/admin/requests/${r.id}`, { status: 'declined' })) }, 'Decline')]
+        : h('span', { class: 'muted small' }, r.status)),
+    h('p', { class: 'small' }, [r.name, r.email].filter(Boolean).join(' · '),
+      r.kind === 'signup' ? ` signed up${r.data.plan && r.data.plan !== 'free' ? ` and would like ${PLAN_LABEL(r.data.plan)}` : ''}.` : '',
+      r.kind === 'upgrade' ? ` asks to move from ${PLAN_LABEL(r.data.from ?? r.org_plan)} to ${PLAN_LABEL(r.data.plan)}.` : '',
+      r.kind === 'contact' && r.data.plan ? ` (about ${PLAN_LABEL(r.data.plan)})` : ''),
+    (r.data.message || r.data.note) && h('blockquote', {}, r.data.message || r.data.note));
+  return h('div', {},
+    h('h2', {}, 'Requests'),
+    h('p', { class: 'muted small' }, 'Sign-ups from the public site, plan changes organisations ask for, and messages from the contact page. New organisations start on Free; moving one to a paid plan is your call, once payment is arranged.'),
+    shown.length ? h('ul', { class: 'requests' }, shown.map(card)) : h('p', { class: 'empty' }, 'Nothing waiting.'),
+    done.length > 0 && h('details', {}, h('summary', {}, `${done.length} dealt with`), h('ul', { class: 'requests' }, done.map(card))));
+}
+
+/* ----------------------------------------------------------- sales site */
+function SalesSite() {
+  const box = h('div', {}, h('p', { class: 'muted' }, 'Loading…'));
+  const status = h('span', { class: 'muted small', role: 'status' });
+  fetch('/api/platform').then((r) => r.json()).then(({ site }) => {
+    const text = (obj, key, label, rows = 1) => h('label', { class: 'field' }, h('span', {}, label),
+      h(rows > 1 ? 'textarea' : 'input', { class: rows > 1 ? 'textarea textarea-sm' : 'input input-sm', rows, value: rows > 1 ? undefined : obj[key], onchange: (e) => { obj[key] = e.target.value; } }, rows > 1 ? obj[key] : undefined));
+    const list = (items, fields, label) => h('fieldset', { class: 'site-list' }, h('legend', {}, label),
+      items.map((it) => h('div', { class: 'site-item' }, fields.map(([k, l, rows]) => text(it, k, l, rows)))));
+    box.replaceChildren(
+      h('section', { class: 'site-edit' }, h('h3', {}, 'Home page'),
+        text(site.hero, 'eyebrow', 'Above the title'), text(site.hero, 'title', 'Title'), text(site.hero, 'text', 'Introduction', 3), text(site.hero, 'cta', 'Button'),
+        list(site.points, [['title', 'Title'], ['text', 'Text', 2]], 'What Dashi does'),
+        list(site.trust, [['title', 'Title'], ['text', 'Text', 2]], 'Why trust it')),
+      h('section', { class: 'site-edit' }, h('h3', {}, 'Plans and pricing'), text(site, 'pricingNote', 'Note under the title', 2), h('p', { class: 'muted small' }, 'Prices, taglines and what each plan includes are under Plans.')),
+      h('section', { class: 'site-edit' }, h('h3', {}, 'About'),
+        text(site.about, 'title', 'Title'), text(site.about, 'intro', 'Introduction', 4),
+        list(site.about.sections, [['title', 'Heading'], ['text', 'Text', 4]], 'Sections'),
+        list(site.about.faq, [['q', 'Question'], ['a', 'Answer', 2]], 'Questions')),
+      h('section', { class: 'site-edit' }, h('h3', {}, 'Contact'), text(site.contact, 'email', 'Email'), text(site.contact, 'note', 'Note')),
+      h('div', { class: 'inline-form sticky-save' },
+        h('button', { class: 'btn btn-sm btn-primary', onclick: async () => { try { await call('PUT', '/api/admin/site', site); status.textContent = 'Saved. The public site shows it now.'; } catch (err) { status.textContent = err.message; } } }, 'Save'),
+        h('a', { class: 'btn btn-sm', href: '/pricing.html', target: '_blank' }, 'View the site ↗'), status));
+  });
+  return h('div', {}, h('h2', {}, 'Sales site'), h('p', { class: 'muted small' }, 'The words on Dashi’s own public site: the home page visitors see at this address, Plans and pricing, About, and Contact.'), box);
 }
 
 async function reload() {

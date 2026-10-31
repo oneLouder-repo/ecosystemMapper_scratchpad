@@ -31,12 +31,15 @@ import { now } from './db.js';
 import { HttpError, send, json, redirect, page, readJson, parseCookies, cookie, sendFile, clientIp, securityHeaders } from './http.js';
 import { publicDocs, mediaIsPublic } from './public.js';
 import { uploadRoutes } from './uploads.js';
+import { domainRoutes } from './domains.js';
 import { runAudit } from './audit.js';
 import { backupNow, listBackups } from './backup.js';
 import { PROVIDERS, authorizeUrl, finish } from './oauth.js';
 import { zipStream, zipSize } from '../src/core/zip.js';
 import { showArchive } from '../src/platform/showArchive.js';
 import { blankOrg, migrateOrg } from '../src/platform/org.js';
+import { planFor, allPlans, overLimit, usageOf, PLAN_IDS } from '../src/platform/plans.js';
+import { siteContent } from '../src/platform/salesSite.js';
 import { blankStrategy } from '../src/platform/strategySeed.js';
 
 const scrypt = promisify(scryptCb);
@@ -67,7 +70,7 @@ export async function checkPassword(password, stored) {
   return timingSafeEqual(want, got);
 }
 
-export function createApp(db) {
+export function createApp(db, options = {}) {
   const q = (sql) => db.prepare(sql);
 
   /* ------------------------------------------------------------------ data */
@@ -76,12 +79,20 @@ export function createApp(db) {
   const userById = (id) => q('SELECT * FROM users WHERE id = ?').get(id);
   const userByEmail = (email) => q('SELECT * FROM users WHERE email = ?').get(String(email).toLowerCase());
   const membership = (userId, orgId) => q('SELECT * FROM memberships WHERE user_id = ? AND org_id = ?').get(userId, orgId);
-  const hostOf = (org) => q('SELECT host FROM domains WHERE org_id = ? ORDER BY host LIMIT 1').get(org.id)?.host ?? orgHost(org.slug);
+  const hostOf = (org) => q("SELECT host FROM domains WHERE org_id = ? AND status = 'active' ORDER BY is_primary DESC, host LIMIT 1").get(org.id)?.host ?? orgHost(org.slug);
 
+  /** The platform admin's changes to the plans (Platform admin → Plans). */
+  const planOverrides = () => JSON.parse(q("SELECT json FROM platform_docs WHERE name = 'plans'").get()?.json ?? '{}');
+  /** An org's plan: its tier, the admin's changes to it, and its own limits. */
+  const orgPlan = (o) => planFor(o?.plan, planOverrides(), JSON.parse(o?.limits || '{}'));
   /** What the platform admin decides for an org, carried on its org document (read only for the org). */
   const platformPart = (orgId) => {
     const o = orgById(orgId);
-    return { plan: o?.plan ?? 'free', paused: JSON.parse(o?.paused_plugins || '{}') };
+    const plan = orgPlan(o);
+    // A plugin the plan doesn't include is paused, as if the admin had paused it.
+    const paused = { ...JSON.parse(o?.paused_plugins || '{}') };
+    for (const [id, on] of Object.entries(plan.plugins)) if (!on) paused[id] = true;
+    return { tier: plan.id, plan, paused };
   };
   const withPlatform = (orgId, name, doc) => (name === 'org' && doc ? { ...doc, platform: platformPart(orgId) } : doc);
   function readDocs(orgId) {
@@ -150,6 +161,10 @@ export function createApp(db) {
     return orgById(id);
   }
 
+  /** Bytes an org keeps: audio, library files and uploads in progress. */
+  const storageUsed = (orgId) => q('SELECT COALESCE(SUM(size), 0) AS n FROM media WHERE org_id = ?').get(orgId).n
+    + q('SELECT COALESCE(SUM(size), 0) AS n FROM uploads WHERE org_id = ?').get(orgId).n;
+
   function deleteOrg(id) {
     q('DELETE FROM orgs WHERE id = ?').run(id);
     rmSync(join(config.dataDir, 'media', id), { recursive: true, force: true });
@@ -162,7 +177,7 @@ export function createApp(db) {
   function tenant(req) {
     const host = String(req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '');
     if (host === config.baseDomain || host === `www.${config.baseDomain}` || host === '127.0.0.1' || host === '[::1]') return { host, root: true };
-    const custom = q('SELECT org_id FROM domains WHERE host = ?').get(host);
+    const custom = q("SELECT org_id FROM domains WHERE host = ? AND status = 'active'").get(host);
     if (custom) return { host, org: orgById(custom.org_id) };
     if (host.endsWith(`.${config.baseDomain}`)) {
       const slug = host.slice(0, -config.baseDomain.length - 1);
@@ -220,7 +235,7 @@ export function createApp(db) {
     q('INSERT INTO handoffs (token, user_id, host, expires_at) VALUES (?, ?, ?, ?)').run(digest(t), userId, host, Date.now() + 60_000);
     redirect(res, urlFor(host, `/auth/handoff?${new URLSearchParams({ token: t, next })}`));
   }
-  const knownHost = (host) => host === config.baseDomain || !!q('SELECT 1 FROM domains WHERE host = ?').get(host)
+  const knownHost = (host) => host === config.baseDomain || !!q("SELECT 1 FROM domains WHERE host = ? AND status = 'active'").get(host)
     || (host.endsWith(`.${config.baseDomain}`) && !!q('SELECT 1 FROM orgs WHERE slug = ?').get(host.slice(0, -config.baseDomain.length - 1)));
   const safeNext = (next) => (typeof next === 'string' && next.startsWith('/') && !next.startsWith('//') ? next : '/');
 
@@ -234,7 +249,9 @@ export function createApp(db) {
     }
   }
 
-  const uploads = uploadRoutes({ q, newId });
+  const uploads = uploadRoutes({ q, newId, limitsOf: (org) => orgPlan(org).limits });
+  const domains = domainRoutes({ q, planOf: orgPlan, announce: (...x) => announce(...x), resolver: options.resolver });
+  setInterval(() => domains.sweep().catch(() => {}), 3600_000).unref();
   uploads.sweep();
   setInterval(uploads.sweep, 3600_000).unref();
 
@@ -284,7 +301,7 @@ export function createApp(db) {
         orgs: orgsFor(a.user),
         platformUrl: a.isSuper ? '/auth/root' : null,
         sessionTag: a.tag,
-        limits: { uploadMb: config.maxUploadMb },
+        limits: { uploadMb: a.org ? Math.min(config.maxUploadMb, orgPlan(a.org).limits.uploadMb ?? config.maxUploadMb) : config.maxUploadMb },
         docs,
       });
     }
@@ -302,6 +319,9 @@ export function createApp(db) {
         if (!a.canEdit || (name === 'org' && !a.canAdmin)) throw new HttpError(403, 'You can’t change this');
         const doc = await readJson(req, config.maxJsonMb * 1048576);
         if (!doc || typeof doc !== 'object') throw new HttpError(400, 'Not a document');
+        // The plan: nothing new past its limits (what's already there can stay).
+        const why = overLimit(orgPlan(a.org), name, readDoc(a.org.id, name), doc);
+        if (why) throw new HttpError(403, why);
         if (name === 'org') {
           doc.id = a.org.id;
           migrateOrg(doc);
@@ -312,6 +332,13 @@ export function createApp(db) {
         announce(a.org.id, name, a.tag);
         return json(res, 200, { ok: true });
       }
+    }
+
+    // The org's plan and how much of it is used (Organisation → Plan).
+    if (path === '/api/plan' && method === 'GET') {
+      needOrg();
+      if (!a.member) throw new HttpError(403, 'Members only');
+      return json(res, 200, { plan: orgPlan(a.org), usage: { ...usageOf(readDocs(a.org.id)), storageMb: Math.round(storageUsed(a.org.id) / 1048576) }, plans: allPlans(planOverrides()) });
     }
 
     if (path === '/api/events' && method === 'GET') {
@@ -326,6 +353,7 @@ export function createApp(db) {
       return;
     }
 
+    if (path.startsWith('/api/domains') && (await domains.handle(req, res, a, path)) !== false) return;
     if (path.startsWith('/api/uploads')) {
       needOrg();
       if ((await uploads.handle(req, res, a, path)) !== false) return;
@@ -394,6 +422,62 @@ export function createApp(db) {
     }
 
     /* Signing in. */
+    /* Dashi's own public site: plans, prices and its words; sign-up; messages. */
+    const platformDoc = (name) => JSON.parse(q('SELECT json FROM platform_docs WHERE name = ?').get(name)?.json ?? 'null');
+    const savePlatformDoc = (name, doc) => q(`INSERT INTO platform_docs (name, json, updated_at, updated_by) VALUES (?, ?, ?, ?)
+      ON CONFLICT (name) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at, updated_by = excluded.updated_by`).run(name, JSON.stringify(doc), now(), a.user?.id ?? null);
+    const request = (kind, { orgId = null, email = null, name = null, data = {} } = {}) => {
+      const id = newId('req');
+      q('INSERT INTO requests (id, kind, org_id, email, name, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, kind, orgId, email, name, JSON.stringify(data), now());
+      return id;
+    };
+    if (path === '/api/platform' && method === 'GET') {
+      return json(res, 200, { plans: allPlans(planOverrides()), site: siteContent(platformDoc('site')), signup: config.openSignup, baseDomain: config.baseDomain });
+    }
+    if (path === '/api/signup' && method === 'POST') {
+      if (!a.t.root) throw new HttpError(404, 'Sign up on the platform’s own site');
+      if (!config.openSignup) throw new HttpError(403, 'Sign-up is closed for now. Write to us instead.');
+      bump(`signup:${clientIp(req)}`, 5);
+      const body = await readJson(req, 10_000);
+      if (body?.website) throw new HttpError(400, 'Something went wrong'); // a field only robots fill in
+      const orgName = String(body?.orgName ?? '').trim().slice(0, 120);
+      const email = String(body?.email ?? '').trim().toLowerCase();
+      const name = String(body?.name ?? '').trim().slice(0, 120);
+      const plan = PLAN_IDS.includes(body?.plan) ? body.plan : 'free';
+      if (!orgName) throw new HttpError(400, 'What is your organisation called?');
+      let user = a.user;
+      if (!user) {
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpError(400, 'Give an email address you can sign in with');
+        if (userByEmail(email)) throw new HttpError(409, 'There’s already an account with that email. Sign in first, then add your organisation.');
+        if (String(body?.password ?? '').length < 10) throw new HttpError(400, 'Choose a password of at least 10 characters');
+      }
+      const org = createOrg({ slug: body?.slug, name: orgName, plan: 'free', admin: { email: user?.email ?? email, name: user?.name ?? name } });
+      user ??= userByEmail(email);
+      if (!a.user) {
+        q('UPDATE users SET password_hash = ?, name = ? WHERE id = ?').run(await hashPassword(String(body.password)), name || user.name, user.id);
+        startSession(res, user.id);
+      }
+      request('signup', { orgId: org.id, email: user.email, name: user.name, data: { plan, note: String(body?.note ?? '').slice(0, 2000) } });
+      return json(res, 201, { org: { id: org.id, name: org.name, url: urlFor(hostOf(org), '/') }, plan, open: `/auth/switch?org=${encodeURIComponent(org.id)}&next=/` });
+    }
+    if (path === '/api/contact' && method === 'POST') {
+      bump(`contact:${clientIp(req)}`, 10);
+      const body = await readJson(req, 20_000);
+      if (body?.website) throw new HttpError(400, 'Something went wrong');
+      const message = String(body?.message ?? '').trim().slice(0, 5000);
+      if (!message || !/@/.test(body?.email ?? '')) throw new HttpError(400, 'Add your email and a message');
+      request('contact', { email: String(body.email).slice(0, 200), name: String(body?.name ?? '').slice(0, 200), data: { org: String(body?.org ?? '').slice(0, 200), message, plan: body?.plan ?? null } });
+      return json(res, 201, { ok: true });
+    }
+    if (path === '/api/plan/request' && method === 'POST') {
+      needOrg();
+      if (!a.canAdmin) throw new HttpError(403, 'Only the organisation’s admin can change its plan');
+      const body = await readJson(req, 10_000);
+      if (!PLAN_IDS.includes(body?.plan)) throw new HttpError(400, 'Which plan?');
+      request('upgrade', { orgId: a.org.id, email: a.user.email, name: a.user.name, data: { from: a.org.plan, plan: body.plan, note: String(body?.note ?? '').slice(0, 2000) } });
+      return json(res, 201, { ok: true });
+    }
+
     if (path === '/api/auth/options' && method === 'GET') {
       const dev = config.devLogin
         ? q('SELECT id, email, name, is_super FROM users ORDER BY is_super DESC, name').all().map((u) => ({
@@ -401,8 +485,10 @@ export function createApp(db) {
             orgs: q('SELECT o.name, m.role FROM memberships m JOIN orgs o ON o.id = m.org_id WHERE m.user_id = ? ORDER BY o.name').all(u.id).map((r) => `${r.name} (${r.role})`),
           }))
         : null;
-      const providers = Object.values(config.providers).map((x) => ({ id: x.id, label: x.label }));
-      return json(res, 200, { providers, google: !!config.providers.google, password: true, dev, org: a.org && { name: a.org.name } });
+      // Sign-in with other accounts comes with Basic and up; the platform's own site always has it.
+      const social = !a.org || orgPlan(a.org).features.socialLogin;
+      const providers = social ? Object.values(config.providers).map((x) => ({ id: x.id, label: x.label })) : [];
+      return json(res, 200, { providers, google: social && !!config.providers.google, password: true, dev, org: a.org && { name: a.org.name } });
     }
     if (path === '/api/auth/password' && method === 'POST') {
       const { email, password } = await readJson(req, 10_000);
@@ -434,7 +520,8 @@ export function createApp(db) {
           .map((o) => {
             const paused = JSON.parse(o.paused_plugins || '{}');
             const chosen = readDoc(o.id, 'org')?.plugins ?? {};
-            return { ...o, paused_plugins: undefined, paused, chosen, url: urlFor(hostOf(o), '/') };
+            return { ...o, paused_plugins: undefined, limits: JSON.parse(o.limits || '{}'), included: orgPlan(o).plugins, paused, chosen, url: urlFor(hostOf(o), '/'),
+              usage: { ...usageOf(readDocs(o.id)), storageMb: Math.round(storageUsed(o.id) / 1048576) }, domains: q('SELECT host, status FROM domains WHERE org_id = ?').all(o.id) };
           }));
       }
       if (path === '/api/admin/orgs' && method === 'POST') {
@@ -466,8 +553,11 @@ export function createApp(db) {
             if (!SLUG.test(body.slug) || RESERVED.has(body.slug)) throw new HttpError(400, 'Not a valid address');
             if (q('SELECT 1 FROM orgs WHERE slug = ?').get(body.slug)) throw new HttpError(409, 'That address is taken');
           }
-          q('UPDATE orgs SET name = ?, slug = ?, plan = ?, status = ? WHERE id = ?').run(
-            body.name ?? org.name, body.slug ?? org.slug, body.plan ?? org.plan, ['active', 'suspended'].includes(body.status) ? body.status : org.status, org.id);
+          if (body.plan && !PLAN_IDS.includes(body.plan)) throw new HttpError(400, 'No such plan');
+          q('UPDATE orgs SET name = ?, slug = ?, plan = ?, status = ?, limits = ? WHERE id = ?').run(
+            body.name ?? org.name, body.slug ?? org.slug, body.plan ?? org.plan, ['active', 'suspended'].includes(body.status) ? body.status : org.status,
+            body.limits && typeof body.limits === 'object' ? JSON.stringify(body.limits) : org.limits, org.id);
+          announce(org.id, 'org', null);
           if (body.name && body.name !== org.name) {
             const doc = readDoc(org.id, 'org');
             if (doc) writeDoc(org.id, 'org', { ...doc, name: body.name });
@@ -478,6 +568,33 @@ export function createApp(db) {
           deleteOrg(org.id);
           return json(res, 200, { ok: true });
         }
+      }
+      if (path.startsWith('/api/admin/domains') && (await domains.admin(req, res, path)) !== false) return;
+      if (path === '/api/admin/site' && method === 'PUT') {
+        const body = await readJson(req, 200_000);
+        if (!body || typeof body !== 'object') throw new HttpError(400, 'Not the site’s words');
+        savePlatformDoc('site', body);
+        return json(res, 200, siteContent(body));
+      }
+      if (path === '/api/admin/requests' && method === 'GET') {
+        return json(res, 200, q('SELECT r.*, o.name AS org_name, o.plan AS org_plan FROM requests r LEFT JOIN orgs o ON o.id = r.org_id ORDER BY r.created_at DESC LIMIT 200').all()
+          .map((r) => ({ ...r, data: JSON.parse(r.data) })));
+      }
+      if ((m = path.match(/^\/api\/admin\/requests\/([\w-]+)$/)) && method === 'PATCH') {
+        const { status } = await readJson(req, 2000);
+        if (!['open', 'done', 'declined'].includes(status)) throw new HttpError(400, 'Which status?');
+        q('UPDATE requests SET status = ? WHERE id = ?').run(status, m[1]);
+        return json(res, 200, { ok: true });
+      }
+      if (path === '/api/admin/plans' && method === 'GET') return json(res, 200, { plans: allPlans(planOverrides()), overrides: planOverrides() });
+      if (path === '/api/admin/plans' && method === 'PUT') {
+        const body = await readJson(req, 100_000);
+        const clean = {};
+        for (const id of PLAN_IDS) if (body?.[id] && typeof body[id] === 'object') clean[id] = body[id];
+        q(`INSERT INTO platform_docs (name, json, updated_at, updated_by) VALUES ('plans', ?, ?, ?)
+           ON CONFLICT (name) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at, updated_by = excluded.updated_by`).run(JSON.stringify(clean), now(), a.user.id);
+        for (const o of q('SELECT id FROM orgs').all()) announce(o.id, 'org', null);
+        return json(res, 200, { plans: allPlans(clean) });
       }
       if (path === '/api/admin/audit' && method === 'GET') return json(res, 200, runAudit(db, { req, cookieName: COOKIE }));
       if (path === '/api/admin/backups' && method === 'GET') return json(res, 200, listBackups());
@@ -534,6 +651,7 @@ export function createApp(db) {
       if (!provider) return page(res, 404, `${PROVIDERS[id].label} sign-in is not set up`, `Ask the platform admin to add ${PROVIDERS[id].env.join(' and ')}.`);
       const redirectUri = urlFor(config.baseDomain, `/auth/${id}/callback`);
       if (!m[2]) {
+        if (a.org && !orgPlan(a.org).features.socialLogin) return page(res, 403, `${PROVIDERS[id].label} sign-in isn’t on this plan`, `${a.org.name} signs in with a password.`, { href: '/login.html', label: 'Sign in' });
         const state = token();
         q('INSERT INTO oauth_states (state, data, expires_at) VALUES (?, ?, ?)').run(state, JSON.stringify({ host: a.t.host, next: safeNext(p.get('next')), provider: id }), Date.now() + 10 * 60_000);
         return redirect(res, authorizeUrl(provider, { redirectUri, state }));

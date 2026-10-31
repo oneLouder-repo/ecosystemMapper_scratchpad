@@ -35,6 +35,10 @@ export const config = {
   },
   /** Sign-in with Google, Facebook, Microsoft…: each switched on by its keys (see server/oauth.js). */
   providers: enabledProviders(env),
+  /** Where orgs' own domains should point (a CNAME); the platform's domain if not set. */
+  dnsTarget: (env.DNS_TARGET || '').toLowerCase(),
+  /** Anyone can sign up for a Free org from the platform's site. */
+  openSignup: env.OPEN_SIGNUP ? env.OPEN_SIGNUP === 'true' : true,
   /** Behind a host's proxy (Fly.io, Render…): read the visitor's address from X-Forwarded-For. */
   trustProxy: env.TRUST_PROXY === 'true',
   /** Daily database snapshots kept in data/backups. */

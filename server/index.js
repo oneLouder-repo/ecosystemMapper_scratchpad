@@ -11,9 +11,9 @@ import { createApp, hashPassword } from './app.js';
 import { exampleDocs } from '../src/platform/seeds.js';
 import { scheduleBackups } from './backup.js';
 
-export async function start({ port = config.port, quiet = false } = {}) {
+export async function start({ port = config.port, quiet = false, resolver } = {}) {
   const db = openDb(config.dataDir);
-  const app = createApp(db);
+  const app = createApp(db, { resolver });
   const log = quiet ? () => {} : (...a) => console.log(...a);
 
   // The platform admin: you.
@@ -29,8 +29,8 @@ export async function start({ port = config.port, quiet = false } = {}) {
 
   // A fresh database gets the two example orgs, to try everything out.
   if (config.seedExamples && !db.prepare('SELECT 1 FROM orgs LIMIT 1').get()) {
-    app.createOrg({ id: 'org-example', slug: 'example', name: 'Example STEM Outreach Network', docs: exampleDocs('org-example') });
-    app.createOrg({ id: 'org-riverbend', slug: 'riverbend', name: 'Riverbend Community Food Hub', docs: exampleDocs('org-riverbend') });
+    app.createOrg({ id: 'org-example', slug: 'example', name: 'Example STEM Outreach Network', plan: 'custom', docs: exampleDocs('org-example') });
+    app.createOrg({ id: 'org-riverbend', slug: 'riverbend', name: 'Riverbend Community Food Hub', plan: 'standard', docs: exampleDocs('org-riverbend') });
     log('Added the example organisations.');
   }
 

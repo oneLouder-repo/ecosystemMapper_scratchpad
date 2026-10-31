@@ -71,7 +71,7 @@ h1, h2, h3, .card-title { font-weight: 750; letter-spacing: -0.005em; }
 #app.frame { gap: 14px; padding: 0 14px 14px; }
 #app.frame > * { background: var(--panel); border-radius: var(--panel-radius); box-shadow: var(--panel-shadow); }
 #app.frame > .side-nav { border-right: 0; }
-body:not(.app-page, .mapper-page, .login-page, .platform-page, .studio-page, .strategy-page, .podcasts-page, .palette-page) > #app {
+body:not(.app-page, .mapper-page, .login-page, .platform-page, .studio-page, .strategy-page, .podcasts-page, .palette-page, .sales-page) > #app {
   margin: 0 14px 14px; background: var(--panel); border-radius: var(--panel-radius); box-shadow: var(--panel-shadow); min-height: calc(100vh - 70px);
 }
 
@@ -153,3 +153,4 @@ body.login-page, body.platform-page { background: var(--color-base-200); }
 .save-toast.leaving { opacity: 0; transform: translateY(6px); }
 .save-toast .alert { padding: 8px 14px; gap: 8px; font-size: 13.5px; font-weight: 650; box-shadow: var(--card-shadow); border-radius: 10px; }
 .tree-row .caret .icon { stroke-width: 2.2; }
+.card-body > .card-title:first-child { margin-top: 0; }

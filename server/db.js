@@ -6,12 +6,13 @@
  *   users        everyone who can sign in (is_super: the platform admin)
  *   identities   sign-in methods linked to a user (google subject ids)
  *   orgs         each org: its subdomain slug, plan and status
- *   domains      extra host names for an org (custom domains, later)
+ *   domains      an org's own domains (pending, verified, active; server/domains.js)
  *   memberships  who belongs to which org, as which staff record and role
  *   docs         each org's documents (org, strategy, maps, podcasts...), as JSON
  *   media        uploaded files (podcast audio), stored in data/media/
  *   uploads      chunked uploads still arriving, in data/uploads/
- *   platform_docs  the platform's own documents (the help library)
+ *   platform_docs  the platform's own documents (the help library, plans, the sales site)
+ *   requests     sign-ups, plan changes and messages for the platform admin
  *   sessions     signed-in browsers; handoffs: one-time tokens to carry a
  *                sign-in to another of the platform's hosts
  */
@@ -56,6 +57,19 @@ const SCHEMA = [
      size INTEGER NOT NULL, received INTEGER NOT NULL DEFAULT 0, created_by TEXT, created_at TEXT NOT NULL, expires_at INTEGER NOT NULL)`,
   // Session and handoff tokens are now kept hashed (SHA-256); older plain ones are cleared, so everyone signs in once more.
   `DELETE FROM sessions; DELETE FROM handoffs; DELETE FROM oauth_states;`,
+  // A Custom org's own limits and plugins, over its tier's (src/platform/plans.js).
+  `ALTER TABLE orgs ADD COLUMN limits TEXT NOT NULL DEFAULT '{}'`,
+  // Custom domains are checked before they work (server/domains.js).
+  `ALTER TABLE domains ADD COLUMN status TEXT NOT NULL DEFAULT 'active';
+   ALTER TABLE domains ADD COLUMN token TEXT;
+   ALTER TABLE domains ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE domains ADD COLUMN checked_at INTEGER;
+   ALTER TABLE domains ADD COLUMN note TEXT;
+   ALTER TABLE domains ADD COLUMN created_at INTEGER;`,
+  // Sign-ups, plan changes and messages from the public site, for the platform admin.
+  `CREATE TABLE requests (
+     id TEXT PRIMARY KEY, kind TEXT NOT NULL, org_id TEXT REFERENCES orgs(id) ON DELETE SET NULL, email TEXT, name TEXT,
+     data TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL)`,
 ];
 
 export function openDb(dataDir) {

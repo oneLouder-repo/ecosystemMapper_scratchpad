@@ -11,6 +11,14 @@ import { ROLES, staffList, teamList, membersOf } from '../platform/org.js';
 import { orgList, openOrg, createOrg, deleteOrg, renameOrg, platformUrl } from '../platform/session.js';
 import { PALETTES, SHAPES, applyTheme } from '../platform/themes.js';
 import { PLUGINS, pausedForOrg } from '../plugins.js';
+import { LIMITS, FEATURES, PLAN_IDS, PLAN_PLUGINS, amount } from '../platform/plans.js';
+
+const api = async (method, url, body) => {
+  const res = await fetch(url, { method, headers: { 'content-type': 'application/json', 'x-toolbox': '1' }, body: body && JSON.stringify(body) });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(out.error ?? `The server said ${res.status}`);
+  return out;
+};
 
 /**
  * Organisation settings: the org's profile, people, public sites and their
@@ -25,6 +33,8 @@ const TABS = [
   ['people', 'People and teams', 'person'],
   ['sites', 'Public sites and theme', 'globe'],
   ['plugins', 'Plugins', 'workbench'],
+  ['plan', 'Plan', 'star'],
+  ['domain', 'Domain', 'link'],
   ['platform', 'Organisations', 'settings'],
 ];
 app.classList.add('frame');
@@ -43,7 +53,7 @@ function render() {
   main.replaceChildren(
     h('div', { class: 'page' },
       h('div', { class: 'org-head' }, Logo(org, 56), h('div', {}, h('h1', {}, org.name), h('p', { class: 'lede' }, org.description || org.mission))),
-      { profile: Profile, people: People, sites: Sites, plugins: Plugins, platform: Platform }[tab()](org)));
+      { profile: Profile, people: People, sites: Sites, plugins: Plugins, plan: Plan, domain: Domain, platform: Platform }[tab()](org)));
   app.replaceChildren(side, main);
   main.scrollTop = scroll;
   if (focused) app.querySelector(`[name="${focused}"]`)?.focus();
@@ -187,6 +197,74 @@ function Plugins(org) {
             : h('input', { type: 'checkbox', class: 'toggle toggle-primary', 'aria-label': `Use ${p.name}`, checked: org.plugins[p.id] !== false,
                 onchange: (e) => set('plugins', { ...org.plugins, [p.id]: e.target.checked }) })),
         h('p', {}, p.blurb)))));
+}
+
+/** The org's plan: what it includes, how much is used, and asking for another. */
+function Plan(org) {
+  if (!isHosted()) return h('p', { class: 'note' }, 'Plans apply on the hosted platform. This local copy has everything switched on.');
+  const box = h('div', {}, h('p', { class: 'muted' }, 'Loading…'));
+  api('GET', '/api/plan').then(({ plan, usage, plans }) => {
+    const bar = (l) => {
+      const max = plan.limits[l.id];
+      const used = usage[l.id] ?? 0;
+      const share = max ? Math.min(1, used / max) : 0;
+      return h('div', { class: 'usage-row' },
+        h('span', {}, l.label),
+        h('span', { class: 'usage-num' }, `${l.unit ? amount(used, l) : used} of ${max === 0 ? 'none' : amount(max, l)}`),
+        max ? h('div', { class: `meter ${share >= 1 ? 'full' : share > 0.8 ? 'near' : ''}`, role: 'meter', 'aria-valuenow': String(used), 'aria-valuemax': String(max), 'aria-label': l.label }, h('div', { class: 'meter-fill', style: `width:${(share * 100).toFixed(1)}%` })) : h('span'));
+    };
+    const others = PLAN_IDS.filter((id) => id !== plan.id);
+    const note = h('textarea', { class: 'textarea textarea-sm', rows: 2, placeholder: 'Anything we should know (optional)' });
+    const choice = h('select', { class: 'select select-sm' }, others.map((id) => h('option', { value: id }, plans[id].label)));
+    const sent = h('span', { class: 'muted small', role: 'status' });
+    box.replaceChildren(
+      h('div', { class: 'card card-border bg-base-100 plan-now' }, h('div', { class: 'card-body' },
+        h('h2', { class: 'card-title' }, `${plan.label} plan`), h('p', { class: 'muted' }, plan.tagline),
+        h('div', { class: 'usage' }, LIMITS.filter((l) => usage[l.id] != null || l.id === 'storageMb').map(bar)),
+        h('p', { class: 'small' }, 'Plugins: ', PLAN_PLUGINS.filter((id) => plan.plugins[id]).map((id) => PLUGINS.find((p) => p.id === id)?.name).join(', '), '.'),
+        h('ul', { class: 'plan-feats' }, FEATURES.map((f) => h('li', { class: plan.features[f.id] ? 'on' : 'off' }, icon(plan.features[f.id] ? 'check' : 'close', 14), f.label))))),
+      org.platform && h('section', { class: 'plan-ask' },
+        h('h2', {}, 'Change plan'),
+        h('p', { class: 'muted small' }, 'Ask for another plan and the platform admin will set it up with you. ', h('a', { href: `${location.protocol}//${location.host.split('.').slice(1).join('.')}/pricing.html`, target: '_blank' }, 'Compare plans ↗')),
+        h('div', { class: 'inline-form' }, choice, h('button', { class: 'btn btn-sm btn-primary', onclick: async () => {
+          try { await api('POST', '/api/plan/request', { plan: choice.value, note: note.value }); sent.textContent = 'Sent. The platform admin will be in touch.'; } catch (err) { sent.textContent = err.message; }
+        } }, 'Ask'), sent),
+        note));
+  }).catch((err) => box.replaceChildren(h('p', { class: 'empty' }, err.message)));
+  return box;
+}
+
+/** The org's own domains (Custom plan): add one, see the DNS records to set, check them. */
+function Domain(org) {
+  if (!isHosted()) return h('p', { class: 'note' }, 'Your own domain works on the hosted platform.');
+  const box = h('div', {}, h('p', { class: 'muted' }, 'Loading…'));
+  const load = () => api('GET', '/api/domains').then(({ domains, allowed, target }) => {
+    const input = h('input', { class: 'input input-sm', placeholder: 'www.yourorg.org', name: 'new-domain' });
+    const msg = h('span', { class: 'small', role: 'status' });
+    const STATUS = { pending: ['badge-warning', 'Waiting for DNS'], verified: ['badge-info', 'Yours; not pointing here yet'], active: ['badge-success', 'Working'] };
+    box.replaceChildren(
+      h('p', { class: 'muted' }, `Your Dashi address, ${location.host.replace(/:\d+$/, '')}, always works. `, allowed ? 'You can also use your own domain. You keep managing its DNS where it is; add the records below at your registrar (where you bought the domain), then press Check.' : 'Using your own domain comes with the Custom plan.'),
+      h('div', {}, domains.map((d) => h('div', { class: 'card card-border bg-base-100 domain-card' }, h('div', { class: 'card-body' },
+        h('div', { class: 'domain-head' }, h('strong', {}, d.host), h('span', { class: `badge badge-sm ${STATUS[d.status][0]}` }, STATUS[d.status][1]), d.primary && h('span', { class: 'badge badge-sm badge-ghost' }, 'Main address'),
+          h('span', { class: 'spacer' }),
+          d.status !== 'active' && h('button', { class: 'btn btn-xs btn-primary', onclick: async (e) => { e.target.disabled = true; await api('POST', `/api/domains/${d.host}/check`).catch((err) => alert(err.message)); load(); } }, 'Check now'),
+          d.status === 'active' && !d.primary && h('button', { class: 'btn btn-xs', onclick: async () => { await api('POST', `/api/domains/${d.host}/primary`); load(); } }, 'Make main address'),
+          h('button', { class: 'btn btn-xs btn-ghost btn-error', onclick: async () => { if (confirm(`Stop using ${d.host}? It stops working at once.`)) { await api('DELETE', `/api/domains/${d.host}`); load(); } } }, 'Remove')),
+        d.records.length > 0 && h('table', { class: 'table table-sm dns-table' },
+          h('thead', {}, h('tr', {}, ['Type', 'Name (host)', 'Value', ''].map((t) => h('th', {}, t)))),
+          h('tbody', {}, d.records.map((r) => h('tr', {}, h('td', {}, h('code', {}, r.type)), h('td', {}, h('code', {}, r.name)), h('td', {}, h('code', { class: 'dns-value' }, r.value),
+            h('button', { class: 'btn btn-xs btn-ghost', onclick: () => navigator.clipboard?.writeText(r.value) }, 'Copy')), h('td', { class: 'muted small' }, r.why))))),
+        d.records.length > 0 && h('p', { class: 'muted small' }, 'Some registrars want only the first part of the name (', h('code', {}, '_dashi'), ' or ', h('code', {}, d.records.some((r) => r.type === 'CNAME') ? d.host.split('.')[0] : '@'), '). Changes can take an hour or two to show; Dashi checks again every hour for a week.'),
+        d.note && h('p', { class: 'small' }, d.note))))),
+      allowed && h('form', { class: 'inline-form', onsubmit: async (e) => {
+        e.preventDefault();
+        try { await api('POST', '/api/domains', { host: input.value }); load(); } catch (err) { msg.textContent = err.message; }
+      } }, input, h('button', { class: 'btn btn-sm btn-primary', type: 'submit' }, 'Add domain'), msg),
+      allowed && h('details', { class: 'domain-help' }, h('summary', {}, 'www or the bare domain?'),
+        h('p', { class: 'small' }, `Use www.yourorg.org if you can: it takes one CNAME record pointing at ${target}, which keeps working if Dashi’s servers move. A bare domain (yourorg.org) needs A records to Dashi’s addresses instead, unless your registrar offers ALIAS or ANAME records. Many registrars can forward the bare domain to www for you.`)));
+  }).catch((err) => box.replaceChildren(h('p', { class: 'empty' }, err.message)));
+  load();
+  return box;
 }
 
 function Platform(org) {

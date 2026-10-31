@@ -87,7 +87,10 @@ async function send(name) {
       const res = await fetch(`/api/docs/${encodeURIComponent(name)}`, {
         method: 'PUT', headers: { 'content-type': 'application/json', 'x-toolbox': '1' }, body: JSON.stringify(doc),
       });
-      if (!res.ok) saveProblem(name, res.status === 403 ? 'You can’t change this here.' : `The server said ${res.status}.`);
+      if (!res.ok) {
+        const why = (await res.json().catch(() => ({}))).error;
+        saveProblem(name, why ?? (res.status === 403 ? 'You can’t change this here.' : `The server said ${res.status}.`));
+      }
       else if (job.loud && !job.next) { job.loud = false; saved(name); }
       job.retries = 0;
     } catch (err) {

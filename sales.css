@@ -1,0 +1,81 @@
+/* Dashi's own public site: home, plans and pricing, about, sign-up, contact (src/pages/sales.js). */
+body.sales-page { background: #fbfaf8; display: block; }
+.sales-head { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 22px; padding: 12px max(16px, calc((100vw - 1160px) / 2)); background: rgb(251 250 248 / 0.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line-soft); }
+.sales-head .spacer { flex: 1; }
+.sales-nav { display: flex; gap: 18px; font-weight: 650; font-size: 14.5px; }
+.sales-nav a { color: var(--ink); text-decoration: none; padding: 4px 0; border-bottom: 2px solid transparent; }
+.sales-nav a:hover, .sales-nav a.on { border-bottom-color: var(--accent); }
+.sales-main { max-width: 1160px; margin: 0 auto; padding: 0 16px 40px; }
+.sales-main h1 { font-size: clamp(30px, 4.4vw, 50px); line-height: 1.08; letter-spacing: -0.02em; font-weight: 850; margin: 0 0 16px; }
+.sales-main h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.01em; margin: 0 0 18px; }
+.sales-main .lede { font-size: 18px; color: var(--muted); max-width: 62ch; line-height: 1.55; }
+.eyebrow { font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 12px; }
+.center { text-align: center; }
+
+.sales-hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: center; padding: 64px 0 56px; }
+.cta-row { display: flex; gap: 10px; margin-top: 26px; flex-wrap: wrap; }
+.cta-row .btn { height: 46px; padding-inline: 22px; font-size: 16px; }
+.hero-art { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; transform: rotate(-3deg); }
+.hero-tile { aspect-ratio: 1; border-radius: 16px; background: color-mix(in oklab, var(--tone) 12%, #fff); color: var(--tone); display: grid; place-content: center; justify-items: center; gap: 8px; font-weight: 750; font-size: 13.5px; box-shadow: var(--card-shadow); border: 1px solid color-mix(in oklab, var(--tone) 22%, #fff); }
+.hero-tile.t1, .hero-tile.t4 { transform: translateY(18px); }
+.sales-points { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; padding: 24px 0 48px; }
+.sales-point { background: #fff; border: 1px solid var(--line-soft); border-radius: 14px; padding: 22px; box-shadow: var(--card-shadow); }
+.sales-point h3 { font-size: 17px; margin: 14px 0 6px; font-weight: 800; }
+.sales-point p { color: var(--muted); margin: 0; line-height: 1.5; }
+.sales-trust { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; padding: 32px; margin: 8px 0 56px; border-radius: 16px; background: var(--color-neutral); color: #f3f1ec; }
+.sales-trust strong { display: block; font-size: 16px; margin: 8px 0 4px; }
+.sales-trust p { margin: 0; color: #c9c6bf; font-size: 14.5px; }
+.sales-trust .icon { color: #ffb37d; }
+.sales-plans-band { padding-bottom: 32px; }
+.sales-plans-band h2 { text-align: center; }
+
+.plan-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; align-items: stretch; }
+.plan-card { position: relative; background: #fff; border: 1px solid var(--line-soft); border-radius: 14px; padding: 24px 20px 20px; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--card-shadow); }
+.plan-card.featured { border: 2px solid var(--accent); }
+.plan-flag { position: absolute; top: -11px; left: 20px; }
+.plan-card h3 { margin: 0; font-size: 19px; font-weight: 800; }
+.plan-price { margin: 0; color: var(--muted); font-size: 13.5px; }
+.plan-price strong { font-size: 30px; color: var(--ink); font-weight: 850; letter-spacing: -0.02em; }
+.plan-tag { color: var(--muted); margin: 0 0 6px; font-size: 14.5px; line-height: 1.45; flex: 1; }
+.plan-list { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 6px; font-size: 14px; }
+.plan-list li { display: flex; gap: 8px; align-items: center; }
+.plan-list .icon { color: var(--color-success); flex: none; }
+
+.sales-section { padding: 48px 0 16px; }
+.sales-section.narrow { max-width: 760px; }
+.compare-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 14px; overflow: hidden; box-shadow: var(--card-shadow); font-size: 14.5px; }
+.compare-table th, .compare-table td { padding: 10px 14px; border-bottom: 1px solid var(--line-soft); text-align: center; }
+.compare-table th[scope='row'] { text-align: left; font-weight: 600; }
+.compare-table thead th { font-size: 16px; font-weight: 800; background: var(--color-base-200); }
+.compare-table tr.group th { text-align: left; background: #faf9f6; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--accent); font-weight: 800; }
+.compare-table .yes .icon { color: var(--color-success); }
+.compare-table .no { color: var(--color-base-300); }
+.about-block { margin: 26px 0; }
+.about-block h2 { font-size: 20px; margin-bottom: 6px; }
+.about-block p { font-size: 16.5px; line-height: 1.65; margin: 0; }
+.faq details { border-bottom: 1px solid var(--line-soft); padding: 12px 0; }
+.faq summary { font-weight: 700; cursor: pointer; }
+.faq p { margin: 8px 0 0; color: var(--muted); }
+
+.signup { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+.signup-form, .signup-done { background: #fff; border: 1px solid var(--line-soft); border-radius: 14px; padding: 26px; display: grid; gap: 14px; box-shadow: var(--card-shadow); }
+.signup-form .field { display: grid; gap: 4px; font-weight: 650; font-size: 14px; }
+.signup-form .input, .signup-form .select, .signup-form .textarea { width: 100%; }
+.signup-form .slug-field { display: flex; align-items: center; gap: 6px; }
+.signup-form .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.form-msg { color: var(--color-error); margin: 0; min-height: 1em; font-weight: 600; }
+
+.sales-foot { max-width: 1160px; margin: 24px auto 0; padding: 28px 16px 40px; border-top: 1px solid var(--line-soft); display: flex; gap: 32px; justify-content: space-between; flex-wrap: wrap; }
+.sales-foot nav { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; }
+.sales-foot a { color: var(--ink); }
+
+@media (max-width: 900px) {
+  .sales-hero, .signup { grid-template-columns: 1fr; padding-top: 32px; }
+  .hero-art { max-width: 420px; }
+  .plan-cards { grid-template-columns: 1fr 1fr; }
+  .sales-trust { grid-template-columns: 1fr; }
+  .sales-nav { display: none; }
+}
+@media (max-width: 560px) { .plan-cards { grid-template-columns: 1fr; } .sales-head { gap: 10px; } }
+.sales-main a:not(.btn), .sales-foot a { color: var(--accent); }
+.sales-foot a { color: var(--ink); text-decoration: none; } .sales-foot a:hover { color: var(--accent); }
