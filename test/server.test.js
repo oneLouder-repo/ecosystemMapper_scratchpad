@@ -206,3 +206,43 @@ test('only the platform admin edits the help library', async () => {
   assert.equal((await call('localhost', 'PUT', '/api/help', { body: lib, cookie: admin })).status, 200);
   assert.deepEqual((await call(RB, 'GET', '/api/help')).json, lib, 'one library for every org');
 });
+
+test('large uploads arrive in chunks, resume after a gap, and are checked before they become media', async () => {
+  const amara = await signIn('amara@example.org');
+  const CHUNK = 8 * 1048576;
+  const size = CHUNK * 2 + 12345;
+  const file = Buffer.alloc(size, 7);
+  Buffer.from('ID3\x04\x00\x00\x00\x00\x00\x00', 'latin1').copy(file);
+  assert.equal((await call(EX, 'POST', '/api/uploads', { body: { filename: 'ep.mp3', size } })).status, 403, 'members only');
+  assert.equal((await call(EX, 'POST', '/api/uploads', { body: { filename: 'x.exe', size, type: 'application/x-msdownload' }, cookie: amara })).status, 415);
+  assert.equal((await call(EX, 'POST', '/api/uploads', { body: { filename: 'big.mp3', size: 10 * 1024 * 1048576 }, cookie: amara })).status, 413);
+  const start = await call(EX, 'POST', '/api/uploads', { body: { filename: 'long episode.mp3', size, type: 'audio/mpeg' }, cookie: amara });
+  assert.equal(start.status, 201);
+  const { id, chunkSize } = start.json;
+  assert.equal(chunkSize, CHUNK);
+  const put = (offset, buf) => call(EX, 'PUT', `/api/uploads/${id}?offset=${offset}`, { body: buf, cookie: amara, headers: { 'content-type': 'application/octet-stream' } });
+  assert.equal((await put(0, file.subarray(0, CHUNK))).json.received, CHUNK);
+  // A repeated chunk (the browser didn't hear back) is refused with where to carry on.
+  const again = await put(0, file.subarray(0, CHUNK));
+  assert.equal(again.status, 409);
+  assert.equal(again.json.received, CHUNK);
+  assert.equal((await call(EX, 'POST', `/api/uploads/${id}/complete`, { cookie: amara })).status, 409, 'not all here yet');
+  assert.equal((await call(EX, 'GET', `/api/uploads/${id}`, { cookie: amara })).json.received, CHUNK);
+  assert.equal((await put(CHUNK, file.subarray(CHUNK, CHUNK * 3))).status, 413, 'a chunk can’t be bigger than a chunk');
+  assert.equal((await call(EX, 'GET', `/api/uploads/${id}`, { cookie: amara })).json.received, CHUNK, 'a refused chunk leaves nothing behind');
+  await put(CHUNK, file.subarray(CHUNK, CHUNK * 2));
+  await put(CHUNK * 2, file.subarray(CHUNK * 2));
+  const done = await call(EX, 'POST', `/api/uploads/${id}/complete`, { cookie: amara });
+  assert.equal(done.status, 201);
+  assert.equal(done.json.size, size);
+  assert.equal(done.json.mimetype, 'audio/mpeg');
+  const back = await call(EX, 'GET', `/media/${done.json.id}`, { cookie: amara });
+  assert.ok(back.raw.equals(file), 'the file comes back byte for byte');
+  assert.equal((await call(RB, 'GET', `/api/uploads/${id}`, { cookie: amara })).status, 403, 'another org can’t see it');
+
+  // Something that isn't audio is refused at the end, and removed.
+  const fake = await call(EX, 'POST', '/api/uploads', { body: { filename: 'fake.mp3', size: 10 }, cookie: amara });
+  await call(EX, 'PUT', `/api/uploads/${fake.json.id}?offset=0`, { body: Buffer.from('<html>hi</'), cookie: amara, headers: { 'content-type': 'application/octet-stream' } });
+  assert.equal((await call(EX, 'POST', `/api/uploads/${fake.json.id}/complete`, { cookie: amara })).status, 415);
+  assert.equal((await call(EX, 'GET', `/api/uploads/${fake.json.id}`, { cookie: amara })).status, 404);
+});

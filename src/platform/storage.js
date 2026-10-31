@@ -32,6 +32,8 @@ if (inBrowser && location.protocol.startsWith('http')) {
 }
 export const session = () => hosted;
 export const isHosted = () => !!hosted;
+/** The server's limits (largest upload), when hosted. */
+export const hostedLimits = () => hosted?.limits ?? null;
 
 // Hosted pages for staff need someone signed in; public site pages don't.
 if (hosted && inBrowser) {

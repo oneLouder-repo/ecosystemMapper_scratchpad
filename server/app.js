@@ -29,6 +29,7 @@ import { config, urlFor, orgHost } from './config.js';
 import { now } from './db.js';
 import { HttpError, send, json, redirect, page, readJson, parseCookies, cookie, sendFile } from './http.js';
 import { publicDocs, mediaIsPublic } from './public.js';
+import { uploadRoutes } from './uploads.js';
 import { blankOrg, migrateOrg } from '../src/platform/org.js';
 import { blankStrategy } from '../src/platform/strategySeed.js';
 
@@ -141,6 +142,7 @@ export function createApp(db) {
   function deleteOrg(id) {
     q('DELETE FROM orgs WHERE id = ?').run(id);
     rmSync(join(config.dataDir, 'media', id), { recursive: true, force: true });
+    rmSync(join(config.dataDir, 'uploads', id), { recursive: true, force: true });
   }
 
   /* ------------------------------------------------------------- requests */
@@ -221,6 +223,10 @@ export function createApp(db) {
     }
   }
 
+  const uploads = uploadRoutes({ q, newId });
+  uploads.sweep();
+  setInterval(uploads.sweep, 3600_000).unref();
+
   /* Sign-in attempts, per address, to slow down guessing. */
   const attempts = new Map();
   function throttle(req) {
@@ -253,6 +259,7 @@ export function createApp(db) {
         orgs: orgsFor(a.user),
         platformUrl: a.isSuper ? '/auth/root' : null,
         sessionTag: a.tag,
+        limits: { uploadMb: config.maxUploadMb },
         docs,
       });
     }
@@ -294,6 +301,10 @@ export function createApp(db) {
       return;
     }
 
+    if (path.startsWith('/api/uploads')) {
+      needOrg();
+      if ((await uploads.handle(req, res, a, path)) !== false) return;
+    }
     if (path === '/api/media' && method === 'POST') {
       needOrg();
       if (!a.canEdit) throw new HttpError(403, 'You can’t upload here');

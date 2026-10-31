@@ -10,7 +10,7 @@ import { staffList } from '../platform/org.js';
 import {
   CATEGORIES, EPISODE_TYPES, LOOKS, isAudioFile, slugify, published, episodesOf, seasonsOf, showsInOrder, stationView, nextNumber, podcastRss,
 } from '../platform/podcasts.js';
-import { putMedia, deleteMedia, audioDuration } from '../platform/media.js';
+import { putMedia, deleteMedia, audioDuration, maxUploadMb } from '../platform/media.js';
 import { readImage } from '../ui/images.js';
 import { Cover, Player, fmtDuration } from '../site/station.js';
 import { PluginHeader } from '../ui/PluginHeader.js';
@@ -44,7 +44,6 @@ app.replaceChildren(side, main, player.el);
 const route = () => decodeURIComponent(location.hash.slice(1)) || 'station';
 const doc = () => store.doc;
 const now = today();
-const MAX_MB = 200;
 const n = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 const stationSite = () => org.sites[doc().station.siteId];
@@ -211,7 +210,7 @@ function EpisodeForm(p, e, done) {
   const form = h('form', { class: 'episode-form', onsubmit: async (ev) => {
     ev.preventDefault();
     const file = f.file.files[0];
-    if (file && file.size > MAX_MB * 1048576) return alert(`For now, audio files must be under ${MAX_MB} MB.`);
+    if (file && file.size > maxUploadMb() * 1048576) return alert(`Audio files can be up to ${maxUploadMb()} MB.`);
     submit.disabled = true;
     submit.textContent = file ? 'Uploading…' : 'Saving…';
     const ops = [];
@@ -220,7 +219,7 @@ function EpisodeForm(p, e, done) {
     let audio = e?.audio;
     if (file) {
       try {
-        audio = { mediaId: await putMedia(file), duration: await audioDuration(file), mimetype: file.type || (/\.wav$/i.test(file.name) ? 'audio/wav' : 'audio/mpeg'), size: file.size, name: file.name };
+        audio = { mediaId: await putMedia(file, { onProgress: (f) => { submit.textContent = `Uploading… ${Math.floor(f * 100)}%`; } }), duration: await audioDuration(file), mimetype: file.type || (/\.wav$/i.test(file.name) ? 'audio/wav' : 'audio/mpeg'), size: file.size, name: file.name };
       } catch (err) {
         alert(err.message);
         submit.disabled = false;

@@ -10,6 +10,7 @@
  *   memberships  who belongs to which org, as which staff record and role
  *   docs         each org's documents (org, strategy, maps, podcasts...), as JSON
  *   media        uploaded files (podcast audio), stored in data/media/
+ *   uploads      chunked uploads still arriving, in data/uploads/
  *   platform_docs  the platform's own documents (the help library)
  *   sessions     signed-in browsers; handoffs: one-time tokens to carry a
  *                sign-in to another of the platform's hosts
@@ -49,6 +50,10 @@ const SCHEMA = [
   `ALTER TABLE orgs ADD COLUMN paused_plugins TEXT NOT NULL DEFAULT '{}'`,
   // Documents that belong to the platform, not an org (the help library).
   `CREATE TABLE platform_docs (name TEXT PRIMARY KEY, json TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT)`,
+  // Chunked uploads in progress (server/uploads.js).
+  `CREATE TABLE uploads (
+     id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE, filename TEXT NOT NULL,
+     size INTEGER NOT NULL, received INTEGER NOT NULL DEFAULT 0, created_by TEXT, created_at TEXT NOT NULL, expires_at INTEGER NOT NULL)`,
 ];
 
 export function openDb(dataDir) {

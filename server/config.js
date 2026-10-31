@@ -37,7 +37,10 @@ export const config = {
     : null,
   sessionDays: Number(env.SESSION_DAYS) || 30,
   maxJsonMb: 15,
-  maxUploadMb: Number(env.MAX_UPLOAD_MB) || 300,
+  /** The largest single upload (podcast audio), sent in 8 MB chunks. */
+  maxUploadMb: Number(env.MAX_UPLOAD_MB) || 700,
+  /** How much media each org can keep. */
+  orgStorageMb: Number(env.ORG_STORAGE_MB) || 20480,
 };
 
 const portPart = (scheme) => ((scheme === 'https' && config.port === 443) || (scheme === 'http' && config.port === 80) || config.production ? '' : `:${config.port}`);

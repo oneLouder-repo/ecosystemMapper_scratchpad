@@ -2,11 +2,10 @@ import { h, options } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { col } from '../core/collections.js';
 import { isAudioFile, slugify, published, seasonsOf, showsInOrder, nextNumber } from '../platform/podcasts.js';
-import { putMedia, audioDuration } from '../platform/media.js';
+import { putMedia, audioDuration, maxUploadMb } from '../platform/media.js';
 import { fmtDuration } from '../site/station.js';
 import { today, short } from '../strategy/dates.js';
 
-const MAX_MB = 200;
 
 /**
  * Podcast publishing mini-tool (only when the org has the Podcasts plugin):
@@ -77,12 +76,12 @@ function QuickPublish(ctx, shows, now) {
   return h('form', { class: 'panel quick-publish', onsubmit: async (ev) => {
     ev.preventDefault();
     const file = f.file.files[0];
-    if (file.size > MAX_MB * 1048576) return alert(`Audio files must be under ${MAX_MB} MB.`);
+    if (file.size > maxUploadMb() * 1048576) return alert(`Audio files can be up to ${maxUploadMb()} MB.`);
     submit.disabled = true;
     submit.textContent = 'Uploading…';
     let audio;
     try {
-      audio = { mediaId: await putMedia(file), duration: await audioDuration(file), mimetype: file.type || (/\.wav$/i.test(file.name) ? 'audio/wav' : 'audio/mpeg'), size: file.size, name: file.name };
+      audio = { mediaId: await putMedia(file, { onProgress: (f) => { submit.textContent = `Uploading… ${Math.floor(f * 100)}%`; } }), duration: await audioDuration(file), mimetype: file.type || (/\.wav$/i.test(file.name) ? 'audio/wav' : 'audio/mpeg'), size: file.size, name: file.name };
     } catch (err) {
       alert(err.message);
       submit.disabled = false;
