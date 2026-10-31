@@ -43,6 +43,7 @@ export function publicDocs(docs, today = new Date().toISOString().slice(0, 10)) 
   const nodeIds = new Set();
   for (const d of Object.values(dashboards)) for (const w of d.widgets ?? []) {
     if (w.measureId) measureIds.add(w.measureId);
+    for (const id of w.measureIds ?? []) measureIds.add(id);
     if (w.nodeId) nodeIds.add(w.nodeId);
   }
   for (const x of [...Object.values(calculators), ...Object.values(stories)]) measuresOf(x).forEach((id) => measureIds.add(id));
@@ -63,7 +64,10 @@ export function publicDocs(docs, today = new Date().toISOString().slice(0, 10)) 
       }];
     })),
   };
-  out.data = { id: 'data', series: Object.fromEntries(Object.entries(docs.data?.series ?? {}).filter(([id]) => measureIds.has(id))) };
+  // Calculated measures that are shown, and the measures their formulas read.
+  const calcs = Object.fromEntries(Object.entries(docs.data?.calcs ?? {}).filter(([id]) => measureIds.has(id)));
+  const inputs = new Set(Object.values(calcs).flatMap((c) => (String(c.expr).match(/\{([^}]+)\}/g) ?? []).map((t) => t.slice(1, -1))));
+  out.data = { id: 'data', series: Object.fromEntries(Object.entries(docs.data?.series ?? {}).filter(([id]) => measureIds.has(id) || inputs.has(id))), calcs };
 
   // The podcast station: episodes that are out, on a site that isn't private.
   const pods = docs.podcasts;

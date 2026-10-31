@@ -4,6 +4,8 @@ import { col } from '../core/collections.js';
 import { measureIndex, NODE_TYPES } from '../platform/strategy.js';
 import { WIDGET_TYPES, widget } from '../platform/dashboards.js';
 import { DashboardView } from '../charts/DashboardView.js';
+import { calcMeasure } from '../platform/data.js';
+import { SERIES_MAX } from '../charts/widgets.js';
 
 /** Dashboards mini-tool: a gallery of dashboards, or the editor for one (#<id>). */
 export function DashboardsTool(ctx) {
@@ -50,7 +52,8 @@ function Editor(ctx, dash) {
     widgets.splice(Math.max(0, Math.min(widgets.length, i + by)), 0, w);
     update({ widgets });
   };
-  const measures = Object.values(measureIndex(ctx.strategy));
+  // Strategy measures, then calculated ones (Program data).
+  const measures = [...Object.values(measureIndex(ctx.strategy)), ...Object.values(ctx.data.doc.calcs ?? {}).map(calcMeasure)];
   const nodes = Object.values(ctx.strategy.nodes).filter((n) => ['plan', 'objective', 'goal', 'workplan'].includes(n.type));
   const sites = Object.values(org.sites);
   const site = org.sites[dash.siteId];
@@ -62,6 +65,17 @@ function Editor(ctx, dash) {
       Object.entries(groups).map(([title, ms]) => h('optgroup', { label: title }, options(ms.map((m) => ({ id: m.id, label: m.name })), w.measureId))));
   };
 
+  // Up to four measures for a comparison.
+  const measuresPicker = (w) => {
+    const on = new Set(w.measureIds ?? []);
+    return h('details', { class: 'dropdown measures-pick' },
+      h('summary', { class: 'btn btn-sm' }, `${on.size} measure${on.size === 1 ? '' : 's'}`),
+      h('ul', { class: 'dropdown-content menu bg-base-100 rounded-box shadow' }, measures.map((m) => h('li', {},
+        h('label', {}, h('input', { type: 'checkbox', class: 'checkbox checkbox-xs', checked: on.has(m.id), disabled: !on.has(m.id) && on.size >= SERIES_MAX,
+          onchange: (e) => setWidget(w.id, { measureIds: e.target.checked ? [...on, m.id] : [...on].filter((id) => id !== m.id) }) }),
+          `${m.name}`, h('small', { class: 'muted' }, ` ${m.nodeTitle}`))))));
+  };
+
   // Edit controls added under each widget in the live preview.
   const decorate = (w, el) => {
     const i = dash.widgets.indexOf(w);
@@ -70,6 +84,7 @@ function Editor(ctx, dash) {
     el.append(h('div', { class: 'widget-tools' },
       h('strong', {}, type?.label ?? w.type),
       type?.needs === 'measure' && measureSelect(w),
+      type?.needs === 'measures' && measuresPicker(w),
       type?.needs === 'node' && h('select', { name: `${w.id}-node`, 'aria-label': 'Strategy item', onchange: (e) => setWidget(w.id, { nodeId: e.target.value }) },
         nodes.map((n) => h('option', { value: n.id, selected: n.id === w.nodeId }, `${NODE_TYPES[n.type].glyph} ${n.title}`))),
       h('input', { name: `${w.id}-title`, value: w.title ?? '', placeholder: 'Title', 'aria-label': 'Widget title', onchange: (e) => setWidget(w.id, { title: e.target.value || undefined }) }),
@@ -114,7 +129,7 @@ function Editor(ctx, dash) {
       addType,
       h('button', { class: 'btn btn-sm btn-primary', onclick: () => {
         const type = addType.value;
-        const first = { measure: { measureId: measures[0]?.id }, node: { nodeId: dash.sourceNodeId ?? nodes[0]?.id }, null: { title: 'Heading', text: 'Say what this shows and why it matters.' } };
+        const first = { measure: { measureId: measures[0]?.id }, measures: { measureIds: measures.slice(0, 2).map((m) => m.id) }, node: { nodeId: dash.sourceNodeId ?? nodes[0]?.id }, null: { title: 'Heading', text: 'Say what this shows and why it matters.' } };
         update({ widgets: [...dash.widgets, widget(type, first[WIDGET_TYPES.find((t) => t.id === type).needs])] });
       } }, icon('plus', 16), 'Add widget'),
       h('span', { class: 'muted' }, 'Charts read live program data. Press Play to watch the year unfold.')));

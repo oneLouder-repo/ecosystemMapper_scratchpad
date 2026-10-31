@@ -3,13 +3,36 @@ import { col } from '../core/collections.js';
 import { measureIndex } from '../platform/strategy.js';
 import { monthLabel } from '../strategy/dates.js';
 import { renderWidget } from '../charts/widgets.js';
+import { DataGrid } from './DataGrid.js';
+import { ChartDesigner } from './ChartDesigner.js';
 
 /**
  * Program data mini-tool: the monthly values behind each measure. Later
- * these come from program systems; for now staff can type them in, and
- * dashboards and public sites update as they do.
+ * these come from program systems; for now staff type or paste them in, and
+ * dashboards and public sites update as they do. Three views:
+ *   Spreadsheet     every measure and month, Excel-style, with calculated measures
+ *   Chart designer  make a chart for a dashboard, a report or a post
+ *   One measure     a single measure's chart and months
  */
+const VIEWS = [
+  { id: 'grid', label: 'Spreadsheet', render: DataGrid },
+  { id: 'design', label: 'Chart designer', render: ChartDesigner },
+  { id: 'one', label: 'One measure', render: OneMeasure },
+];
+
 export function DataTool(ctx) {
+  const view = VIEWS.find((v) => v.id === ctx.dataView) ?? VIEWS[0];
+  return h('div', { class: 'data-tool' },
+    h('div', { class: 'data-title' },
+      h('div', {},
+        h('h1', {}, 'Program data'),
+        h('p', { class: 'lede' }, 'Monthly values for every measure in your strategy. Change a number and every dashboard and public site using it updates.')),
+      h('div', { role: 'tablist', class: 'seg' }, VIEWS.map((v) =>
+        h('button', { role: 'tab', class: v === view ? 'on' : '', 'aria-selected': String(v === view), onclick: () => { ctx.dataView = v.id; ctx.render(); } }, v.label)))),
+    view.render(ctx));
+}
+
+function OneMeasure(ctx) {
   const { data } = ctx;
   const measures = Object.values(measureIndex(ctx.strategy));
   if (!measures.length) return h('p', { class: 'empty' }, 'Add measures to objectives or goals in Strategy & Work first.');
@@ -27,8 +50,6 @@ export function DataTool(ctx) {
   };
 
   return h('div', {},
-    h('h1', {}, 'Program data'),
-    h('p', { class: 'lede' }, 'Monthly values for every measure in your strategy. Change a number and every dashboard and public site using it updates.'),
     h('div', { class: 'data-head' },
       h('label', {}, 'Measure ',
         h('select', { name: 'measure', onchange: (e) => { ctx.measureId = e.target.value; ctx.render(); } },

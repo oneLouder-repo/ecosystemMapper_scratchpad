@@ -39,6 +39,7 @@ export const WIDGET_TYPES = [
   { id: 'kpi', label: 'Headline number', needs: 'measure', size: 'small' },
   { id: 'line', label: 'Line over time', needs: 'measure', size: 'wide' },
   { id: 'bar', label: 'Monthly columns', needs: 'measure', size: 'wide' },
+  { id: 'compare', label: 'Compare measures', needs: 'measures', size: 'full' },
   { id: 'progress', label: 'Work progress', needs: 'node', size: 'wide' },
   { id: 'text', label: 'Text', needs: null, size: 'wide' },
 ];
@@ -78,7 +79,8 @@ export function dashboardFromNode(strategy, nodeId, createdBy = null) {
 
 /** The months a dashboard's player steps through. */
 export function dashboardMonths(dash, data) {
-  const ids = dash.widgets.map((w) => w.measureId).filter(Boolean);
+  const ids = dash.widgets.flatMap((w) => [w.measureId, ...(w.measureIds ?? [])]).filter(Boolean)
+    .flatMap((id) => (data.calcs?.[id] ? (data.calcs[id].expr.match(/\{([^}]+)\}/g) ?? []).map((t) => t.slice(1, -1)) : [id]));
   return dataMonths(data, ids.length ? ids : undefined);
 }
 

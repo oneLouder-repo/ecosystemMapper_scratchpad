@@ -1,7 +1,7 @@
 import { h } from '../ui/dom.js';
 import { svg } from '../core/svg.js';
 import { measureIndex, descendants, TASK_STATUSES, statusAt } from '../platform/strategy.js';
-import { valueAt, pointsUntil } from '../platform/data.js';
+import { valueAt, pointsUntil, seriesOf, calcMeasure, dataMonths } from '../platform/data.js';
 import { monthLabel, addDays } from '../strategy/dates.js';
 
 /**
@@ -30,11 +30,13 @@ const fmt = (v, unit = '') => {
 const unitText = (unit = '') => (unit.startsWith('%') ? '' : unit);
 const monthShort = (d) => monthLabel(d).replace(/ (\d\d)(\d\d)$/, ' ’$2');
 
-function measureOf(w, ctx) {
-  const m = measureIndex(ctx.strategy)[w.measureId];
-  const series = ctx.data.series[w.measureId];
-  return { m, series };
+/** A strategy measure, or a calculated one (Program data → calculated measures). */
+function lookup(id, ctx) {
+  const calc = ctx.data.calcs?.[id];
+  const m = measureIndex(ctx.strategy)[id] ?? (calc && calcMeasure(calc));
+  return { m, series: m && seriesOf(id, ctx.data) };
 }
+const measureOf = (w, ctx) => lookup(w.measureId, ctx);
 
 function figure(w, cls, title, body, table) {
   const tableId = `${w.id}-table`;
@@ -227,4 +229,90 @@ function text(w) {
     h('p', {}, w.text ?? ''));
 }
 
-const RENDERERS = { kpi, line, bar, progress, text };
+// ---------------------------------------------------------------- compare
+/**
+ * Up to four measures side by side. Measures in the same unit share one
+ * chart, one line each, in fixed categorical colours with a legend and the
+ * latest value labelled at each line's end. Measures in different units
+ * never share an axis: each gets its own small chart, side by side.
+ */
+export const SERIES_MAX = 4;
+function compare(w, ctx) {
+  const items = (w.measureIds ?? []).slice(0, SERIES_MAX).map((id) => ({ id, ...lookup(id, ctx) })).filter((x) => x.m && x.series);
+  if (!items.length) return missing(w, 'measure or two');
+  const title = w.title ?? items.map((x) => x.m.name).join(' and ');
+  const sameUnit = items.every((x) => (x.m.unit ?? '') === (items[0].m.unit ?? ''));
+  if (!sameUnit || items.length === 1) {
+    return figure(w, 'compare-widget multiples', title,
+      h('div', { class: 'small-multiples' }, items.map((x, i) => {
+        const fig = line({ id: `${w.id}-${i}`, type: 'line', size: 'small', measureId: x.id }, { ...ctx, months: ctx.months.length ? ctx.months : [] });
+        fig.classList.add(`series-${i + 1}`);
+        return fig;
+      })));
+  }
+  const unit = items[0].m.unit ?? '';
+  const months = ctx.months.length ? ctx.months : dataMonths({ series: Object.fromEntries(items.map((x) => [x.id, x.series])) });
+  const shown = items.map((x) => pointsUntil(x.series, ctx.asOf));
+  const top = niceMax(Math.max(1, ...items.flatMap((x) => x.series.points.map((p) => p.value))));
+  const x = (d) => PAD.l + (months.indexOf(d) / Math.max(1, months.length - 1)) * (W - PAD.l - PAD.r);
+  const y = (v) => PAD.t + (1 - v / top) * (H - PAD.t - PAD.b);
+  const chart = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img' });
+  for (const t of ticks(top)) {
+    svg('line', { class: 'grid', x1: PAD.l, x2: W - PAD.r, y1: y(t), y2: y(t) }, chart);
+    svg('text', { class: 'axis', x: PAD.l - 8, y: y(t) + 4, 'text-anchor': 'end' }, chart).textContent = fmt(t, unit);
+  }
+  months.forEach((d, i) => {
+    if (i % Math.ceil(months.length / 6) && i !== months.length - 1) return;
+    svg('text', { class: 'axis', x: x(d), y: H - 8, 'text-anchor': 'middle' }, chart).textContent = monthShort(d);
+  });
+  // Lines, then end labels nudged apart so they never overlap.
+  const ends = [];
+  shown.forEach((pts, i) => {
+    if (!pts.length) return;
+    svg('path', { class: `line series-${i + 1}`, d: pts.map((p, k) => `${k ? 'L' : 'M'} ${x(p.date)} ${y(p.value)}`).join(' ') }, chart);
+    const last = pts.at(-1);
+    svg('circle', { class: `end-dot series-${i + 1}`, cx: x(last.date), cy: y(last.value), r: 4 }, chart);
+    ends.push({ i, x: x(last.date), y: y(last.value), text: fmt(last.value, unit) });
+  });
+  ends.sort((a, b) => a.y - b.y);
+  for (let k = 1; k < ends.length; k++) ends[k].y = Math.max(ends[k].y, ends[k - 1].y + 14);
+  for (const e of ends) {
+    const label = svg('text', { class: 'end-label', x: e.x + 8, y: e.y + 4 }, chart);
+    label.textContent = e.text;
+  }
+  chart.setAttribute('aria-label', items.map((it, i) => summary(it.m, shown[i])).join(' '));
+  const wrap = h('div', { class: 'chart-wrap' }, chart);
+  // One tooltip for the month under the pointer, every series in it.
+  const cross = svg('line', { class: 'crosshair', y1: PAD.t, y2: H - PAD.b, visibility: 'hidden' }, chart);
+  const tip = h('div', { class: 'chart-tip chart-tip-multi', hidden: true, role: 'status' });
+  wrap.append(tip);
+  const hit = svg('rect', { x: PAD.l - 10, y: 0, width: W - PAD.l - PAD.r + 20, height: H, fill: 'transparent' }, chart);
+  const live = months.filter((d) => d <= ctx.asOf);
+  hit.addEventListener('pointermove', (e) => {
+    if (!live.length) return;
+    const box = chart.getBoundingClientRect();
+    const vx = ((e.clientX - box.left) / box.width) * W;
+    const d = live.reduce((best, q) => (Math.abs(x(q) - vx) < Math.abs(x(best) - vx) ? q : best), live[0]);
+    cross.setAttribute('visibility', 'visible');
+    cross.setAttribute('x1', x(d));
+    cross.setAttribute('x2', x(d));
+    tip.hidden = false;
+    tip.replaceChildren(h('strong', {}, monthLabel(d)), ...items.map((it, i) => {
+      const p = it.series.points.find((q) => q.date === d);
+      return h('div', {}, h('span', { class: `swatch series-${i + 1}` }), `${it.m.name}: ${fmt(p?.value, unit)}`);
+    }));
+    tip.style.left = `${(x(d) / W) * 100}%`;
+    tip.style.top = `${(PAD.t / H) * 100}%`;
+  });
+  hit.addEventListener('pointerleave', () => { cross.setAttribute('visibility', 'hidden'); tip.hidden = true; });
+  const table = h('table', { class: 'list compact' },
+    h('thead', {}, h('tr', {}, h('th', {}, 'Month'), items.map((it) => h('th', {}, `${it.m.name}${unitText(unit) ? ` (${unit})` : ''}`)))),
+    h('tbody', {}, live.map((d) => h('tr', {}, h('td', {}, monthLabel(d)), items.map((it) => h('td', {}, fmt(it.series.points.find((q) => q.date === d)?.value, unit)))))));
+  return figure(w, 'compare-widget', title,
+    h('div', {},
+      h('ul', { class: 'legend' }, items.map((it, i) => h('li', {}, h('span', { class: `swatch series-${i + 1}` }), it.m.name))),
+      wrap),
+    table);
+}
+
+const RENDERERS = { kpi, line, bar, progress, text, compare };

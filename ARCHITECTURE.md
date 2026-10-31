@@ -288,6 +288,13 @@ The platform is now called **Dashi** (the wordmark is `src/ui/Wordmark.js`). Sto
 
 **Plugin home pages** start with `PluginHeader(id, { actions, tabs })` (`src/ui/PluginHeader.js`): the plugin's icon, name and blurb from `src/plugins.js`, with optional tabs.
 
+**Program data** (`src/palette/DataTool.js`) has three views:
+- **Spreadsheet** (`DataGrid.js`): every measure by month, with Excel-style keys, paste from a spreadsheet, fill down, CSV import and export, column statistics, and flags on unusual values.
+- **Chart designer** (`ChartDesigner.js`): line, columns, compare (up to four measures) or a headline number. It previews with the dashboard code, adds the chart to a dashboard, or exports a PNG or SVG sized for a report, a slide or a social post.
+- **One measure**: the earlier single-measure view.
+
+*Calculated measures* live in `data.calcs` as `{ id, name, unit, target, expr }`, where `expr` names measures by id (`{m-meals} / {m-boxes}`). `core/formula.js` parses formulas into a tree and evaluates it; nothing runs as code. `calcSeries()` in `platform/data.js` works the values out month by month. Widgets accept a calculated measure anywhere a measure goes. The new `compare` widget draws measures in the same unit on one chart and measures in different units as side-by-side charts, never on two axes. A public dashboard publishes the calculated measures it shows and the input series they need (`server/public.js`).
+
 **Workbench.** `#home` is an overview of the mini-tools. New mini-tools: *Data postcards* (one measure as a PNG in the org's theme, with alt text) and *Podcast publishing* (quick upload and publish; only listed when the org has Podcasts, through a mini-tool's `when(org)`). `measureFacts()` in `platform/data.js` gives the latest value, progress to target and change on a year for any measure.
 
 **Strategy & Work tabs.** Overview (the framework's statements, counts, and a squarified treemap down to workplans), Framework (the tree and detail, as before; `#<id>` still opens an item), Strategic data, Workplan completion and Roadmap lights. The sums behind them are pure functions in `platform/strategyReports.js`, with tests.

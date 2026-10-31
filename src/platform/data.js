@@ -1,6 +1,13 @@
+import { parseFormula, evaluate } from '../core/formula.js';
+
 /**
  * Program data: values recorded over time against strategy measures.
- * { id, series: { [measureId]: { id, points: [{ date: 'YYYY-MM-01', value }] } } }
+ * { id, series: { [measureId]: { id, points: [{ date: 'YYYY-MM-01', value }] } },
+ *   calcs: { [id]: { id, name, unit, target?, expr } } }
+ *
+ * Calculated measures (calcs) are worked out from other measures by a
+ * formula (core/formula.js), month by month, like a spreadsheet column:
+ * meals per box, cost per participant, change on last year.
  *
  * In production this is fed by program systems (registrations, surveys,
  * finance). Here it is seeded with example data and can be edited in the
@@ -32,6 +39,42 @@ export function measureFacts(measure, series) {
     change: yearAgo && yearAgo.value ? Math.round(((last.value - yearAgo.value) / Math.abs(yearAgo.value)) * 100) : null,
   };
 }
+
+/** Every month from `first` to `last` (YYYY-MM-01), with none skipped. */
+export function monthRange(first, last) {
+  const out = [];
+  if (!first || !last) return out;
+  let [y, m] = [+first.slice(0, 4), +first.slice(5, 7)];
+  for (let guard = 0; guard < 1200; guard++) {
+    const d = `${y}-${String(m).padStart(2, '0')}-01`;
+    if (d > last) break;
+    out.push(d);
+    if (++m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+/** A calculated measure's monthly values: { id, points, error? }. */
+export function calcSeries(calc, data) {
+  let parsed;
+  try { parsed = parseFormula(calc.expr); } catch (err) { return { id: calc.id, points: [], error: err.message }; }
+  const months = dataMonths(data, parsed.refs);
+  const range = monthRange(months[0], months.at(-1));
+  const index = Object.fromEntries(parsed.refs.map((id) => [id, Object.fromEntries((data.series[id]?.points ?? []).map((p) => [p.date, p.value]))]));
+  const value = (id, at) => index[id]?.[range[at]] ?? null;
+  const points = [];
+  range.forEach((date, at) => {
+    const v = evaluate(parsed.tree, at, value);
+    if (v != null) points.push({ date, value: +v.toPrecision(6) });
+  });
+  return { id: calc.id, points, refs: parsed.refs };
+}
+
+/** A calculated measure, shaped like a strategy measure for charts. */
+export const calcMeasure = (c) => ({ id: c.id, name: c.name, unit: c.unit ?? '', target: c.target ?? '', nodeTitle: 'Calculated', calc: true });
+
+/** The series for a measure or a calculated measure. */
+export const seriesOf = (id, data) => data.series?.[id] ?? (data.calcs?.[id] ? calcSeries(data.calcs[id], data) : undefined);
 
 export const pointsUntil = (series, date) => (series?.points ?? []).filter((p) => p.date <= date);
 
