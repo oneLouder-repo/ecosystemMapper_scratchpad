@@ -9,7 +9,8 @@ import { svg } from './svg.js';
  *
  * Events dispatched on the stage (tools listen to these):
  *   pointerdown, pointermove, pointerup, dblclick
- *     { worldX, worldY, screenX, screenY, view, handle, shiftKey, altKey, original }
+ *     { worldX, worldY, screenX, screenY, view, handle, dock, target, shiftKey, altKey, original }
+ *   (`dock` is true on an actor's dock box; `target` is the SVG element hit)
  *   camera   after a pan or zoom
  *
  * Pointer events are also dispatched on the hit view itself, so a view can
@@ -29,9 +30,10 @@ export class Stage extends DisplayObject {
 
     // Fixed layers, back to front.
     this.lensLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-lens' })));
-    this.groupLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-groups' })));
+    // Groups sit on top: their frames only catch the pointer on the outline and tab.
     this.connectorLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-connectors' })));
     this.actorLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-actors' })));
+    this.groupLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-groups' })));
     this.overlayLayer = this.addChild(new DisplayObject(svg('g', { class: 'layer-overlay' })));
 
     this.#bindPointer();
@@ -77,6 +79,8 @@ export class Stage extends DisplayObject {
       screenY: e.clientY,
       view: findView(hit),
       handle: hit?.closest?.('[data-handle]')?.dataset.handle ?? null,
+      dock: Boolean(hit?.closest?.('[data-dock]')),
+      target: hit,
       shiftKey: e.shiftKey,
       altKey: e.altKey,
       original: e,

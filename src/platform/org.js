@@ -122,7 +122,7 @@ export function migrateOrg(org) {
   return org;
 }
 
-export const pluginOn = (org, id) => org.plugins?.[id] !== false;
+export const pluginOn = (org, id) => !org.platform?.paused?.[id] && org.plugins?.[id] !== false;
 export const initials = (name = '?') => name.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 
 export const staffList = (org) => Object.values(org.staff).sort((a, b) => a.name.localeCompare(b.name));

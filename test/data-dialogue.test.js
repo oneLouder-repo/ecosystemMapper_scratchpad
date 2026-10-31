@@ -5,7 +5,8 @@ import { seedOrg } from '../src/platform/org.js';
 import { seedMap } from '../src/seed.js';
 import { measureIndex, measuresUnder, migrateStrategy, statusAt } from '../src/platform/strategy.js';
 import { seedData, valueAt, pointsUntil, dataMonths } from '../src/platform/data.js';
-import { dashboardFromNode, dashboardMonths, seedDashboards, WIDGET_TYPES } from '../src/platform/dashboards.js';
+import { dashboardFromNode, dashboardMonths, seedDashboards, WIDGET_TYPES, calculatorRates, yearlyCount, measuresOf, migrateDashboards } from '../src/platform/dashboards.js';
+import { publicDocs, mediaIsPublic } from '../server/public.js';
 import { resolveAsset, assetsInWorkplan, assetsUnder, groupAssets, assetKey, ASSET_KINDS } from '../src/platform/assets.js';
 
 const strategy = () => migrateStrategy(seedStrategy());
@@ -109,4 +110,38 @@ test('assets roll up from tasks to their workplan and beyond', () => {
   const grouped = groupAssets(assetsInWorkplan(s, wp.id));
   const tanis = grouped.find((g) => assetKey(g.asset) === 'staff:s-indig');
   assert.equal(tanis.from.length, 2);
+});
+
+test('an impact calculator works out the cost of one from the program data', () => {
+  const strategy = migrateStrategy(seedStrategy());
+  const index = measureIndex(strategy);
+  const data = seedData(Object.keys(index));
+  const calc = seedDashboards(strategy).calculators['calc-reach'];
+  const [reach] = calculatorRates(calc, index, data);
+  assert.equal(reach.perYear, data.series['m-reach'].points.at(-1).value, 'a yearly count is used as it is');
+  assert.equal(Math.round(reach.costOfOne), 20);
+  assert.equal(calculatorRates({ ...calc, outcomes: [{ ...calc.outcomes[0], perYear: 92000 }] }, index, data)[0].costOfOne, 100, 'staff can override the count');
+  // A running total counts what it grew by in a year; a monthly rate counts twelve months.
+  const run = { unit: 'people', target: '' };
+  const months = Array.from({ length: 14 }, (_, i) => ({ date: `2025-${String((i % 12) + 1).padStart(2, '0')}-01`, value: 100 + i * 10 }));
+  assert.equal(yearlyCount(run, { points: months }), 120);
+  assert.equal(yearlyCount({ unit: 'meals / month' }, { points: months.slice(0, 12).map((p) => ({ ...p, value: 10 })) }), 120);
+  assert.equal(yearlyCount({ unit: '%' }, { points: months }), null);
+});
+
+test('public calculators and stories publish with just the measures they use', () => {
+  const strategy = migrateStrategy(seedStrategy());
+  const data = seedData(Object.keys(measureIndex(strategy)));
+  const dashboards = seedDashboards(strategy);
+  dashboards.stories.secret = { id: 'secret', title: 'Draft', visibility: 'private', siteId: 'site-impact', steps: [{ id: 'x', measureId: 'm-views', audio: { mediaId: 'media_draft' } }] };
+  dashboards.stories['story-reach'].steps[0].audio = { mediaId: 'media_clip' };
+  const docs = { org: seedOrg(), strategy, data, dashboards };
+  const pub = publicDocs(docs);
+  assert.deepEqual(Object.keys(pub.dashboards.calculators), ['calc-reach']);
+  assert.deepEqual(Object.keys(pub.dashboards.stories), ['story-reach']);
+  for (const id of measuresOf(pub.dashboards.stories['story-reach'])) assert.ok(pub.data.series[id], `${id} is published`);
+  assert.equal(pub.data.series['m-views'], undefined, 'a private story’s measure stays private');
+  assert.ok(mediaIsPublic(docs, 'media_clip'));
+  assert.ok(!mediaIsPublic(docs, 'media_draft'));
+  assert.deepEqual(migrateDashboards({ id: 'dashboards', dashboards: {} }), { id: 'dashboards', dashboards: {}, calculators: {}, stories: {} });
 });

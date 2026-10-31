@@ -2,14 +2,17 @@
   "name": "ecosystem-mapper",
   "version": "0.1.0",
   "private": true,
-  "description": "A playful board for mapping a change ecosystem.",
+  "description": "Dashi: planning, ecosystem mapping, data dashboards, podcasts and public sites for small nonprofits.",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "test": "node --test \"test/**/*.test.js\""
+    "start": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server.js",
+    "dev": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning --watch-path=server server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.js\"",
+    "audit": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server/audit-cli.js",
+    "backup": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning -e \"import('./server/config.js').then(async ({config})=>{const {openDb}=await import('./server/db.js');const {backupNow}=await import('./server/backup.js');console.log(backupNow(openDb(config.dataDir)))})\""
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   },
   "license": "MIT"
 }

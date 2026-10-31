@@ -36,7 +36,7 @@ export function Detail(ctx) {
           p.name))), true);
 
   const measures = () =>
-    field('Measures (feed dashboards in the Workbench)', h('div', { class: 'measures' },
+    field('Measures (feed dashboards in the Data Workbench)', h('div', { class: 'measures' },
       n.measures.map((m, i) =>
         h('div', { class: 'measure' },
           ['name', 'target', 'unit'].map((k) =>

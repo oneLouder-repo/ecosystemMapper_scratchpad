@@ -62,6 +62,16 @@ export class DisplayObject extends EventDispatcher {
     return child;
   }
 
+  /** Draw a child above its siblings. */
+  bringToFront(child) {
+    const i = this.children.indexOf(child);
+    if (i === -1 || i === this.children.length - 1) return child;
+    this.children.splice(i, 1);
+    this.children.push(child);
+    this.node.appendChild(child.node);
+    return child;
+  }
+
   removeChild(child) {
     const i = this.children.indexOf(child);
     if (i === -1) return child;

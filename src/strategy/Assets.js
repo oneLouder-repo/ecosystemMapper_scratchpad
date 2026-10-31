@@ -95,3 +95,6 @@ function row(asset, docs, { remove, from, select } = {}) {
     remove && h('button', { class: 'icon-button', title: 'Remove from toolbox', 'aria-label': `Remove ${r.label}`, onclick: remove }, '×'),
   );
 }
+
+/** An asset as a tile, for other plugins (the Planning Studio's lists). */
+export { tile as assetTile };

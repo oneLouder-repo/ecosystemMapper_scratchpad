@@ -1,0 +1,28 @@
+# Dashi on your own server (a $6–12/month VPS), with Caddy in front for HTTPS.
+#   1. Point yourdomain.ca and *.yourdomain.ca at the server's IP address (two A records).
+#   2. cp .env.example .env, set BASE_DOMAIN, SUPER_ADMIN_EMAIL, SUPER_ADMIN_PASSWORD, NODE_ENV=production
+#   3. docker compose -f deploy/compose.yaml up -d
+# Caddy gets a certificate for each org's address the first time someone
+# visits it, after asking Dashi that the address is one of its orgs.
+services:
+  dashi:
+    build: ..
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      PORT: "8080"
+      DATA_DIR: /data
+      TRUST_PROXY: "true"
+    volumes:
+      - dashi-data:/data
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on: [dashi]
+volumes:
+  dashi-data:
+  caddy-data:

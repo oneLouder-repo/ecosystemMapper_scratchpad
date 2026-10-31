@@ -30,8 +30,8 @@ document.querySelector('#app').replaceChildren(
     h('h2', {}, 'Your plugins'),
     h('div', { class: 'cards' },
       enabledPlugins(org).map((tool) =>
-        h('a', { class: 'card', href: tool.href },
-          h('h3', {}, icon(tool.icon, 26), tool.name),
+        h('a', { class: 'card plugin-card', href: tool.href, style: `--tone:${tool.tone ?? 'var(--accent)'}` },
+          h('h3', {}, h('span', { class: 'tone-tile', 'aria-hidden': 'true' }, icon(tool.icon, 22)), tool.name),
           h('p', {}, tool.blurb),
           h('div', { class: 'stat-line' }, tool.stats(docs)),
         ),

@@ -1,4 +1,5 @@
 import { h } from '../ui/dom.js';
+import { icon } from '../ui/icons.js';
 import { NODE_TYPES, childrenOf, rootOf, statusById, taskSummary } from '../platform/strategy.js';
 import { range } from './dates.js';
 
@@ -21,7 +22,7 @@ export function Tree(ctx) {
       h('li', { class: `tree-row type-${n.type}${n.id === selectedId ? ' selected' : ''}`, style: `padding-left:${8 + depth * 16}px` },
         kids.length
           ? h('button', { class: 'caret', 'aria-label': open ? 'Collapse' : 'Expand', 'aria-expanded': String(open),
-              onclick: () => { open ? collapsed.add(n.id) : collapsed.delete(n.id); ctx.render(); } }, open ? '▾' : '▸')
+              onclick: () => { open ? collapsed.add(n.id) : collapsed.delete(n.id); ctx.render(); } }, icon(open ? 'chevronDown' : 'chevronRight', 18))
           : h('span', { class: 'caret' }),
         h('span', { class: 'glyph', title: type.label }, type.glyph),
         h('button', { class: 'tree-title', onclick: () => select(n.id) }, n.title || 'Untitled'),

@@ -12,6 +12,8 @@
  *   [[dashboard:<id>]]   a public dashboard
  *   [[episode:<id>]]     a podcast episode with a player
  *   [[show:<id>]]        a podcast show card
+ *   [[calculator:<id>]]  an impact calculator (Workbench)
+ *   [[story:<id>]]       a data story (Workbench)
  */
 import { loadOrSeed } from './storage.js';
 
@@ -19,7 +21,7 @@ export const PAGE_KINDS = [
   { id: 'page', label: 'Page', blurb: 'An information page in the site menu' },
   { id: 'article', label: 'Article', blurb: 'A dated news or blog post' },
 ];
-export const EMBEDS = ['dashboard', 'episode', 'show'];
+export const EMBEDS = ['dashboard', 'episode', 'show', 'calculator', 'story'];
 
 export const slugify = (s = '') => s.toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_-]+/g, '-') || 'page';
 
@@ -139,7 +141,7 @@ export function siteContent(doc, siteId, today) {
  *          { t: 'quote', c } { t: 'hr' } { t: 'embed', kind, id }
  * Inline:  { t: 'text', v } { t: 'b' | 'i', c } { t: 'code', v } { t: 'a', href, c }
  */
-export function parseMarkdown(src = '') {
+export function parseMarkdown(src = '', { embeds = EMBEDS } = {}) {
   const blocks = [];
   let para = [];
   let list = null;
@@ -151,7 +153,7 @@ export function parseMarkdown(src = '') {
     const line = raw.trim();
     let m;
     if (!line) { flush(); continue; }
-    if ((m = line.match(/^\[\[(\w+):([\w-]+)\]\]$/)) && EMBEDS.includes(m[1])) { flush(); blocks.push({ t: 'embed', kind: m[1], id: m[2] }); continue; }
+    if ((m = line.match(/^\[\[(\w+):([\w-]+)\]\]$/)) && embeds.includes(m[1])) { flush(); blocks.push({ t: 'embed', kind: m[1], id: m[2] }); continue; }
     if ((m = line.match(/^(#{1,3})\s+(.*)$/))) { flush(); blocks.push({ t: 'h', level: m[1].length + 1, c: parseInline(m[2]) }); continue; }
     if (/^(-{3,}|\*{3,})$/.test(line)) { flush(); blocks.push({ t: 'hr' }); continue; }
     if ((m = line.match(/^>\s?(.*)$/))) { flush(); blocks.push({ t: 'quote', c: parseInline(m[1]) }); continue; }

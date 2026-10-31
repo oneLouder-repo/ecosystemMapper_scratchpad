@@ -7,10 +7,11 @@ import { parseMarkdown } from '../platform/pages.js';
  *
  * `embed({ kind, id })` returns the element for a [[kind:id]] shortcode,
  * e.g. a live dashboard or an episode player; without it, or when it
- * returns nothing, the shortcode shows as a small placeholder.
+ * returns nothing, the shortcode shows as a small placeholder. `embeds`
+ * lists the shortcode kinds to recognise (by default, the site's).
  */
-export function Markdown(body, { embed } = {}) {
-  return h('div', { class: 'md' }, parseMarkdown(body).map((b) => block(b, embed)));
+export function Markdown(body, { embed, embeds } = {}) {
+  return h('div', { class: 'md' }, parseMarkdown(body, { embeds }).map((b) => block(b, embed)));
 }
 
 function block(b, embed) {

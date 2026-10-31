@@ -4,6 +4,9 @@
  * then add an entry here; it shows up on the dashboard, in the header and
  * in Organisation settings, where an org can switch it off.
  *
+ * `short` is its label in the header, beside its icon.
+ * `tone` is the plugin's own colour: its icon in the header, and the
+ * buttons, links and highlights on its pages.
  * `core: true` plugins can't be switched off.
  * `stats(docs)` returns a short line for the dashboard card from the
  * loaded documents (see platform/docs.js loadAll).
@@ -13,6 +16,8 @@ const count = (o) => Object.keys(o ?? {}).length;
 export const PLUGINS = [
   {
     id: 'mapper',
+    short: 'Mapper',
+    tone: '#13897a',
     name: 'Ecosystem Mapper',
     href: 'mapper.html',
     icon: 'mapper',
@@ -24,6 +29,8 @@ export const PLUGINS = [
   },
   {
     id: 'strategy',
+    short: 'Strategy',
+    tone: '#3d63dd',
     name: 'Strategy & Work',
     href: 'strategy.html',
     icon: 'strategy',
@@ -35,8 +42,20 @@ export const PLUGINS = [
     },
   },
   {
+    id: 'studio',
+    short: 'Studio',
+    tone: '#7a4cc4',
+    name: 'Planning Studio',
+    href: 'studio.html',
+    icon: 'studio',
+    blurb: 'Facilitate strategic planning online: a shared SOAR whiteboard, the plan’s context and team, a results framework, and a canvas for wiring ideas into objectives and goals.',
+    stats: ({ studio }) => `${Object.keys(studio?.plans ?? {}).length} plans in the studio · ${Object.keys(studio?.cards ?? {}).length} SOAR cards`,
+  },
+  {
     id: 'palette',
-    name: 'Workbench',
+    short: 'Data',
+    tone: '#c25a14',
+    name: 'Data Workbench',
     href: 'palette.html',
     icon: 'workbench',
     blurb: 'Mini-tools for bringing others into the data dialogue: design dashboards from your strategy, keep program data current, and publish to public sites.',
@@ -47,6 +66,8 @@ export const PLUGINS = [
   },
   {
     id: 'podcasts',
+    short: 'Podcasts',
+    tone: '#c03a64',
     name: 'Podcasts',
     href: 'podcasts.html',
     icon: 'mic',
@@ -58,6 +79,8 @@ export const PLUGINS = [
   },
   {
     id: 'pages',
+    short: 'Sites',
+    tone: '#3a8a3f',
     name: 'Sites & Pages',
     href: 'pages.html',
     icon: 'news',
@@ -69,6 +92,7 @@ export const PLUGINS = [
   },
   {
     id: 'org',
+    tone: '#56657f',
     name: 'Organisation',
     href: 'org.html',
     icon: 'org',
@@ -79,6 +103,7 @@ export const PLUGINS = [
   },
   {
     id: 'help',
+    tone: '#56657f',
     name: 'Help',
     href: 'help.html',
     icon: 'help',
@@ -89,5 +114,11 @@ export const PLUGINS = [
   },
 ];
 
-/** The plugins this org has switched on. */
-export const enabledPlugins = (org) => PLUGINS.filter((p) => p.core || org.plugins?.[p.id] !== false);
+/** Paused by the platform admin (hosted only): the org can't switch it on itself. */
+export const pausedForOrg = (org, id) => !!org.platform?.paused?.[id];
+/** The plugins this org has switched on (and the platform hasn't paused). */
+export const enabledPlugins = (org) => PLUGINS.filter((p) => p.core || (!pausedForOrg(org, p.id) && org.plugins?.[p.id] !== false));
+
+/** Each page's colour: a plugin's tone, or Dashi's own for the dashboard and the rest. */
+export const DASHI_TONE = '#d0621b';
+export const toneFor = (id) => PLUGINS.find((p) => p.id === id)?.tone ?? DASHI_TONE;

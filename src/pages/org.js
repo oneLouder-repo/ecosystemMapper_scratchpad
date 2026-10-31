@@ -1,45 +1,51 @@
 import { h, options } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { Shell, Avatar, Logo } from '../ui/Shell.js';
+import { SideNav } from '../ui/SideNav.js';
 import { readImage } from '../ui/images.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp, col } from '../core/collections.js';
-import { autosaveDoc } from '../platform/storage.js';
+import { autosaveDoc, isHosted } from '../platform/storage.js';
 import { loadOrg } from '../platform/docs.js';
 import { ROLES, staffList, teamList, membersOf } from '../platform/org.js';
-import { orgList, switchOrg, createOrg, deleteOrg, renameOrg } from '../platform/session.js';
+import { orgList, openOrg, createOrg, deleteOrg, renameOrg, platformUrl } from '../platform/session.js';
 import { PALETTES, SHAPES, applyTheme } from '../platform/themes.js';
-import { PLUGINS } from '../plugins.js';
+import { PLUGINS, pausedForOrg } from '../plugins.js';
 
 /**
  * Organisation settings: the org's profile, people, public sites and their
- * theme, plugins, and the orgs on this platform. Tabs live in the URL hash.
+ * theme, plugins, and the orgs on this platform. The sections are listed in
+ * the shared sidebar and live in the URL hash.
  */
 const store = new Store(loadOrg(), applyCollectionOp);
 autosaveDoc('org', store, 150);
 const app = document.querySelector('#app');
 const TABS = [
-  ['profile', 'Profile'],
-  ['people', 'People and teams'],
-  ['sites', 'Public sites and theme'],
-  ['plugins', 'Plugins'],
-  ['platform', 'Organisations'],
+  ['profile', 'Profile', 'org'],
+  ['people', 'People and teams', 'person'],
+  ['sites', 'Public sites and theme', 'globe'],
+  ['plugins', 'Plugins', 'workbench'],
+  ['platform', 'Organisations', 'settings'],
 ];
+app.classList.add('frame');
+const main = h('section', { class: 'page-main' });
 const tab = () => (TABS.some(([id]) => id === location.hash.slice(1)) ? location.hash.slice(1) : 'profile');
 const set = (key, value) => store.apply(col.set(key, value));
 
 function render() {
   const org = store.doc;
   Shell(document.querySelector('#shell'), { current: 'org', org });
-  const scroll = window.scrollY;
+  const scroll = main.scrollTop;
   const focused = app.contains(document.activeElement) ? document.activeElement.name : null;
-  app.replaceChildren(
+  const side = SideNav({ label: 'Organisation', sections: [
+    { title: 'Organisation', items: TABS.map(([id, label, ic]) => ({ label, icon: ic, href: `#${id}`, on: tab() === id })) },
+  ] });
+  main.replaceChildren(
     h('div', { class: 'page' },
       h('div', { class: 'org-head' }, Logo(org, 56), h('div', {}, h('h1', {}, org.name), h('p', { class: 'lede' }, org.description || org.mission))),
-      h('div', { role: 'tablist', class: 'tabs tabs-border settings-tabs' },
-        TABS.map(([id, label]) => h('a', { role: 'tab', href: `#${id}`, class: `tab${tab() === id ? ' tab-active' : ''}`, 'aria-selected': String(tab() === id) }, label))),
       { profile: Profile, people: People, sites: Sites, plugins: Plugins, platform: Platform }[tab()](org)));
-  window.scrollTo(0, scroll);
+  app.replaceChildren(side, main);
+  main.scrollTop = scroll;
   if (focused) app.querySelector(`[name="${focused}"]`)?.focus();
 }
 
@@ -75,7 +81,11 @@ function Profile(org) {
 }
 
 function People(org) {
-  const newStaff = { name: h('input', { class: 'input input-sm', placeholder: 'Name', required: true }), title: h('input', { class: 'input input-sm', placeholder: 'Title' }) };
+  const newStaff = {
+    name: h('input', { class: 'input input-sm', placeholder: 'Name', required: true }),
+    email: h('input', { class: 'input input-sm', type: 'email', placeholder: 'Email (to sign in)' }),
+    title: h('input', { class: 'input input-sm', placeholder: 'Title' }),
+  };
   const newTeam = h('input', { class: 'input input-sm', placeholder: 'Team name' });
   const teamChips = (s) => teamList(org).map((t) =>
     h('label', { class: 'chip' },
@@ -89,7 +99,9 @@ function People(org) {
       h('tbody', {}, staffList(org).map((s) =>
         h('tr', {},
           h('td', {}, Avatar(s, 30)),
-          h('td', {}, h('strong', {}, s.name), h('div', { class: 'muted' }, s.email)),
+          h('td', {}, h('strong', {}, s.name),
+            h('input', { class: 'input input-xs input-ghost staff-email', type: 'email', value: s.email, placeholder: 'Email (to sign in)', 'aria-label': `Email for ${s.name}`,
+              onchange: (e) => store.apply(col.update('staff', s.id, { email: e.target.value.trim().toLowerCase() })) })),
           h('td', {}, s.title),
           h('td', {}, h('select', { class: 'select select-sm', 'aria-label': `Role for ${s.name}`, onchange: (e) => store.apply(col.update('staff', s.id, { roleId: e.target.value })) },
             options(ROLES.map((r) => ({ id: r.id, label: r.label })), s.roleId))),
@@ -98,9 +110,9 @@ function People(org) {
     h('form', { class: 'inline-form', onsubmit: (e) => {
       e.preventDefault();
       if (!newStaff.name.value.trim()) return;
-      store.apply(col.add('staff', { name: newStaff.name.value.trim(), title: newStaff.title.value.trim(), roleId: 'staff', teamIds: [], interests: [], avatar: null, email: '' }));
-    } }, newStaff.name, newStaff.title, h('button', { class: 'btn btn-sm btn-primary', type: 'submit' }, 'Add person')),
-    h('p', { class: 'note' }, ROLES.map((r) => `${r.label}: ${r.can}.`).join(' '), ' People change their own picture and details in My profile. Roles take effect once accounts and the server arrive.'),
+      store.apply(col.add('staff', { name: newStaff.name.value.trim(), title: newStaff.title.value.trim(), roleId: 'staff', teamIds: [], interests: [], avatar: null, email: newStaff.email.value.trim().toLowerCase() }));
+    } }, newStaff.name, newStaff.email, newStaff.title, h('button', { class: 'btn btn-sm btn-primary', type: 'submit' }, 'Add person')),
+    h('p', { class: 'note' }, ROLES.map((r) => `${r.label}: ${r.can}.`).join(' '), ' People change their own picture and details in My profile. ', isHosted() ? 'Each person signs in with the email here (with Google, or a password from the platform admin); their role decides what they can change.' : 'On the hosted platform, each person signs in with the email here.'),
     h('h2', {}, 'Teams'),
     h('div', { class: 'cards' }, teamList(org).map((t) =>
       h('div', { class: 'card' },
@@ -170,6 +182,8 @@ function Plugins(org) {
         h('h3', {}, icon(p.icon, 24), p.name, h('span', { class: 'spacer' }),
           p.core
             ? h('span', { class: 'badge badge-ghost' }, 'Always on')
+            : pausedForOrg(org, p.id)
+            ? h('span', { class: 'badge badge-warning badge-soft', title: 'Ask the platform admin to switch it on' }, 'Not in your plan')
             : h('input', { type: 'checkbox', class: 'toggle toggle-primary', 'aria-label': `Use ${p.name}`, checked: org.plugins[p.id] !== false,
                 onchange: (e) => set('plugins', { ...org.plugins, [p.id]: e.target.checked }) })),
         h('p', {}, p.blurb)))));
@@ -183,17 +197,19 @@ function Platform(org) {
         h('tr', {},
           h('td', {}, h('strong', {}, o.name), o.id === org.id && h('span', { class: 'badge badge-primary badge-sm', style: 'margin-left:8px' }, 'Open now')),
           h('td', { class: 'right' },
-            o.id !== org.id && h('button', { class: 'btn btn-sm', onclick: () => { switchOrg(o.id); location.assign('index.html'); } }, 'Open'),
+            o.id !== org.id && h('button', { class: 'btn btn-sm', onclick: () => openOrg(o.id) }, 'Open'),
             ' ',
-            h('button', { class: 'btn btn-sm btn-ghost btn-error', onclick: () => {
+            !isHosted() && h('button', { class: 'btn btn-sm btn-ghost btn-error', onclick: () => {
               if (!confirm(`Delete ${o.name} and all its data? This can't be undone.`)) return;
               try { deleteOrg(o.id); location.assign('org.html#platform'); } catch (err) { alert(err.message); }
             } }, 'Delete')))))),
-    h('div', { class: 'inline-form' },
-      h('button', { class: 'btn btn-sm btn-primary', onclick: () => {
-        const name = prompt('Name of the new organisation');
-        if (name?.trim()) { createOrg(name.trim()); location.assign('org.html'); }
-      } }, icon('plus', 16), 'New organisation')));
+    isHosted()
+      ? platformUrl() && h('p', {}, 'Organisations are added and removed on the ', h('a', { href: platformUrl() }, 'platform admin page'), '.')
+      : h('div', { class: 'inline-form' },
+          h('button', { class: 'btn btn-sm btn-primary', onclick: () => {
+            const name = prompt('Name of the new organisation');
+            if (name?.trim()) { createOrg(name.trim()); location.assign('org.html'); }
+          } }, icon('plus', 16), 'New organisation')));
 }
 
 store.addEventListener('change', render);

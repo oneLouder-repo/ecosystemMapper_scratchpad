@@ -25,8 +25,8 @@ export function loadMapIndex(seed = () => ({ index: { maps: {} }, contents: {} }
   const index = loadDoc('maps');
   if (index) return index;
   const fresh = seed();
-  for (const [id, map] of Object.entries(fresh.contents)) saveDoc(mapDocName(id), map);
-  saveDoc('maps', fresh.index);
+  for (const [id, map] of Object.entries(fresh.contents)) saveDoc(mapDocName(id), map, undefined, { quiet: true });
+  saveDoc('maps', fresh.index, undefined, { quiet: true });
   return fresh.index;
 }
 

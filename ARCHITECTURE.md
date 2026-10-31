@@ -263,3 +263,33 @@ Measures on objectives and goals now have stable ids (`migrateStrategy` adds any
 **The public site.** `pages/site.js` routes on the query string (`page`, `view=news`, `view=station`, `show`, `episode`) and builds its menu from the site's pages, News when it has articles, and the station when it hosts one. Links inside the site use `history.pushState`, and the player (`site/station.js` `Player`) lives outside the redrawn area, so audio keeps playing between pages and through live updates. Skinning is two layers: the org theme (`applyTheme`) and the station look, set as `look-player-*`, `look-art-*` and `look-hero-*` classes on `body`. The same station components preview inside the admin plugins.
 
 **Help.** `src/help/` draws its diagrams from the lens files (`lenses/crosswalk.js` works out which regions of each lens sit in each micro / meso / macro tier), so the guide stays right when a lens changes.
+
+## 12. The platform server (round 7)
+
+**One process, no dependencies.** `server.js` starts `server/index.js`, which runs Node's `http` module with SQLite from `node:sqlite`, built into Node 22.13 and later. `server/db.js` holds the schema, as numbered migrations. `server/app.js` handles every request, and `server/public.js` decides what visitors may see. Settings come from the environment (`server/config.js`, `.env.example`). Hosting is covered in `DEPLOY.md`.
+
+**Tenants by host name.** The root domain is the platform's own site: sign-in, and the platform admin page (`platform.html`). `<slug>.<BASE_DOMAIN>` is an org. The `domains` table maps any other host name to an org, and is checked first, so custom domains need no code change. On an org's address, `/` serves the dashboard to members and the public site to everyone else.
+
+**Accounts.** `users` are people. `memberships` link a user to an org, with a role and their staff record. The org admin doesn't manage memberships directly: every save of the `org` document syncs memberships from the staff list. Anyone listed with an email can sign in, with the role on their staff record (admin, lead, staff or viewer, where viewers read only). One person can be in several orgs. `users.is_super` marks the platform admin, who can open any org, add, suspend or remove orgs, set passwords, and "view as" any staff member (`sessions.view_as`).
+
+**Sign-in.** People sign in with Google (OpenID Connect, with its one callback on the root domain), a password (hashed with scrypt), or, on test servers, by picking anyone from a list (`DEV_LOGIN`). Session cookies are HttpOnly and SameSite=Lax, and each belongs to one host. Moving between hosts (switching org, or returning from Google) uses a one-time handoff token that the other host trades for its own cookie. Requests that change data must carry an `x-toolbox` header, which other sites can't send.
+
+**The same front end, two modes.** `platform/storage.js` asks `/api/session` once, using top-level await, so every module waits for the answer. With a server, the answer carries the org's documents: reads come from that copy, saves are `PUT /api/docs/<name>` (one at a time per document), and an `EventSource` on `/api/events` reports what other people change, so pages update live. With no server (a static host, or the prototype), everything stays in local storage as before. `session.js` and `media.js` switch the same way: org switching becomes navigation, and uploads go to `POST /api/media` and play from `/media/<id>` with range requests.
+
+**Public data.** A visitor's session gets `publicDocs(docs)` in place of the real documents. That means public dashboards, plus just the measures, series and task statuses they chart; episodes and pages that are out; sites that aren't private; and only the names and pictures of the people public content mentions. Maps and drafts never leave the server. Uploaded audio is public only once a published episode uses it.
+
+**Seeds.** `platform/seeds.js` builds the example orgs' documents as pure functions, so the browser and the server seed exactly the same examples.
+
+## 13. Dashi: plugin plans, overviews and the help library (round 8)
+
+The platform is now called **Dashi** (the wordmark is `src/ui/Wordmark.js`). Storage keys and the `palette` plugin id keep their old names, so nothing saved is lost.
+
+**Plugins per org.** The platform admin switches plugins on or pauses them for each org (`POST /api/admin/orgs/:id/plugins`). Pauses live in `orgs.paused_plugins`, outside the org's own documents, and reach the client as `org.platform.paused`, which the server adds when it reads the org doc and strips when the org writes it back, so an org can't unpause itself. `pluginOn()` and `enabledPlugins()` check it, and so does the public filter. Switching a plugin on also turns it on in the org's own settings.
+
+**Plugin home pages** start with `PluginHeader(id, { actions, tabs })` (`src/ui/PluginHeader.js`): the plugin's icon, name and blurb from `src/plugins.js`, with optional tabs.
+
+**Workbench.** `#home` is an overview of the mini-tools. New mini-tools: *Data postcards* (one measure as a PNG in the org's theme, with alt text) and *Podcast publishing* (quick upload and publish; only listed when the org has Podcasts, through a mini-tool's `when(org)`). `measureFacts()` in `platform/data.js` gives the latest value, progress to target and change on a year for any measure.
+
+**Strategy & Work tabs.** Overview (the framework's statements, counts, and a squarified treemap down to workplans), Framework (the tree and detail, as before; `#<id>` still opens an item), Strategic data, Workplan completion and Roadmap lights. The sums behind them are pure functions in `platform/strategyReports.js`, with tests.
+
+**Help library.** Help is a platform document, not an org one: `{ version, sections: [{ id, title, icon, blurb, pages: [{ id, title, body }] }] }`, with bodies in the same markdown as site pages plus `[[diagram:…]]` shortcodes. The built-in library is `src/help/library.js`; once the platform admin edits it (Help → Edit help), their copy is kept in the `platform_docs` table (`GET`/`PUT /api/help`, writes for the platform admin only) or, locally, in the browser.

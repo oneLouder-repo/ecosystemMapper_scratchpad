@@ -23,6 +23,21 @@ export class LensView extends Sprite {
     });
   }
 
+  /** The region a drawn shape belongs to (e.g. the element under a click), or null. */
+  regionOf(el) {
+    for (const [id, shape] of this.#shapes) if (shape === el) return id;
+    return null;
+  }
+
+  /** Light a region up briefly. */
+  flash(regionId, ms = 900) {
+    const shape = this.#shapes.get(regionId);
+    if (!shape) return;
+    shape.classList.add('flash');
+    clearTimeout(shape.flashTimer);
+    shape.flashTimer = setTimeout(() => shape.classList.remove('flash'), ms);
+  }
+
   highlight(regionId) {
     if (regionId === this.#highlighted) return;
     this.#shapes.get(this.#highlighted)?.classList.remove('highlight');

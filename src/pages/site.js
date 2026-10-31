@@ -1,6 +1,6 @@
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { onDocChange } from '../platform/storage.js';
+import { onDocChange, session, isHosted } from '../platform/storage.js';
 import { loadOrg, loadStrategy, loadData, loadDashboards, loadPodcasts, loadPages } from '../platform/docs.js';
 import { migrateStrategy } from '../platform/strategy.js';
 import { migratePodcasts, published } from '../platform/podcasts.js';
@@ -8,6 +8,9 @@ import { migratePages, siteContent } from '../platform/pages.js';
 import { pluginOn } from '../platform/org.js';
 import { dashboardMonths } from '../platform/dashboards.js';
 import { DashboardView } from '../charts/DashboardView.js';
+import { CalculatorView } from '../charts/CalculatorView.js';
+import { StoryView } from '../charts/StoryView.js';
+import { migrateDashboards } from '../platform/dashboards.js';
 import { applyTheme } from '../platform/themes.js';
 import { Logo, Avatar } from '../ui/Shell.js';
 import { Markdown } from '../ui/markdown.js';
@@ -17,7 +20,8 @@ import { today, short } from '../strategy/dates.js';
 /**
  * A sample public site: site.html?site=<id>, with its own pages:
  *
- *   ?site=x                   home: the site's public dashboards, latest news, latest episode
+ *   ?site=x                   home: the site's public dashboards, calculators and stories, latest news, latest episode
+ *   ?site=x&story=<id>        a data story (Workbench)
  *   ?site=x&page=<slug>       an information page or article (Sites & Pages plugin)
  *   ?site=x&view=news         every article, newest first
  *   ?site=x&view=station      the podcast station, if this site hosts it (Podcasts plugin)
@@ -44,7 +48,10 @@ document.body.append(player.el);
 const asOf = {};
 
 const params = () => Object.fromEntries(new URLSearchParams(location.search));
-const siteId = () => params().site ?? 'site-impact';
+// Without ?site=, the org's first public site.
+const firstSite = () => Object.values(docs.org.sites).find((s) => s.visibility === 'public')?.id ?? Object.keys(docs.org.sites)[0];
+const siteId = () => params().site ?? firstSite();
+const staffView = !isHosted() || !!session()?.member;
 const link = (p) => `?${new URLSearchParams({ site: siteId(), ...p })}`;
 player.setLink(link);
 
@@ -80,6 +87,8 @@ function render() {
     if (kind === 'dashboard') { const d = docs.dashboards.dashboards[ref]; return d?.visibility === 'public' ? dashboard(d) : null; }
     if (kind === 'episode') { const e = pod.episodes[ref]; return e && published(e, now) && pluginOn(org, 'podcasts') ? EpisodeCard(ctx, e, { embed: true }) : null; }
     if (kind === 'show') { const s = pod.podcasts[ref]; return s && pluginOn(org, 'podcasts') ? ShowCard(ctx, s) : null; }
+    if (kind === 'calculator') { const c = docs.dashboards.calculators[ref]; return c?.visibility === 'public' ? CalculatorView(c, docs) : null; }
+    if (kind === 'story') { const s = docs.dashboards.stories[ref]; return s?.visibility === 'public' ? StoryView(s, docs) : null; }
     return null;
   };
 
@@ -93,6 +102,11 @@ function render() {
     current = pg?.kind === 'article' ? 'news' : `page:${p.page}`;
     title = pg?.title ?? 'Not found';
     body = pg ? Article(pg, embed) : h('p', { class: 'empty' }, 'That page is not here.');
+  } else if (p.story) {
+    const s = docs.dashboards.stories[p.story];
+    const ok = s?.visibility === 'public' && s.siteId === id;
+    title = ok ? s.title : 'Not found';
+    body = ok ? h('div', { class: 'story-page' }, StoryView(s, docs)) : h('p', { class: 'empty' }, 'That story is not here.');
   } else if (p.episode && hasStation) {
     const e = pod.episodes[p.episode];
     current = 'station';
@@ -117,7 +131,8 @@ function render() {
   const navLink = (key, href, label) => h('a', { href, 'aria-current': current === key ? 'page' : null }, label);
 
   root.replaceChildren(
-    h('div', { class: 'preview-banner' }, 'Sample public site, made by Org Toolbox from live data. ', h('a', { href: 'pages.html' }, 'Back to the toolbox')),
+    // replaceChildren would print a bare false, so an empty string when there's no banner.
+    !staffView ? '' : h('div', { class: 'preview-banner' }, isHosted() ? 'You’re signed in, so this is the public site as visitors see it. ' : 'Sample public site, made by Dashi from live data. ', h('a', { href: 'pages.html' }, 'Back to Dashi')),
     h('header', { class: 'site-head' },
       h('div', { class: 'inner' },
         h('a', { class: 'site-brand', href: link({}) }, Logo(org, 36), h('strong', {}, org.name)),
@@ -137,12 +152,16 @@ function render() {
         org.contact.address && h('div', {}, org.contact.address),
         org.contact.email && h('div', {}, h('a', { href: `mailto:${org.contact.email}` }, org.contact.email)),
         org.contact.phone && h('div', {}, org.contact.phone)),
-      h('p', { class: 'site-small' }, 'Every chart has a table view for screen readers and printing.')),
+      h('p', { class: 'site-small' }, 'Every chart has a table view for screen readers and printing.',
+        isHosted() && !staffView && [' · ', h('a', { href: '/login.html?next=/index.html' }, 'Staff sign in')])),
   );
 }
 
 function Home(site, content, hasStation, ctx) {
   const shown = Object.values(docs.dashboards.dashboards).filter((d) => d.siteId === site.id && d.visibility === 'public');
+  const mine = (coll) => Object.values(docs.dashboards[coll] ?? {}).filter((x) => x.siteId === site.id && x.visibility === 'public');
+  const calcs = mine('calculators');
+  const stories = mine('stories');
   const latest = hasStation ? Object.values(ctx.doc.episodes).filter((e) => published(e, now)).sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))[0] : null;
   return h('div', {},
     h('section', { class: 'site-hero' },
@@ -156,8 +175,14 @@ function Home(site, content, hasStation, ctx) {
       latest && h('div', {},
         h('div', { class: 'section-head' }, h('h2', {}, 'New on the station'), h('a', { href: link({ view: 'station' }) }, 'All shows')),
         EpisodeCard(ctx, latest, { embed: true }))),
+    stories.length > 0 && h('section', { class: 'story-teasers' },
+      h('div', { class: 'section-head' }, h('h2', {}, 'Stories from the data')),
+      h('div', { class: 'news-list' }, stories.map((s) => h('a', { class: 'news-card story-card', href: link({ story: s.id }) },
+        h('small', { class: 'muted' }, `${s.steps.length} steps${s.steps.some((st) => st.audio) ? ' · with audio' : ''}`),
+        h('strong', {}, s.title), s.summary && h('span', {}, s.summary))))),
     shown.map(dashboard),
-    !shown.length && !content.articles.length && !latest && h('p', { class: 'empty' }, 'Nothing is published here yet.'));
+    calcs.map((c) => { const v = CalculatorView(c, docs); v.id = c.id; return v; }),
+    !shown.length && !calcs.length && !stories.length && !content.articles.length && !latest && h('p', { class: 'empty' }, 'Nothing is published here yet.'));
 }
 
 function NewsList(articles) {
@@ -195,7 +220,7 @@ document.addEventListener('click', (e) => {
 });
 window.addEventListener('popstate', render);
 
-onDocChange('dashboards', (doc) => { docs.dashboards = doc; render(); });
+onDocChange('dashboards', (doc) => { docs.dashboards = migrateDashboards(doc); render(); });
 onDocChange('data', (doc) => { docs.data = doc; render(); });
 onDocChange('strategy', (doc) => { docs.strategy = migrateStrategy(doc); render(); });
 onDocChange('org', (doc) => { docs.org = doc; render(); });

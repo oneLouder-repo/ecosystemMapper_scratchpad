@@ -1,6 +1,7 @@
 import { h, options } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { Shell } from '../ui/Shell.js';
+import { SideNav, swapSide } from '../ui/SideNav.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp, col } from '../core/collections.js';
 import { autosaveDoc } from '../platform/storage.js';
@@ -10,10 +11,13 @@ import { published } from '../platform/podcasts.js';
 import { pluginOn, staffList } from '../platform/org.js';
 import { currentUser } from '../platform/session.js';
 import { DashboardView } from '../charts/DashboardView.js';
+import { CalculatorView } from '../charts/CalculatorView.js';
+import { StoryView } from '../charts/StoryView.js';
 import { Markdown } from '../ui/markdown.js';
 import { readImage } from '../ui/images.js';
 import { EpisodeCard, ShowCard, Player } from '../site/station.js';
 import { today, short } from '../strategy/dates.js';
+import { PluginHeader } from '../ui/PluginHeader.js';
 
 /**
  * Sites & Pages: the admin for an org's public sites. One place to see
@@ -34,8 +38,8 @@ Shell(document.querySelector('#shell'), { current: 'pages', org });
 const docs = { org, strategy: loadStrategy(), data: loadData(), dashboards: loadDashboards(), podcasts: loadPodcasts() };
 
 const app = document.querySelector('#app');
-app.classList.add('palette', 'sites-app');
-const side = h('nav', { class: 'palette-side', 'aria-label': 'Sites and pages' });
+app.classList.add('palette', 'sites-app', 'frame');
+let side = h('nav');
 const main = h('section', { class: 'palette-main' });
 const player = Player(() => docs.podcasts);
 player.el.classList.add('admin-player');
@@ -53,20 +57,16 @@ function renderSide() {
   const r = route();
   const list = (kind) => Object.values(doc().pages).filter((p) => p.kind === kind)
     .sort((a, b) => (kind === 'article' ? b.publishedAt.localeCompare(a.publishedAt) : (a.siteId ?? '').localeCompare(b.siteId ?? '') || a.order - b.order));
-  const item = (p) => h('button', { class: `mini-tool${r === p.id ? ' on' : ''}`, onclick: () => (location.hash = p.id) },
-    h('span', { class: `status-dot ${isLive(p, now) ? 'live' : p.status}`, title: isLive(p, now) ? 'Published' : p.status === 'draft' ? 'Draft' : 'Scheduled' }),
-    h('span', {}, p.title, h('small', {}, [org.sites[p.siteId]?.name ?? 'No site', p.kind === 'article' ? short(p.publishedAt) : p.inNav ? 'in menu' : null].filter(Boolean).join(' · '))));
-  side.replaceChildren(
-    h('div', { class: 'mini-tools' },
-      h('button', { class: `mini-tool${r === 'sites' ? ' on' : ''}`, onclick: () => (location.hash = 'sites') },
-        icon('globe', 20), h('span', {}, 'Your sites', h('small', {}, 'What each one shows')))),
-    h('h2', {}, 'Pages'),
-    h('div', { class: 'mini-tools' }, list('page').map(item),
-      h('button', { class: 'mini-tool', onclick: () => newPage('page') }, icon('plus', 20), h('span', {}, 'New page'))),
-    h('h2', {}, 'News articles'),
-    h('div', { class: 'mini-tools' }, list('article').map(item),
-      h('button', { class: 'mini-tool', onclick: () => newPage('article') }, icon('plus', 20), h('span', {}, 'New article'))),
-  );
+  const item = (p) => ({
+    label: p.title, href: `#${p.id}`, on: r === p.id,
+    lead: h('span', { class: 'side-lead' }, h('span', { class: `status-dot ${isLive(p, now) ? 'live' : p.status}`, title: isLive(p, now) ? 'Published' : p.status === 'draft' ? 'Draft' : 'Scheduled' })),
+    sub: [org.sites[p.siteId]?.name ?? 'No site', p.kind === 'article' ? short(p.publishedAt) : p.inNav ? 'in menu' : null].filter(Boolean).join(' · '),
+  });
+  side = swapSide(side, SideNav({ label: 'Sites and pages', sections: [
+    { title: 'Sites', items: [{ label: 'Your sites', sub: 'What each one shows', icon: 'globe', href: '#sites', on: r === 'sites' }] },
+    { title: 'Pages', action: { label: 'New page', onclick: () => newPage('page') }, items: [...list('page').map(item), { label: 'New page', icon: 'plus', onclick: () => newPage('page') }] },
+    { title: 'News articles', action: { label: 'New article', onclick: () => newPage('article') }, items: [...list('article').map(item), { label: 'New article', icon: 'plus', onclick: () => newPage('article') }] },
+  ] }));
 }
 
 function render() {
@@ -89,8 +89,9 @@ function newPage(kind) {
 function Sites() {
   const sites = Object.values(org.sites);
   return h('div', {},
-    h('h1', {}, 'Your sites'),
-    h('p', { class: 'lede muted' }, 'Each public site can carry dashboards, information pages, news and your podcast station. They all wear your organisation’s theme.'),
+    PluginHeader('pages'),
+    h('h2', {}, 'Your sites'),
+    h('p', { class: 'muted' }, 'Each public site can carry dashboards, information pages, news and your podcast station. They all wear your organisation’s theme.'),
     h('div', { class: 'site-cards' }, sites.map((s) => {
       const c = siteContent(doc(), s.id, now);
       const dashes = publicDashboards().filter((d) => d.siteId === s.id);
@@ -103,7 +104,7 @@ function Sites() {
           h('span', { class: `badge badge-sm ${s.visibility === 'public' ? 'badge-success' : 'badge-ghost'}` }, s.visibility),
           s.url && h('small', { class: 'muted' }, s.url)),
         h('ul', { class: 'site-contents' },
-          row('chart', 'Dashboards', dashes.length, 'palette.html#publish', 'Workbench'),
+          row('chart', 'Dashboards', dashes.length, 'palette.html#publish', 'Data Workbench'),
           row('doc', 'Pages in the menu', c.nav.length),
           row('news', 'News articles', c.articles.length),
           drafts > 0 && row('doc', 'Drafts and scheduled', drafts),
@@ -133,6 +134,8 @@ function Editor(p) {
     if (kind === 'dashboard') { const d = docs.dashboards.dashboards[id]; return d ? DashboardView(d, docs) : null; }
     if (kind === 'episode') { const e = docs.podcasts.episodes[id]; return e ? EpisodeCard(ctx, e, { embed: true }) : null; }
     if (kind === 'show') { const s = docs.podcasts.podcasts[id]; return s ? ShowCard(ctx, s) : null; }
+    if (kind === 'calculator') { const c = docs.dashboards.calculators[id]; return c ? CalculatorView(c, docs) : null; }
+    if (kind === 'story') { const s = docs.dashboards.stories[id]; return s ? StoryView(s, docs) : null; }
     return null;
   };
   const drawPreview = () => {
@@ -147,6 +150,10 @@ function Editor(p) {
       if (kind === 'dashboard') { const d = docs.dashboards.dashboards[id]; return !d ? `No dashboard “${id}”.` : d.visibility !== 'public' ? `“${d.title}” is private, so the public site leaves it out.` : null; }
       if (kind === 'episode') { const e = docs.podcasts.episodes[id]; return !e ? `No episode “${id}”.` : !published(e, now) ? `“${e.title}” isn’t published yet, so the public site leaves it out.` : null; }
       if (kind === 'show') return docs.podcasts.podcasts[id] ? null : `No show “${id}”.`;
+      if (kind === 'calculator' || kind === 'story') {
+        const x = docs.dashboards[kind === 'story' ? 'stories' : 'calculators'][id];
+        return !x ? `No ${kind} “${id}”.` : x.visibility !== 'public' ? `“${x.title}” is private, so the public site leaves it out.` : null;
+      }
       return null;
     }).filter(Boolean);
     warnings.replaceChildren(...notes.map((n) => h('div', { role: 'status', class: 'alert alert-warning alert-soft' }, n)));
@@ -183,6 +190,8 @@ function Editor(p) {
   const embedMenu = h('select', { class: 'select select-sm', 'aria-label': 'Insert live content', onchange: (e) => { if (e.target.value) insert(e.target.value); e.target.value = ''; } },
     h('option', { value: '' }, 'Insert…'),
     h('optgroup', { label: 'Dashboards' }, Object.values(docs.dashboards.dashboards).map((d) => h('option', { value: `[[dashboard:${d.id}]]` }, `${d.title}${d.visibility === 'public' ? '' : ' (private)'}`))),
+    h('optgroup', { label: 'Impact calculators' }, Object.values(docs.dashboards.calculators).map((c) => h('option', { value: `[[calculator:${c.id}]]` }, `${c.title}${c.visibility === 'public' ? '' : ' (private)'}`))),
+    h('optgroup', { label: 'Data stories' }, Object.values(docs.dashboards.stories).map((s) => h('option', { value: `[[story:${s.id}]]` }, `${s.title}${s.visibility === 'public' ? '' : ' (private)'}`))),
     pluginOn(org, 'podcasts') && h('optgroup', { label: 'Podcast episodes' }, liveEpisodes().map((e) => h('option', { value: `[[episode:${e.id}]]` }, `${docs.podcasts.podcasts[e.podcastId]?.title}: ${e.title}`))),
     pluginOn(org, 'podcasts') && h('optgroup', { label: 'Podcast shows' }, Object.values(docs.podcasts.podcasts).map((s) => h('option', { value: `[[show:${s.id}]]` }, s.title))));
 

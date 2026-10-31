@@ -1,4 +1,4 @@
-# Org Toolbox (scratchpad)
+# Dashi (scratchpad)
 
 A small, cohesive platform for nonprofits' planning, knowledge and learning work. It holds many organisations; each picks the **plugins** it uses. Open `index.html` (via `npm start`) for the dashboard, then choose a plugin:
 
@@ -52,12 +52,12 @@ Plain ES modules, HTML, CSS and SVG. No framework, no bundler, no dependencies. 
 
 ### Run it
 
-```sh
-npm start        # http://localhost:5173 (dashboard); the mapper is /mapper.html
-npm test         # store and op tests (Node 20+)
+```
+npm start        # the platform, with the example orgs: http://example.localhost:5173
+npm test         # unit and server tests
 ```
 
-Any static server works too; `npm start` is a tiny one in `server.js`.
+`npm start` runs the platform server (Node 22.13+, no dependencies): sign-in, each org on its own subdomain, documents and uploads saved on the server, and public sites that only ever receive published content. [DEPLOY.md](DEPLOY.md) covers testing it locally as any user, settings, and hosting. The pages still run without the server, too, on any static host: they then keep everything in the browser, as the prototype does.
 
 ### Using the board
 

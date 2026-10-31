@@ -1,8 +1,9 @@
 import { EventDispatcher } from '../core/EventDispatcher.js';
-import { project } from '../lenses/index.js';
+import { project, regionAt } from '../lenses/index.js';
 import { ActorView } from './ActorView.js';
 import { ConnectorView } from './ConnectorView.js';
 import { GroupView } from './GroupView.js';
+import { relatedTo } from './related.js';
 import { LensView } from './LensView.js';
 
 /**
@@ -74,6 +75,14 @@ export class MapView extends EventDispatcher {
     if (this.selection.size !== before) this.dispatchEvent('selection');
   }
 
+  /** Bring these items to the front, each within its kind (actors over connectors, groups over both). */
+  raise(ids) {
+    for (const id of ids) {
+      const view = this.viewFor(id);
+      view?.parent?.bringToFront(view);
+    }
+  }
+
   select(ids, { add = false } = {}) {
     if (!add) {
       for (const id of this.selection) {
@@ -87,6 +96,8 @@ export class MapView extends EventDispatcher {
       if (!view) continue;
       this.selection.add(id);
       view.selected = true;
+      // A clicked actor or connector comes to the front, with what it's tied to.
+      if (view.kind !== 'group') this.raise([...relatedTo(this.store.map, id)].filter((x) => x !== id).concat(id));
     }
     this.dispatchEvent('selection');
   }
@@ -98,6 +109,28 @@ export class MapView extends EventDispatcher {
       this.selection.delete(id);
     }
     this.dispatchEvent('selection');
+  }
+
+  /** Every visible actor in a lens region signals once, and the region lights up. */
+  signalRegion(regionId) {
+    const lens = this.lens;
+    this.lensView.flash(regionId);
+    for (const a of Object.values(this.store.map.actors)) {
+      const view = this.#actors.get(a.id);
+      if (view?.visible && regionAt(lens, a.place)?.id === regionId) view.signal();
+    }
+  }
+
+  /**
+   * Data viz focus: these actors and connectors pulse, everything else dims.
+   * Pass null to clear it.
+   */
+  focus(ids) {
+    const on = ids ? new Set(ids) : null;
+    this.stage.svgEl.classList.toggle('dataviz-focus', Boolean(on));
+    for (const [id, view] of this.#actors) view.pulsing = Boolean(on?.has(id));
+    for (const [id, view] of this.#connectors) view.node.classList.toggle('focus', Boolean(on?.has(id)));
+    for (const [id, view] of this.#groups) view.node.classList.toggle('focus', Boolean(on?.has(id)));
   }
 
   selectedItems() {

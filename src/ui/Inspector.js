@@ -1,5 +1,6 @@
 import { h, options } from './dom.js';
 import { columnAt, regionAt } from '../lenses/index.js';
+import { STRENGTH_WIDTH } from '../display/ConnectorView.js';
 
 /** Side panel for editing whatever is selected. */
 export function Inspector(el, ctx) {
@@ -46,7 +47,8 @@ export function Inspector(el, ctx) {
       field('Category', h('select', { onchange: (e) => store.apply(ops.updateActor(a.id, { category: e.target.value })) }, categoryOptions(lens, a.category))),
       field('Region', h('output', {}, [region?.label, column?.label].filter(Boolean).join(' · ') || 'Outside the lens')),
       field('Depth', h('output', { class: 'muted' }, `${Math.round(a.place.depth * 100)}% from surface (explicit) to deep (implicit)`)),
-      field('Layer', layerSelect(a, ops.updateActor)),
+      field('Layer', h('select', { onchange: (e) => store.apply(ops.batch(ctx.actions.actorsToLayerOps([a.id], e.target.value))) },
+        options(store.map.layers.map((l) => ({ id: l.id, label: l.name })), a.layerId ?? store.map.layers[0]?.id))),
       field('Notes', h('textarea', {
         rows: 5,
         value: a.meta?.notes ?? '',
@@ -62,6 +64,14 @@ export function Inspector(el, ctx) {
       h('p', { class: 'muted' }, `${describeDock(c.from)} → ${describeDock(c.to)}`),
       field('Label', h('input', { value: c.label, onchange: (e) => store.apply(ops.updateConnector(c.id, { label: e.target.value })) })),
       field('Type', h('select', { onchange: (e) => store.apply(ops.updateConnector(c.id, { type: e.target.value })) }, typeOptions(lens, c.type))),
+      field('Strength', h('div', { class: 'strength-picker', role: 'radiogroup', 'aria-label': 'Strength, 1 to 5' },
+        [1, 2, 3, 4, 5].map((n) => h('button', {
+          class: n === (c.strength ?? 3) ? 'on' : '',
+          role: 'radio',
+          'aria-checked': String(n === (c.strength ?? 3)),
+          title: ['', 'Very weak', 'Weak', 'Medium', 'Strong', 'Very strong'][n],
+          onclick: () => store.apply(ops.updateConnector(c.id, { strength: n })),
+        }, h('span', { class: 'strength-line', style: `height:${STRENGTH_WIDTH[n]}px` }), String(n))))),
       field('Layer', layerSelect(c, ops.updateConnector)),
       h('button', {
         class: 'btn btn-sm',
@@ -77,9 +87,13 @@ export function Inspector(el, ctx) {
     return [
       h('h2', {}, 'Group'),
       field('Name', h('input', { value: g.label, onchange: (e) => store.apply(ops.updateGroup(g.id, { label: e.target.value })) })),
+      field('Description', h('textarea', { rows: 4, value: g.description ?? '', placeholder: 'Who they are and why they belong together',
+        onchange: (e) => store.apply(ops.updateGroup(g.id, { description: e.target.value })) })),
       h('p', { class: 'muted' }, `${g.memberIds.length} members: ${g.memberIds.map((id) => store.map.actors[id]?.label || 'Untitled').join(', ')}`),
       field('Layer', layerSelect(g, ops.updateGroup)),
-      h('button', { class: 'btn btn-sm', onclick: () => ctx.actions.ungroup(g.id) }, 'Ungroup (keeps the actors)'),
+      h('div', { class: 'inspector-actions' },
+        h('button', { class: 'btn btn-sm', title: 'Move the group, its actors and their connectors onto a new layer', onclick: () => ctx.actions.groupToLayer(g.id) }, 'Move to its own layer'),
+        h('button', { class: 'btn btn-sm btn-ghost', onclick: () => ctx.actions.ungroup(g.id) }, 'Ungroup (keeps the actors)')),
     ];
   }
 
@@ -90,17 +104,19 @@ export function Inspector(el, ctx) {
       field('Name', h('input', { value: store.map.name, onchange: (e) => store.apply(ops.renameMap(e.target.value)) })),
       h('p', { class: 'muted' }, lens.description ?? ''),
       h('ul', { class: 'tips' },
-        h('li', {}, 'Press A and click to add actors, as many as you like. Press A again or Esc to stop.'),
-        h('li', {}, 'Press C and drag between actors to connect them, again and again.'),
+        h('li', {}, 'Click Actor or Agent to add one, or drag it onto the board. A adds one where the pointer is.'),
+        h('li', {}, 'Drag from the small box on an actor’s top-left corner to another actor to connect them.'),
+        h('li', {}, 'Click a zone of the lens to make its actors signal.'),
         h('li', {}, 'Drag a box to select several. Ctrl or ⌘ + G groups them.'),
         h('li', {}, 'Select a connector, then drag its round ends to re-dock it.'),
-        h('li', {}, 'Scroll or hold Space to pan, Ctrl or ⌘ + scroll to zoom, F to fit.'),
+        h('li', {}, 'Data viz (D): click anything to light up what it’s connected to for 15 seconds.'),
+        h('li', {}, 'Scroll or hold Space to pan, Ctrl or ⌘ + scroll to zoom, F to fit, Tidy to space actors out.'),
       ),
     ];
   }
 
   function render() {
-    if (el.contains(document.activeElement)) return; // don't clobber a field being typed in
+    if (el.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) return; // don't clobber a field being typed in
     const { actorIds, connectorIds, groupIds } = mapView.selectedItems();
     const count = actorIds.length + connectorIds.length + groupIds.length;
     let body;

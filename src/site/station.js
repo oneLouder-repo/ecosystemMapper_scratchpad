@@ -3,6 +3,9 @@ import { icon } from '../ui/icons.js';
 import { Avatar } from '../ui/Shell.js';
 import { Markdown } from '../ui/markdown.js';
 import { audioSrc } from '../platform/media.js';
+import { isHosted } from '../platform/storage.js';
+import { showArchive, archiveBytes } from '../platform/showArchive.js';
+import { zipStream } from '../core/zip.js';
 import { stationView, seasonsOf, published, podcastRss } from '../platform/podcasts.js';
 import { short } from '../strategy/dates.js';
 
@@ -64,7 +67,56 @@ export function ShowCard(ctx, show, { latest, count } = {}) {
       h('p', {}, show.description),
       latest && h('div', { class: 'show-card-latest' },
         PlayButton(ctx, [latest], latest.title, 'sm'),
-        h('span', {}, h('small', { class: 'muted' }, 'Latest'), h('a', { href: ctx.link({ episode: latest.id }) }, latest.title)))));
+        h('span', {}, h('small', { class: 'muted' }, 'Latest'), h('a', { href: ctx.link({ episode: latest.id }) }, latest.title))),
+      show.featured && count > 0 && DownloadShow(ctx, show, 'btn-xs btn-ghost')));
+}
+
+const mb = (n) => (n >= 1073741824 ? `${(n / 1073741824).toFixed(1)} GB` : `${Math.max(1, Math.round(n / 1048576))} MB`);
+
+/**
+ * Download a featured show as a .zip to listen to offline: the episodes,
+ * a page with every detail, and a small player. On a server it streams
+ * from /podcasts/<id>.zip; in the local preview the browser builds it.
+ */
+export function DownloadShow(ctx, show, cls = 'btn-sm') {
+  const bytes = archiveBytes(ctx.doc, show.id, ctx.today);
+  const label = ['Download for offline', bytes ? `(.zip, ${mb(bytes)})` : '(.zip)'].join(' ');
+  const title = 'Every episode, with a page and a player that work with no internet. Unzip it and open index.html.';
+  if (isHosted()) return h('a', { class: `btn ${cls}`, href: `/podcasts/${encodeURIComponent(show.id)}.zip`, download: '', title }, icon('download', 14), label);
+  const btn = h('button', { class: `btn ${cls}`, title, onclick: async () => {
+    btn.disabled = true;
+    try {
+      await buildInBrowser(ctx, show, (t) => { btn.lastChild.textContent = t; });
+    } catch (err) {
+      alert(`The download didn’t work: ${err.message}`);
+    }
+    btn.lastChild.textContent = label;
+    btn.disabled = false;
+  } }, icon('download', 14), h('span', {}, label));
+  return btn;
+}
+
+async function buildInBrowser(ctx, show, say) {
+  say('Gathering episodes…');
+  const blobs = new Map();
+  for (const e of Object.values(ctx.doc.episodes).filter((x) => x.podcastId === show.id && published(x, ctx.today))) {
+    const url = await audioSrc(e.audio);
+    if (url) blobs.set(e.id, await (await fetch(url)).blob());
+  }
+  const plan = showArchive({ doc: ctx.doc, org: ctx.org, showId: show.id, today: ctx.today, audioSize: (e) => blobs.get(e.id)?.size ?? -1, sourceUrl: location.href });
+  const enc = new TextEncoder();
+  const entries = [
+    ...plan.texts.map((t) => { const data = enc.encode(t.text); return { name: t.name, size: data.length, data }; }),
+    ...plan.binaries.map((b) => ({ name: b.name, size: b.bytes.length, data: b.bytes })),
+  ];
+  for (const x of plan.audio.filter((y) => y.size >= 0)) entries.push({ name: x.name, size: x.size, data: new Uint8Array(await blobs.get(x.episode.id).arrayBuffer()) });
+  say('Making the zip…');
+  const parts = [];
+  for await (const p of zipStream(entries)) parts.push(p);
+  const a = h('a', { href: URL.createObjectURL(new Blob(parts, { type: 'application/zip' })), download: plan.filename });
+  document.body.append(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
 }
 
 /** The station's home: the current episode, featured shows, then the archive of every show. */
@@ -147,7 +199,8 @@ export function ShowPage(ctx, show) {
           show.hostIds.map((id) => ctx.org.staff[id] && h('span', { class: 'host' }, Avatar(ctx.org.staff[id], 26), ctx.org.staff[id].name))),
         h('div', { class: 'show-actions' },
           all.length > 0 && h('button', { class: 'btn btn-primary btn-sm', onclick: () => ctx.player.play(all) }, icon('play', 14), 'Play from the start'),
-          h('a', { class: 'btn btn-sm', href: '#', onclick: (e) => { e.currentTarget.href = rss(); }, download: `${show.handle}.xml` }, icon('rss', 14), 'RSS feed')))),
+          h('a', { class: 'btn btn-sm', href: '#', onclick: (e) => { e.currentTarget.href = rss(); }, download: `${show.handle}.xml` }, icon('rss', 14), 'RSS feed'),
+          show.featured && all.length > 0 && DownloadShow(ctx, show)))),
     seasons.length > 1 && tabs,
     list);
 }

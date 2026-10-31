@@ -43,46 +43,46 @@ const ACTORS = [
 ];
 
 const CONNECTIONS = [
-  // from, to, type, label
-  ['ised', 'actua', 'resource-flow', 'core funding'],
-  ['nserc', 'universities', 'resource-flow', 'grants'],
-  ['corporate', 'actua', 'resource-flow', 'sponsorship'],
+  // from, to, type, label, strength (1–5, default 3)
+  ['ised', 'actua', 'resource-flow', 'core funding', 5],
+  ['nserc', 'universities', 'resource-flow', 'grants', 4],
+  ['corporate', 'actua', 'resource-flow', 'sponsorship', 3],
   ['foundations', 'community-orgs', 'resource-flow', ''],
   ['actua', 'universities', 'relationship', 'network members'],
-  ['universities', 'instructors', 'relationship', 'hire & host'],
-  ['actua', 'instructors', 'learning', 'training'],
-  ['instructors', 'youth', 'relationship', 'programs'],
-  ['instructors', 'girls', 'relationship', 'programs'],
-  ['coordinators', 'instructors', 'information', 'coaching'],
-  ['youth', 'coordinators', 'feedback', 'surveys'],
-  ['coordinators', 'actua', 'feedback', 'impact data'],
-  ['actua', 'ised', 'feedback', 'reporting'],
+  ['universities', 'instructors', 'relationship', 'hire & host', 4],
+  ['actua', 'instructors', 'learning', 'training', 5],
+  ['instructors', 'youth', 'relationship', 'programs', 5],
+  ['instructors', 'girls', 'relationship', 'programs', 5],
+  ['coordinators', 'instructors', 'information', 'coaching', 4],
+  ['youth', 'coordinators', 'feedback', 'surveys', 2],
+  ['coordinators', 'actua', 'feedback', 'impact data', 3],
+  ['actua', 'ised', 'feedback', 'reporting', 3],
   ['actua', 'policy-net', 'relationship', 'convenes'],
-  ['policy-net', 'ministries', 'power', 'advocacy'],
-  ['ministries', 'boards', 'power', 'curriculum'],
+  ['policy-net', 'ministries', 'power', 'advocacy', 2],
+  ['ministries', 'boards', 'power', 'curriculum', 5],
   ['boards', 'teachers', 'power', ''],
-  ['teachers', 'youth', 'relationship', 'classroom'],
-  ['actua', 'teachers', 'learning', 'PD workshops'],
-  ['skeptics', 'teachers', 'power', 'resistance'],
+  ['teachers', 'youth', 'relationship', 'classroom', 5],
+  ['actua', 'teachers', 'learning', 'PD workshops', 2],
+  ['skeptics', 'teachers', 'power', 'resistance', 2],
   ['parents', 'youth', 'relationship', ''],
   ['indig-gov', 'indig-comm', 'relationship', ''],
-  ['indig-comm', 'actua', 'relationship', 'partnership'],
-  ['indig-comm', 'indig-youth', 'relationship', 'land-based learning'],
-  ['researchers', 'actua', 'information', 'evaluation'],
-  ['mentors', 'instructors', 'learning', 'mentoring'],
+  ['indig-comm', 'actua', 'relationship', 'partnership', 4],
+  ['indig-comm', 'indig-youth', 'relationship', 'land-based learning', 5],
+  ['researchers', 'actua', 'information', 'evaluation', 3],
+  ['mentors', 'instructors', 'learning', 'mentoring', 2],
   ['alumni', 'volunteers', 'relationship', 'become'],
   ['volunteers', 'instructors', 'relationship', ''],
-  ['champions', 'actua', 'learning', 'equity practice'],
-  ['media', 'parents', 'information', 'narratives'],
+  ['champions', 'actua', 'learning', 'equity practice', 3],
+  ['media', 'parents', 'information', 'narratives', 1],
   ['regulators', 'universities', 'power', ''],
-  ['outreach-orgs', 'actua', 'relationship', 'peers'],
-  ['girls', 'champions', 'feedback', 'lived experience'],
+  ['outreach-orgs', 'actua', 'relationship', 'peers', 1],
+  ['girls', 'champions', 'feedback', 'lived experience', 3],
 ];
 
 const GROUPS = [
-  ['Funders', ['ised', 'nserc', 'corporate', 'foundations']],
-  ['Delivery network', ['instructors', 'coordinators', 'champions']],
-  ['School system', ['boards', 'teachers', 'parents']],
+  ['Funders', ['ised', 'nserc', 'corporate', 'foundations'], 'Public and private money behind the programs, and the reporting it asks for.'],
+  ['Delivery network', ['instructors', 'coordinators', 'champions'], 'The people who run programs with youth, day to day.'],
+  ['School system', ['boards', 'teachers', 'parents'], 'Where most youth meet STEM first: classrooms, and the families around them.'],
 ];
 
 export function seedMap() {
@@ -95,11 +95,11 @@ export function seedMap() {
     applyOp(map, op);
     ids[key] = op.id;
   }
-  for (const [from, to, type, label] of CONNECTIONS) {
-    applyOp(map, ops.addConnector({ from: { actorId: ids[from] }, to: { actorId: ids[to] }, type, label, layerId }));
+  for (const [from, to, type, label, strength = 3] of CONNECTIONS) {
+    applyOp(map, ops.addConnector({ from: { actorId: ids[from] }, to: { actorId: ids[to] }, type, label, strength, layerId }));
   }
-  for (const [label, members] of GROUPS) {
-    applyOp(map, ops.addGroup({ label, memberIds: members.map((k) => ids[k]), layerId }));
+  for (const [label, members, description] of GROUPS) {
+    applyOp(map, ops.addGroup({ label, description, memberIds: members.map((k) => ids[k]), layerId }));
   }
   return map;
 }
@@ -117,5 +117,7 @@ export function migrateMap(map, lenses) {
       delete a.y;
     }
   }
+  for (const c of Object.values(map.connectors)) c.strength ??= 3;
+  for (const g of Object.values(map.groups)) g.description ??= '';
   return map;
 }

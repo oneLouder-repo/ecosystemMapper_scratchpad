@@ -1,6 +1,7 @@
 import { h, options } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { Shell, Avatar } from '../ui/Shell.js';
+import { SideNav, swapSide } from '../ui/SideNav.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp, col } from '../core/collections.js';
 import { autosaveDoc } from '../platform/storage.js';
@@ -9,9 +10,10 @@ import { staffList } from '../platform/org.js';
 import {
   CATEGORIES, EPISODE_TYPES, LOOKS, isAudioFile, slugify, published, episodesOf, seasonsOf, showsInOrder, stationView, nextNumber, podcastRss,
 } from '../platform/podcasts.js';
-import { putMedia, deleteMedia, audioDuration } from '../platform/media.js';
+import { putMedia, deleteMedia, audioDuration, maxUploadMb } from '../platform/media.js';
 import { readImage } from '../ui/images.js';
 import { Cover, Player, fmtDuration } from '../site/station.js';
+import { PluginHeader } from '../ui/PluginHeader.js';
 import { today, short } from '../strategy/dates.js';
 
 /**
@@ -31,8 +33,8 @@ autosaveDoc('podcasts', store, 150);
 Shell(document.querySelector('#shell'), { current: 'podcasts', org });
 
 const app = document.querySelector('#app');
-app.classList.add('podcasts-app');
-const side = h('nav', { class: 'palette-side', 'aria-label': 'Station and shows' });
+app.classList.add('podcasts-app', 'frame');
+let side = h('nav');
 const main = h('section', { class: 'palette-main' });
 const player = Player(() => store.doc);
 player.setLink(({ episode }) => `#${store.doc.episodes[episode]?.podcastId ?? 'station'}`);
@@ -42,7 +44,6 @@ app.replaceChildren(side, main, player.el);
 const route = () => decodeURIComponent(location.hash.slice(1)) || 'station';
 const doc = () => store.doc;
 const now = today();
-const MAX_MB = 200;
 const n = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 const stationSite = () => org.sites[doc().station.siteId];
@@ -50,18 +51,13 @@ const stationUrl = (extra = {}) => `site.html?${new URLSearchParams({ site: doc(
 
 function render() {
   const r = route();
-  side.replaceChildren(
-    h('h2', {}, 'Station'),
-    h('div', { class: 'mini-tools' },
-      h('button', { class: `mini-tool${r === 'station' ? ' on' : ''}`, onclick: () => (location.hash = 'station') },
-        icon('mic', 20), h('span', {}, doc().station.name, h('small', {}, 'Public page, look, featured shows')))),
-    h('h2', {}, 'Shows'),
-    h('div', { class: 'mini-tools' },
-      showsInOrder(doc()).map((p) =>
-        h('button', { class: `mini-tool${r === p.id ? ' on' : ''}`, onclick: () => (location.hash = p.id) },
-          Cover(p, 32), h('span', {}, p.title, h('small', {}, `${n(episodesOf(doc(), p.id).length, 'episode')}${p.featured ? ' · featured' : ''}`)))),
-      h('button', { class: 'mini-tool', onclick: newShow }, icon('plus', 20), h('span', {}, 'New show'))),
-  );
+  side = swapSide(side, SideNav({ label: 'Station and shows', sections: [
+    { title: 'Station', items: [{ label: doc().station.name, sub: 'Public page, look, featured shows', icon: 'mic', href: '#station', on: r === 'station' }] },
+    { title: 'Shows', action: { label: 'New show', onclick: newShow }, items: [
+      ...showsInOrder(doc()).map((p) => ({ label: p.title, sub: `${n(episodesOf(doc(), p.id).length, 'episode')}${p.featured ? ' · featured' : ''}`, lead: Cover(p, 24), href: `#${p.id}`, on: r === p.id })),
+      { label: 'New show', icon: 'plus', onclick: newShow },
+    ] },
+  ] }));
   const scroll = main.scrollTop;
   const focused = main.contains(document.activeElement) ? document.activeElement.name : null;
   main.replaceChildren(doc().podcasts[r] ? Show(doc().podcasts[r]) : Station());
@@ -110,6 +106,7 @@ function Station() {
   const publicSites = Object.values(org.sites);
 
   return h('div', {},
+    PluginHeader('podcasts', { actions: stationSite() && h('a', { class: 'btn btn-sm', href: stationUrl(), target: '_blank', rel: 'noopener' }, icon('globe', 14), 'View station') }),
     h('div', { class: 'station-admin-head' },
       CoverUpload({ title: st.name, cover: st.cover }, 112, (cover) => update({ cover }), 'Station art'),
       h('div', { class: 'show-fields' },
@@ -124,13 +121,6 @@ function Station() {
           ? h('a', { class: 'btn btn-sm btn-primary', href: stationUrl(), target: '_blank', rel: 'noopener' }, icon('globe', 14), 'View station')
           : h('span', { class: 'muted' }, 'Pick a site to give the station a public page.'),
         stationSite()?.visibility === 'private' && h('span', { class: 'muted' }, 'That site is private. Make it public in Organisation settings.'))),
-
-    h('h2', {}, 'How the station looks'),
-    h('p', { class: 'muted' }, 'On top of your organisation’s colour palette and shape (Organisation → Public sites and theme).'),
-    h('div', { class: 'look-grid' },
-      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Player'), Segmented('Player', LOOKS.player, st.look.player, (player) => setLook({ player }))),
-      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Cover art'), Segmented('Cover art', LOOKS.art, st.look.art, (art) => setLook({ art }))),
-      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Top of the page'), Segmented('Top of the page', LOOKS.hero, st.look.hero, (hero) => setLook({ hero })))),
 
     h('h2', {}, 'Shows'),
     h('p', { class: 'muted' }, 'Featured shows lead the station page, in this order. Every show’s past episodes stay in the archive.'),
@@ -157,10 +147,13 @@ function Station() {
         h('h2', {}, 'Coming up and drafts'),
         upcoming.length ? h('ul', { class: 'episode-list' }, upcoming.map((e) => EpisodeRow(e, { showShow: true }))) : h('p', { class: 'empty' }, 'Nothing scheduled.'))),
 
-    h('section', { class: 'panel castopod-note' },
-      h('h2', {}, 'Hosting'),
-      h('p', {}, 'For now, uploads are kept in this browser. When the Node backend arrives, it stores the audio, serves it with range requests so listeners can skip ahead, and publishes each show’s RSS feed for podcast apps. The fields follow ',
-        h('a', { href: 'https://castopod.org', target: '_blank', rel: 'noopener' }, 'Castopod'), '’s model, so moving to a Castopod server later would not mean reshaping your data.')),
+
+    h('h2', {}, 'How the station looks'),
+    h('p', { class: 'muted' }, 'On top of your organisation’s colour palette and shape (Organisation → Public sites and theme).'),
+    h('div', { class: 'look-grid' },
+      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Player'), Segmented('Player', LOOKS.player, st.look.player, (player) => setLook({ player }))),
+      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Cover art'), Segmented('Cover art', LOOKS.art, st.look.art, (art) => setLook({ art }))),
+      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Top of the page'), Segmented('Top of the page', LOOKS.hero, st.look.hero, (hero) => setLook({ hero })))),
   );
 }
 
@@ -217,7 +210,7 @@ function EpisodeForm(p, e, done) {
   const form = h('form', { class: 'episode-form', onsubmit: async (ev) => {
     ev.preventDefault();
     const file = f.file.files[0];
-    if (file && file.size > MAX_MB * 1048576) return alert(`For now, audio files must be under ${MAX_MB} MB.`);
+    if (file && file.size > maxUploadMb() * 1048576) return alert(`Audio files can be up to ${maxUploadMb()} MB.`);
     submit.disabled = true;
     submit.textContent = file ? 'Uploading…' : 'Saving…';
     const ops = [];
@@ -225,7 +218,14 @@ function EpisodeForm(p, e, done) {
     if (f.season.value === 'new') ops.push(col.update('podcasts', p.id, { seasons: { ...p.seasons, [season]: { number: season, title: `Season ${season}`, description: '' } } }));
     let audio = e?.audio;
     if (file) {
-      audio = { mediaId: await putMedia(file), duration: await audioDuration(file), mimetype: file.type || (/\.wav$/i.test(file.name) ? 'audio/wav' : 'audio/mpeg'), size: file.size, name: file.name };
+      try {
+        audio = { mediaId: await putMedia(file, { onProgress: (f) => { submit.textContent = `Uploading… ${Math.floor(f * 100)}%`; } }), duration: await audioDuration(file), mimetype: file.type || (/\.wav$/i.test(file.name) ? 'audio/wav' : 'audio/mpeg'), size: file.size, name: file.name };
+      } catch (err) {
+        alert(err.message);
+        submit.disabled = false;
+        submit.textContent = e ? 'Save episode' : 'Add episode';
+        return;
+      }
       if (e?.audio?.mediaId) deleteMedia(e.audio.mediaId);
     }
     const date = f.date.value || now;
