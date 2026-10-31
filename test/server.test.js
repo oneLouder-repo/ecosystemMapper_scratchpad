@@ -277,3 +277,23 @@ test('a featured show downloads as a zip that plays offline; other shows stay wi
   assert.equal((await call(EX, 'HEAD', `/podcasts/${other.id}.zip`, { cookie: amara })).status, 200, 'members can take any show');
   assert.equal((await call(RB, 'GET', `/podcasts/${featured.id}.zip`)).status, 404, 'only at its own org');
 });
+
+test('sessions are stored hashed, pages carry security headers, sign-in guessing is slowed per account', async () => {
+  const cookie = await signIn('amara@example.org');
+  const raw = decodeURIComponent(cookie.split('=')[1]);
+  assert.equal(srv.db.prepare('SELECT 1 FROM sessions WHERE id = ?').get(raw), undefined, 'the cookie value is not in the database');
+  const { digest } = await import('../server/app.js');
+  assert.ok(srv.db.prepare('SELECT 1 FROM sessions WHERE id = ?').get(digest(raw)), 'its hash is');
+  assert.equal((await call(EX, 'GET', '/api/session', { cookie })).json.member, true);
+
+  const home = await call(EX, 'GET', '/');
+  assert.match(home.headers['content-security-policy'], /script-src 'self'/);
+  assert.match(home.headers['content-security-policy'], /object-src 'none'/);
+
+  // Ten wrong passwords for one account, from different addresses; the eleventh is refused.
+  for (let i = 0; i < 10; i++) {
+    const r = await call(EX, 'POST', '/api/auth/password', { body: { email: 'target@example.org', password: `guess${i}` } });
+    assert.equal(r.status, 401);
+  }
+  assert.equal((await call(EX, 'POST', '/api/auth/password', { body: { email: 'TARGET@example.org', password: 'x' } })).status, 429);
+});

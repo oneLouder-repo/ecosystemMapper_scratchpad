@@ -54,6 +54,8 @@ const SCHEMA = [
   `CREATE TABLE uploads (
      id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE, filename TEXT NOT NULL,
      size INTEGER NOT NULL, received INTEGER NOT NULL DEFAULT 0, created_by TEXT, created_at TEXT NOT NULL, expires_at INTEGER NOT NULL)`,
+  // Session and handoff tokens are now kept hashed (SHA-256); older plain ones are cleared, so everyone signs in once more.
+  `DELETE FROM sessions; DELETE FROM handoffs; DELETE FROM oauth_states;`,
 ];
 
 export function openDb(dataDir) {

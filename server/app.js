@@ -28,7 +28,7 @@ import { pipeline } from 'node:stream/promises';
 import { Transform, Readable } from 'node:stream';
 import { config, urlFor, orgHost } from './config.js';
 import { now } from './db.js';
-import { HttpError, send, json, redirect, page, readJson, parseCookies, cookie, sendFile } from './http.js';
+import { HttpError, send, json, redirect, page, readJson, parseCookies, cookie, sendFile, clientIp, securityHeaders } from './http.js';
 import { publicDocs, mediaIsPublic } from './public.js';
 import { uploadRoutes } from './uploads.js';
 import { PROVIDERS, authorizeUrl, finish } from './oauth.js';
@@ -46,6 +46,11 @@ const DOC_NAME = /^[\w-]{1,64}(\/[\w-]{1,64})?$/;
 const today = () => new Date().toISOString().slice(0, 10);
 export const newId = (prefix) => `${prefix}_${randomBytes(9).toString('base64url')}`;
 const token = () => randomBytes(32).toString('base64url');
+/**
+ * Session and handoff tokens are kept as their SHA-256 in the database, so a
+ * copy of the database (a backup, a leak) holds nothing anyone can sign in with.
+ */
+export const digest = (t) => createHash('sha256').update(String(t)).digest('base64url');
 
 export async function hashPassword(password) {
   const salt = randomBytes(16);
@@ -167,7 +172,7 @@ export function createApp(db) {
   function sessionOf(req) {
     const id = parseCookies(req.headers.cookie)[COOKIE];
     if (!id) return null;
-    const s = q('SELECT * FROM sessions WHERE id = ?').get(id);
+    const s = q('SELECT * FROM sessions WHERE id = ?').get(digest(id));
     if (!s || s.expires_at < Date.now()) return null;
     const user = userById(s.user_id);
     return user ? { ...s, user, viewAs: JSON.parse(s.view_as || '{}') } : null;
@@ -175,7 +180,7 @@ export function createApp(db) {
 
   function startSession(res, userId) {
     const id = token();
-    q('INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)').run(id, userId, Date.now() + config.sessionDays * 864e5, now());
+    q('INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)').run(digest(id), userId, Date.now() + config.sessionDays * 864e5, now());
     res.setHeader('set-cookie', cookie(COOKIE, id, { maxAge: config.sessionDays * 86400, secure: config.https }));
   }
 
@@ -210,7 +215,7 @@ export function createApp(db) {
   /** Hand a sign-in to another host: a one-time token, good for a minute. */
   function handoff(res, userId, host, next = '/') {
     const t = token();
-    q('INSERT INTO handoffs (token, user_id, host, expires_at) VALUES (?, ?, ?, ?)').run(t, userId, host, Date.now() + 60_000);
+    q('INSERT INTO handoffs (token, user_id, host, expires_at) VALUES (?, ?, ?, ?)').run(digest(t), userId, host, Date.now() + 60_000);
     redirect(res, urlFor(host, `/auth/handoff?${new URLSearchParams({ token: t, next })}`));
   }
   const knownHost = (host) => host === config.baseDomain || !!q('SELECT 1 FROM domains WHERE host = ?').get(host)
@@ -231,16 +236,30 @@ export function createApp(db) {
   uploads.sweep();
   setInterval(uploads.sweep, 3600_000).unref();
 
-  /* Sign-in attempts, per address, to slow down guessing. */
+  /*
+   * Sign-in attempts, to slow down guessing: 20 per address and 10 per
+   * account every 15 minutes. The per-account limit stops one person being
+   * targeted from many addresses.
+   */
   const attempts = new Map();
-  function throttle(req) {
-    const key = req.socket.remoteAddress ?? '?';
+  function bump(key, max) {
     const a = attempts.get(key) ?? { n: 0, until: Date.now() + 15 * 60_000 };
     if (a.until < Date.now()) { a.n = 0; a.until = Date.now() + 15 * 60_000; }
     a.n += 1;
     attempts.set(key, a);
-    if (a.n > 20) throw new HttpError(429, 'Too many tries. Wait a few minutes.');
+    if (a.n > max) throw new HttpError(429, 'Too many tries. Wait a few minutes.');
   }
+  function throttle(req, email) {
+    bump(`ip:${clientIp(req)}`, 20);
+    if (email) bump(`email:${String(email).toLowerCase()}`, 10);
+  }
+  setInterval(() => { for (const [k, a] of attempts) if (a.until < Date.now()) attempts.delete(k); }, 15 * 60_000).unref();
+  /* Expired sessions, handoffs and sign-in states, cleared hourly. */
+  function clearExpired() {
+    for (const t of ['sessions', 'handoffs', 'oauth_states']) q(`DELETE FROM ${t} WHERE expires_at < ?`).run(Date.now());
+  }
+  clearExpired();
+  setInterval(clearExpired, 3600_000).unref();
 
   /* ---------------------------------------------------------------- routes */
 
@@ -384,8 +403,8 @@ export function createApp(db) {
       return json(res, 200, { providers, google: !!config.providers.google, password: true, dev, org: a.org && { name: a.org.name } });
     }
     if (path === '/api/auth/password' && method === 'POST') {
-      throttle(req);
       const { email, password } = await readJson(req, 10_000);
+      throttle(req, email);
       const user = email && userByEmail(email);
       if (!user || !(await checkPassword(String(password ?? ''), user.password_hash))) throw new HttpError(401, 'That email and password don’t match.');
       startSession(res, user.id);
@@ -487,7 +506,7 @@ export function createApp(db) {
     const p = url.searchParams;
     let m;
     if (path === '/auth/handoff') {
-      const row = q('SELECT * FROM handoffs WHERE token = ?').get(p.get('token') ?? '');
+      const row = q('SELECT * FROM handoffs WHERE token = ?').get(digest(p.get('token') ?? ''));
       if (row) q('DELETE FROM handoffs WHERE token = ?').run(row.token);
       if (!row || row.expires_at < Date.now() || row.host !== a.t.host) return page(res, 400, 'That sign-in link has expired', 'Sign in again.', { href: '/login.html', label: 'Sign in' });
       startSession(res, row.user_id);
@@ -617,9 +636,7 @@ export function createApp(db) {
   }
 
   async function handle(req, res) {
-    res.setHeader('x-content-type-options', 'nosniff');
-    res.setHeader('referrer-policy', 'same-origin');
-    res.setHeader('x-frame-options', 'SAMEORIGIN');
+    securityHeaders(res);
     const url = new URL(req.url, 'http://x');
     let path;
     try {

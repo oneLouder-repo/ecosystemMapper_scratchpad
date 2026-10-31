@@ -1,6 +1,7 @@
 /** Small helpers for Node's http module, so the server needs no framework. */
 import { createReadStream, statSync } from 'node:fs';
 import { extname } from 'node:path';
+import { config } from './config.js';
 
 export const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -109,4 +110,40 @@ export function sendFile(req, res, file, { type, cache = 'no-cache', headers = {
   res.writeHead(200, { ...base, 'content-length': stat.size });
   if (req.method === 'HEAD') return res.end();
   createReadStream(file).pipe(res);
+}
+
+/**
+ * The visitor's address. Behind a host's proxy (Fly.io, Render, a load
+ * balancer) every request comes from the proxy, so with TRUST_PROXY=true the
+ * address is read from X-Forwarded-For instead: the last entry, which is the
+ * one the proxy itself added (earlier ones are whatever the client sent).
+ */
+export function clientIp(req) {
+  if (config.trustProxy) {
+    const hops = String(req.headers['x-forwarded-for'] ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+    if (hops.length) return hops.at(-1);
+  }
+  return req.socket.remoteAddress ?? '?';
+}
+
+/**
+ * Headers on every response.
+ * - CSP: scripts and connections only from this address; no plugins; nobody
+ *   else can frame the pages. Styles allow inline (the app sets style
+ *   attributes), images and audio allow https (logos and cover art by URL).
+ * - HSTS: once on https, browsers never fall back to http.
+ */
+export const CSP = [
+  "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:", "media-src 'self' data: blob: https:", "font-src 'self' data:",
+  "connect-src 'self'", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'self'",
+].join('; ');
+export function securityHeaders(res) {
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('referrer-policy', 'same-origin');
+  res.setHeader('x-frame-options', 'SAMEORIGIN');
+  res.setHeader('content-security-policy', CSP);
+  res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  res.setHeader('cross-origin-opener-policy', 'same-origin');
+  if (config.https) res.setHeader('strict-transport-security', 'max-age=31536000; includeSubDomains');
 }

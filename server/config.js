@@ -35,6 +35,10 @@ export const config = {
   },
   /** Sign-in with Google, Facebook, Microsoft…: each switched on by its keys (see server/oauth.js). */
   providers: enabledProviders(env),
+  /** Behind a host's proxy (Fly.io, Render…): read the visitor's address from X-Forwarded-For. */
+  trustProxy: env.TRUST_PROXY === 'true',
+  /** Daily database snapshots kept in data/backups. */
+  backupDays: Number(env.BACKUP_DAYS) || 14,
   sessionDays: Number(env.SESSION_DAYS) || 30,
   maxJsonMb: 15,
   /** The largest single upload (podcast audio), sent in 8 MB chunks. */
