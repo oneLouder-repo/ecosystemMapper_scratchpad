@@ -171,10 +171,10 @@ Both publish like dashboards: make one public and choose a site. Calculators sho
           body: `The Planning Studio works on the plans in your strategic framework (the same ones as in Strategy & Work). Each plan has:
 
 - **Plan home:** its dates, the mission and vision it serves, its operating context and its planning team.
-- **SOAR board:** a shared whiteboard. Double-click a quadrant to add a card, drag cards by their top strip, and click the dot to vote. Everyone with the plan open sees changes as they save.
+- **SOAR board:** one big shared canvas with the four quadrants meeting in the middle. Double-click anywhere to add a sticky note, drag notes to move them (into another quadrant too), and click the dot to vote. The nearer a note is to the centre, the more it matters: its border is thickest (5px) at the centre and thins out further away. Drag the background to pan, use − and + (or Ctrl/⌘ + scroll) to zoom, and **Centre** to come back. **Rank by dots** moves the most-voted notes closest in. Everyone with the plan open sees changes as they save.
 - **Strengths, Opportunities, Aspirations:** the same cards as lists, most dotted first, where you can say more and link assets with the asset chooser.
 - **Results:** a grid of result cards, each with an indicator, baseline, target, source and how often it is measured. Link a Strategy & Work measure to use its live data.
-- **Assemble:** drag cards, context, results and assets onto the canvas, add goals and objectives, and patch outlets into inlets. **Send to plan** makes the objectives and goals in Strategy & Work. Sending again updates them rather than making copies.`,
+- **Assemble:** drag cards, context, results and assets onto the canvas, add goals, objectives and workplans, and patch outlets into inlets: ideas and workplans into goals, goals into objectives, objectives into the plan. **Bring in the plan** lays out the plan as it already stands in Strategy & Work, so you can see and rearrange the whole thing. Renaming a block that is already in the plan renames it there too; a workplan's link opens it in Strategy & Work for dates, people and tasks. **Send to plan** makes anything new in Strategy & Work, and sending again updates rather than copies. Zoom with − and +, and **Centre** fits everything in view.`,
         },
         {
           id: 'studio-live',

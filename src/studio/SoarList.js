@@ -2,7 +2,7 @@ import { h, options } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { openAssetChooser } from '../ui/AssetChooser.js';
 import { assetTile } from '../strategy/Assets.js';
-import { QUADRANTS, quadrant, ofPlan } from '../platform/studio.js';
+import { QUADRANTS, quadrant, ofPlan, freeSpot } from '../platform/studio.js';
 
 /**
  * Strengths, Opportunities or Aspirations as a list: the same cards as on
@@ -24,7 +24,7 @@ export function SoarList(ctx, plan, tab) {
   const add = (e) => {
     e.preventDefault();
     if (!text.value.trim()) return;
-    ctx.add('cards', { planId: plan.id, quadrant: tab, text: text.value.trim(), detail: '', x: 0.05 + Math.random() * 0.45, y: 0.15 + Math.random() * 0.6, by: ctx.me?.id ?? null, votes: [], assets: [] });
+    ctx.add('cards', { planId: plan.id, quadrant: tab, text: text.value.trim(), detail: '', ...freeSpot(ctx.doc, plan.id, tab), by: ctx.me?.id ?? null, votes: [], assets: [] });
   };
   const toCanvas = (c) => {
     const n = ofPlan(ctx.doc, 'blocks', plan.id).length;
@@ -41,7 +41,7 @@ export function SoarList(ctx, plan, tab) {
       h('div', { class: 'soar-item-head' },
         h('span', { class: 'badge badge-sm', title: 'Dots from the SOAR board' }, `● ${c.votes.length}`),
         h('input', { class: 'input input-sm soar-item-text', name: `t-${c.id}`, value: c.text, 'aria-label': 'Card', onchange: (e) => ctx.put('cards', c.id, { text: e.target.value.trim() }) }),
-        h('select', { class: 'select select-xs', name: `q-${c.id}`, 'aria-label': 'Move to', title: 'Move to another quadrant', onchange: (e) => ctx.put('cards', c.id, { quadrant: e.target.value }) },
+        h('select', { class: 'select select-xs', name: `q-${c.id}`, 'aria-label': 'Move to', title: 'Move to another quadrant', onchange: (e) => ctx.put('cards', c.id, { quadrant: e.target.value, ...freeSpot(ctx.doc, plan.id, e.target.value) }) },
           options(QUADRANTS.map((x) => ({ id: x.id, label: x.label })), c.quadrant)),
         h('button', { class: 'btn btn-ghost btn-xs', disabled: onCanvas.has(c.id), title: onCanvas.has(c.id) ? 'Already on the Assemble canvas' : 'Put it on the Assemble canvas', onclick: () => toCanvas(c) }, icon('connect', 13), onCanvas.has(c.id) ? 'On canvas' : 'To canvas'),
         h('button', { class: 'btn btn-ghost btn-xs btn-square', title: 'Remove', 'aria-label': 'Remove card', onclick: () => { if (confirm('Remove this card?')) ctx.remove('cards', c.id); } }, '×')),

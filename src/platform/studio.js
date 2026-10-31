@@ -7,9 +7,12 @@
  * { id: 'studio',
  *   plans:   { [planId]: { id, team: [{ staffId, role }], notes } }        planId is a strategy plan node
  *   context: { [id]: { id, planId, kind, text, at } }                      the plan's operating context
- *   cards:   { [id]: { id, planId, quadrant: 's'|'o'|'a'|'r', text, detail, x, y, by, votes: [staffId], assets: [Asset], at } }
+ *   cards:   { [id]: { id, planId, quadrant: 's'|'o'|'a'|'r', text, detail, wx, wy, by, votes: [staffId], assets: [Asset], at } }
+ *            wx, wy: where the card sits on the SOAR canvas, from its centre 0,0. The quadrant follows
+ *            from the side it is on (S top left, O top right, A bottom left, R bottom right); nearer
+ *            the centre means more important.
  *   results: { [id]: { id, planId, title, indicator, baseline, target, unit, source, frequency, measureId, cardId, x, y, w, h, at } }
- *   blocks:  { [id]: { id, planId, kind: 'card'|'asset'|'context'|'result'|'goal'|'objective', ref, title, x, y, strategyId, at } }
+ *   blocks:  { [id]: { id, planId, kind: 'card'|'asset'|'context'|'result'|'workplan'|'goal'|'objective'|'plan', ref, title, x, y, strategyId, at } }
  *   wires:   { [id]: { id, planId, from, to, at } }
  *   gone:    { [id]: at }                                                  deleted items, so a merge doesn't bring them back
  * }
@@ -21,7 +24,7 @@
  */
 import { uid } from '../core/ops.js';
 import { col } from '../core/collections.js';
-import { strategyOps, childrenOf } from './strategy.js';
+import { strategyOps, childrenOf, descendants } from './strategy.js';
 
 export const COLLECTIONS = ['plans', 'context', 'cards', 'results', 'blocks', 'wires'];
 
@@ -54,8 +57,30 @@ export const blankStudio = () => ({ id: 'studio', plans: {}, context: {}, cards:
 
 export function migrateStudio(doc) {
   for (const k of [...COLLECTIONS, 'gone']) doc[k] ??= {};
+  // Cards from the first SOAR board sat at a share of a fixed quadrant; put them on the open canvas.
+  for (const c of Object.values(doc.cards)) {
+    if (c.wx != null) continue;
+    const left = c.quadrant === 's' || c.quadrant === 'a';
+    const top = c.quadrant === 's' || c.quadrant === 'o';
+    const x = (c.x ?? 0.3) * QUADRANT_SIZE + CARD_SIZE.w / 2;
+    const y = (c.y ?? 0.3) * QUADRANT_SIZE + CARD_SIZE.h / 2;
+    c.wx = Math.round(left ? x - QUADRANT_SIZE : x);
+    c.wy = Math.round(top ? y - QUADRANT_SIZE : y);
+  }
   return doc;
 }
+
+/** The SOAR canvas: a quadrant's usual reach, and a card's size, in canvas units. */
+export const QUADRANT_SIZE = 1000;
+export const CARD_SIZE = { w: 200, h: 110 };
+
+/** Which quadrant a point on the SOAR canvas is in. */
+export const quadrantAt = (wx, wy) => (wy < 0 ? (wx < 0 ? 's' : 'o') : (wx < 0 ? 'a' : 'r'));
+
+/** How important a card reads, from 0 (far out) to 1 (at the centre). */
+export const closeness = (c) => Math.max(0, Math.min(1, 1 - (Math.hypot(c.wx, c.wy) - 160) / 1000));
+/** Its border: 5px at the centre, thinning to 1px far out. */
+export const borderFor = (c) => Math.round((1 + 4 * closeness(c)) * 2) / 2;
 
 /** Ops that stamp the time, so merges know which change is newer. */
 export const studioOps = {
@@ -116,8 +141,9 @@ export function blockLabel(doc, block) {
 /** Can a wire go from one block to another? Ideas feed goals; goals feed objectives. */
 export function canWire(from, to) {
   if (!from || !to || from.id === to.id) return false;
-  if (to.kind === 'goal') return ['card', 'asset', 'context', 'result'].includes(from.kind);
+  if (to.kind === 'goal') return ['card', 'asset', 'context', 'result', 'workplan'].includes(from.kind);
   if (to.kind === 'objective') return ['card', 'asset', 'context', 'result', 'goal'].includes(from.kind);
+  if (to.kind === 'plan') return from.kind === 'objective';
   return false;
 }
 
@@ -155,7 +181,8 @@ export function sendToPlan(doc, strategy, planId) {
     const notes = notesFor(b);
     if (existing) {
       const patch = { title: b.title };
-      if (existing.parentId !== parentId && parentId) patch.parentId = parentId;
+      // Move it only if it isn't already somewhere under its new parent (an objective in a sub-plan stays there).
+      if (parentId && !isUnder(nodes, existing.id, parentId)) patch.parentId = parentId;
       if (notes && !existing.notes) patch.notes = notes;
       const measures = measuresFor(b, existing);
       if (measures) patch.measures = measures;
@@ -172,13 +199,24 @@ export function sendToPlan(doc, strategy, planId) {
     made++;
     return op.id;
   };
+  for (const pb of blocks.filter((b) => b.kind === 'plan' && b.strategyId === planId && nodes[planId])) {
+    if (pb.title && pb.title !== nodes[planId].title) { sOps.push(strategyOps.update(planId, { title: pb.title })); updated++; }
+  }
   for (const ob of blocks.filter((b) => b.kind === 'objective')) {
     const objId = place(ob, 'objective', planId);
-    for (const g of into(ob.id).filter((x) => x.kind === 'goal')) place(g, 'goal', objId);
+    for (const g of into(ob.id).filter((x) => x.kind === 'goal')) {
+      const goalId = place(g, 'goal', objId);
+      for (const w of into(g.id).filter((x) => x.kind === 'workplan')) place(w, 'workplan', goalId);
+    }
   }
   const loose = blocks.filter((b) => b.kind === 'goal' && !wires.some((w) => w.from === b.id && byId[w.to]?.kind === 'objective')).length;
   return { strategyOps: sOps, studioOps: tOps, made, updated, loose };
 }
+
+const isUnder = (nodes, id, ancestorId) => {
+  for (let n = nodes[id]; n?.parentId; n = nodes[n.parentId]) if (n.parentId === ancestorId) return true;
+  return false;
+};
 
 /** The example org's planning for its long-range plan: a SOAR in progress. */
 export function seedStudio(strategy, { staff = [] } = {}) {
@@ -207,7 +245,11 @@ export function seedStudio(strategy, { staff = [] } = {}) {
   };
   for (const [q, list] of Object.entries(cards)) list.forEach((text, i) => {
     const id = `card-${q}${i + 1}`;
-    doc.cards[id] = { id, planId, quadrant: q, text, detail: '', x: 0.06 + (i % 2) * 0.47, y: 0.12 + Math.floor(i / 2) * 0.42, by: who(i), votes: staff.slice(0, (5 - i) % 4), assets: [], at };
+    // Spread out from the centre: the first (most important) cards closest in.
+    const r = 280 + i * 210;
+    const angle = ((18 + ((i * 29) % 54)) * Math.PI) / 180;
+    const [sx, sy] = [q === 's' || q === 'a' ? -1 : 1, q === 's' || q === 'o' ? -1 : 1];
+    doc.cards[id] = { id, planId, quadrant: q, text, detail: '', wx: Math.round(sx * r * Math.cos(angle)), wy: Math.round(sy * r * Math.sin(angle)), by: who(i), votes: staff.slice(0, (5 - i) % 4), assets: [], at };
   });
   doc.cards['card-s1'].assets = [{ id: 'as-seed-1', kind: 'actor', mapId: 'map-ecosystem', ref: 'actor-universities', label: 'University & college partners' }];
   doc.cards['card-o1'].assets = [{ id: 'as-seed-2', kind: 'actor', mapId: 'map-ecosystem', ref: 'actor-indig-comm', label: 'Indigenous communities' }];
@@ -229,4 +271,65 @@ export function seedStudio(strategy, { staff = [] } = {}) {
   [['bl-1', 'bl-5'], ['bl-2', 'bl-5'], ['bl-3', 'bl-5'], ['bl-4', 'bl-5'], ['bl-5', 'bl-6'], ['bl-7', 'bl-8'], ['bl-8', 'bl-6']]
     .forEach(([from, to], i) => { doc.wires[`wi-${i + 1}`] = { id: `wi-${i + 1}`, planId, from, to, at }; });
   return doc;
+}
+
+/**
+ * Put the plan as it stands in Strategy & Work onto the Assemble canvas:
+ * the plan, its objectives, their goals and the goals' workplans, wired
+ * together, leaving out anything already there. Returns studio ops.
+ */
+export function bringInPlan(doc, strategy, planId) {
+  const blocks = ofPlan(doc, 'blocks', planId);
+  const onCanvas = Object.fromEntries(blocks.filter((b) => b.strategyId).map((b) => [b.strategyId, b.id]));
+  const wired = new Set(ofPlan(doc, 'wires', planId).map((w) => `${w.from}>${w.to}`));
+  const top = blocks.reduce((m, b) => Math.max(m, b.y + 130), 30);
+  const ops = [];
+  const rows = { workplan: top, goal: top, objective: top, plan: top };
+  const X = { workplan: 40, goal: 400, objective: 760, plan: 1120 };
+  const put = (n, kind) => {
+    if (onCanvas[n.id]) return onCanvas[n.id];
+    const op = studioOps.add('blocks', { planId, kind, ref: null, title: n.title, strategyId: n.id, x: X[kind], y: rows[kind] });
+    rows[kind] += kind === 'workplan' ? 135 : 125;
+    ops.push(op);
+    onCanvas[n.id] = op.id;
+    return op.id;
+  };
+  const wire = (from, to) => {
+    if (wired.has(`${from}>${to}`)) return;
+    wired.add(`${from}>${to}`);
+    ops.push(studioOps.add('wires', { planId, from, to }));
+  };
+  const plan = strategy.nodes[planId];
+  if (!plan) return ops;
+  const planBlock = put(plan, 'plan');
+  // Objectives in sub-plans (a year-one plan under a five-year plan) count as the plan's too.
+  for (const o of descendants(strategy, planId).filter((n) => n.type === 'objective')) {
+    const ob = put(o, 'objective');
+    wire(ob, planBlock);
+    for (const g of childrenOf(strategy, o.id).filter((n) => n.type === 'goal')) {
+      rows.goal = Math.max(rows.goal, rows.workplan);
+      const gb = put(g, 'goal');
+      wire(gb, ob);
+      for (const w of childrenOf(strategy, g.id).filter((n) => n.type === 'workplan')) wire(put(w, 'workplan'), gb);
+    }
+    rows.objective = Math.max(rows.objective, rows.goal);
+  }
+  return ops;
+}
+
+/** A free spot for a new card in a quadrant of the SOAR canvas, as near the centre as there's room. */
+export function freeSpot(doc, planId, q, near = null) {
+  const cards = ofPlan(doc, 'cards', planId);
+  const [sx, sy] = [q === 's' || q === 'a' ? -1 : 1, q === 's' || q === 'o' ? -1 : 1];
+  const fits = (x, y) => quadrantAt(x, y) === q && Math.abs(x) > CARD_SIZE.w / 2 + 10 && Math.abs(y) > CARD_SIZE.h / 2 + 10
+    && cards.every((c) => Math.abs(c.wx - x) > CARD_SIZE.w + 16 || Math.abs(c.wy - y) > CARD_SIZE.h + 16);
+  const start = near ?? { x: sx * 420, y: sy * 320 };
+  for (let i = 0; i < 600; i++) {
+    const r = i * 9;
+    const t = i * 0.5;
+    const x = Math.round(start.x + r * Math.cos(t));
+    const y = Math.round(start.y + r * Math.sin(t) * 0.7);
+    if (fits(x, y)) return { wx: x, wy: y };
+  }
+  return { wx: start.x, wy: start.y };
 }

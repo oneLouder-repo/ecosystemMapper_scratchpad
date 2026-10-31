@@ -1019,15 +1019,9 @@ body.studio-page { height: 100vh; display: flex; flex-direction: column; overflo
 .team-name { flex: 1; display: flex; flex-direction: column; font-size: 14px; }
 
 .soar-help { margin: 0 0 10px; }
-.soar-board { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(340px, 42vh) minmax(340px, 42vh); gap: 10px; }
-.soar-q { position: relative; border: 1px solid color-mix(in oklab, var(--q) 35%, var(--line)); border-radius: var(--radius-box); background: color-mix(in oklab, var(--q) 6%, var(--panel)); overflow: hidden; }
-.soar-q.over { box-shadow: inset 0 0 0 2px var(--q); }
-.soar-q-head { position: absolute; inset: 0 0 auto 0; display: flex; align-items: center; gap: 10px; padding: 8px 10px; z-index: 1; background: color-mix(in oklab, var(--q) 10%, var(--panel)); border-bottom: 1px solid color-mix(in oklab, var(--q) 25%, var(--line)); }
-.soar-q-head small { display: block; color: var(--muted); font-size: 12px; }
 .soar-letter { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 8px; background: var(--q); color: #fff; font-weight: 800; font-size: 17px; }
 .soar-letter.big { width: 48px; height: 48px; font-size: 26px; border-radius: 12px; }
 .soar-card { position: absolute; width: 42%; background: color-mix(in oklab, var(--q, #888) 16%, #fffdf3); border: 1px solid color-mix(in oklab, var(--q, #888) 30%, transparent); border-radius: 4px; box-shadow: 0 2px 6px rgb(0 0 0 / 0.1); display: flex; flex-direction: column; color: #1d2230; z-index: 2; }
-.soar-card.dragging { z-index: 1000; box-shadow: 0 10px 24px rgb(0 0 0 / 0.25); transform: rotate(-1.5deg); }
 .soar-card textarea { border: 0; background: transparent; resize: none; padding: 2px 8px 8px; font-size: 13px; line-height: 1.35; width: 100%; color: inherit; }
 .soar-card textarea:focus { outline: none; }
 .soar-card:focus-within { box-shadow: 0 0 0 2px var(--q, var(--accent)); }
@@ -1079,14 +1073,17 @@ body.studio-page { height: 100vh; display: flex; flex-direction: column; overflo
 .port-demo.out { background: var(--ink); }
 .assemble-body { flex: 1; min-height: 420px; display: grid; grid-template-columns: 250px minmax(0, 1fr); border: 1px solid var(--line); border-radius: var(--radius-box); overflow: hidden; }
 .patch-bins { overflow: auto; background: var(--panel); border-right: 1px solid var(--line); padding: 10px; }
-.bin-add { display: flex; gap: 6px; margin-bottom: 10px; }
+.bin-add { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.bin-add-wp { --btn-color: #2a9d8f; color: #2a9d8f; border-color: #2a9d8f; }
+.bin-add-plan { width: 100%; }
 .bin { margin-bottom: 8px; }
 .bin summary { cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); display: flex; align-items: center; gap: 6px; padding: 4px 0; }
 .bin ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .bin-chip { display: flex; width: 100%; text-align: left; font-size: 12.5px; line-height: 1.3; padding: 6px 8px !important; border-radius: 6px !important; background: color-mix(in oklab, var(--c, #888) 10%, var(--panel)) !important; border-left: 4px solid var(--c, #888) !important; cursor: grab; }
 .bin-chip.used { opacity: 0.55; }
 .bin-chip small { display: block; color: var(--muted); }
-.patch-scroll { overflow: auto; background-color: var(--bg); background-image: radial-gradient(color-mix(in oklab, var(--ink) 18%, transparent) 1px, transparent 1px); background-size: 20px 20px; }
+.patch-vp { min-height: 0; }
+.patch-vp .patch { background: color-mix(in oklab, var(--panel) 35%, transparent); outline: 1px dashed var(--line); border-radius: 8px; }
 .patch { position: relative; }
 .patch-wires { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
 .patch-wire { pointer-events: auto; cursor: pointer; }
@@ -1097,6 +1094,10 @@ body.studio-page { height: 100vh; display: flex; flex-direction: column; overflo
 .wire-remove { position: absolute; transform: translate(-50%, -50%); z-index: 6; }
 .block { position: absolute; width: 190px; background: var(--panel); border: 1px solid color-mix(in oklab, var(--c) 45%, var(--line)); border-left: 5px solid var(--c); border-radius: 6px; box-shadow: 0 1px 3px rgb(0 0 0 / 0.08); font-size: 13px; z-index: 2; }
 .block.big { width: 230px; border-left-width: 1px; border-top: 6px solid var(--c); }
+.block.kind-plan { width: 250px; background: color-mix(in oklab, var(--c) 8%, var(--panel)); border-top-width: 8px; }
+.block.kind-workplan { width: 210px; }
+.block-foot { display: flex; justify-content: space-between; gap: 6px; padding: 0 8px 6px; font-size: 11px; color: var(--muted); }
+.block-foot .link { color: var(--c); font-weight: 600; text-decoration: none; }
 .block.kind-objective { background: color-mix(in oklab, var(--c) 6%, var(--panel)); }
 .block.dragging { z-index: 10; box-shadow: 0 8px 20px rgb(0 0 0 / 0.2); }
 .patching .block:not(.can-take) { opacity: 0.45; }
@@ -1114,7 +1115,6 @@ body.studio-page { height: 100vh; display: flex; flex-direction: column; overflo
 .outlet { right: -8px; background: var(--c, var(--ink)); border-color: var(--panel); box-shadow: 0 0 0 1px var(--c, var(--ink)); cursor: crosshair; touch-action: none; }
 .outlet:hover { transform: scale(1.3); }
 @media (max-width: 900px) {
-  .soar-board { grid-template-columns: 1fr; grid-template-rows: repeat(4, 360px); }
   .framework-fields, .plan-fields { grid-template-columns: 1fr; }
   .assemble-body { grid-template-columns: 1fr; grid-template-rows: 200px 1fr; }
   .results-grid { grid-template-columns: 1fr; grid-template-rows: none; background: none; }
@@ -1131,3 +1131,30 @@ body.studio-page { height: 100vh; display: flex; flex-direction: column; overflo
 .result-title { min-height: 2.6em; color: var(--ink); }
 @media (max-width: 1100px) { .plan-home { grid-template-columns: 1fr; } .plan-home > :first-child { grid-row: auto; } }
 .studio-main .card { padding: 0; gap: 0; }
+
+/* Studio canvases (studio/Viewport.js): the SOAR board and Assemble. */
+.vp { position: relative; overflow: hidden; background-color: var(--bg); background-image: radial-gradient(color-mix(in oklab, var(--ink) 16%, transparent) 1px, transparent 1px); touch-action: none; cursor: grab; outline: none; }
+.vp.panning { cursor: grabbing; }
+.vp-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.vp-controls { position: absolute; right: 12px; bottom: 12px; z-index: 20; box-shadow: 0 2px 8px rgb(0 0 0 / 0.12); }
+.vp-zoom-btn { min-width: 58px; font-variant-numeric: tabular-nums; }
+.studio-page-body.tab-soar { max-width: none; height: 100%; display: flex; flex-direction: column; padding-bottom: 16px; }
+.soar-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.soar-canvas { flex: 1; min-height: 480px; border: 1px solid var(--line); border-radius: var(--radius-box); background-image: none; }
+.soar-zone { position: absolute; background: color-mix(in oklab, var(--q) 7%, var(--panel)); }
+.soar-ring { position: absolute; border-radius: 50%; border: 2px dashed color-mix(in oklab, var(--ink) 16%, transparent); }
+.soar-axis { position: absolute; background: color-mix(in oklab, var(--ink) 30%, transparent); }
+.soar-axis.x { left: -6000px; top: -1px; width: 12000px; height: 2px; }
+.soar-axis.y { top: -6000px; left: -1px; height: 12000px; width: 2px; }
+.soar-centre { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); background: var(--panel); border: 2px solid var(--ink); border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 700; white-space: nowrap; z-index: 1; }
+.soar-label { position: absolute; display: flex; align-items: center; gap: 12px; width: 360px; padding: 10px 12px; border-radius: 10px; background: color-mix(in oklab, var(--q) 14%, var(--panel)); border: 1px solid color-mix(in oklab, var(--q) 35%, transparent); z-index: 1; }
+.soar-label strong { display: block; font-size: 20px; color: var(--q); }
+.soar-label small { display: block; color: var(--muted); font-size: 12px; line-height: 1.35; }
+.soar-label .btn { margin-left: auto; flex: none; cursor: pointer; }
+.soar-label.q-s { right: 1240px; bottom: 1060px; }
+.soar-label.q-o { left: 1240px; bottom: 1060px; }
+.soar-label.q-a { right: 1240px; top: 1060px; }
+.soar-label.q-r { left: 1240px; top: 1060px; }
+.soar-canvas .soar-card { position: absolute; border-style: solid; border-color: var(--q); border-radius: 6px; background: color-mix(in oklab, var(--q) 14%, #fffdf3); box-shadow: 0 2px 6px rgb(0 0 0 / 0.12); cursor: grab; z-index: 2; transform: none; }
+.soar-canvas .soar-card.dragging { cursor: grabbing; z-index: 50; box-shadow: 0 12px 28px rgb(0 0 0 / 0.25); }
+.soar-canvas .soar-card textarea { cursor: text; }
