@@ -4,6 +4,7 @@
  * then add an entry here; it shows up on the dashboard, in the header and
  * in Organisation settings, where an org can switch it off.
  *
+ * `short` is its label in the header, beside its icon.
  * `tone` is the plugin's own colour: its icon in the header, and the
  * buttons, links and highlights on its pages.
  * `core: true` plugins can't be switched off.
@@ -15,6 +16,7 @@ const count = (o) => Object.keys(o ?? {}).length;
 export const PLUGINS = [
   {
     id: 'mapper',
+    short: 'Mapper',
     tone: '#13897a',
     name: 'Ecosystem Mapper',
     href: 'mapper.html',
@@ -27,6 +29,7 @@ export const PLUGINS = [
   },
   {
     id: 'strategy',
+    short: 'Strategy',
     tone: '#3d63dd',
     name: 'Strategy & Work',
     href: 'strategy.html',
@@ -40,6 +43,7 @@ export const PLUGINS = [
   },
   {
     id: 'studio',
+    short: 'Studio',
     tone: '#7a4cc4',
     name: 'Planning Studio',
     href: 'studio.html',
@@ -49,8 +53,9 @@ export const PLUGINS = [
   },
   {
     id: 'palette',
+    short: 'Data',
     tone: '#c25a14',
-    name: 'Workbench',
+    name: 'Data Workbench',
     href: 'palette.html',
     icon: 'workbench',
     blurb: 'Mini-tools for bringing others into the data dialogue: design dashboards from your strategy, keep program data current, and publish to public sites.',
@@ -61,6 +66,7 @@ export const PLUGINS = [
   },
   {
     id: 'podcasts',
+    short: 'Podcasts',
     tone: '#c03a64',
     name: 'Podcasts',
     href: 'podcasts.html',
@@ -73,6 +79,7 @@ export const PLUGINS = [
   },
   {
     id: 'pages',
+    short: 'Sites',
     tone: '#3a8a3f',
     name: 'Sites & Pages',
     href: 'pages.html',

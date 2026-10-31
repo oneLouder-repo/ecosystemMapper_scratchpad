@@ -4,7 +4,7 @@ import { Shell, Avatar } from '../ui/Shell.js';
 import { SideNav, swapSide } from '../ui/SideNav.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp, col } from '../core/collections.js';
-import { autosaveDoc, isHosted } from '../platform/storage.js';
+import { autosaveDoc } from '../platform/storage.js';
 import { loadOrg, loadPodcasts } from '../platform/docs.js';
 import { staffList } from '../platform/org.js';
 import {
@@ -123,13 +123,6 @@ function Station() {
           : h('span', { class: 'muted' }, 'Pick a site to give the station a public page.'),
         stationSite()?.visibility === 'private' && h('span', { class: 'muted' }, 'That site is private. Make it public in Organisation settings.'))),
 
-    h('h2', {}, 'How the station looks'),
-    h('p', { class: 'muted' }, 'On top of your organisation’s colour palette and shape (Organisation → Public sites and theme).'),
-    h('div', { class: 'look-grid' },
-      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Player'), Segmented('Player', LOOKS.player, st.look.player, (player) => setLook({ player }))),
-      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Cover art'), Segmented('Cover art', LOOKS.art, st.look.art, (art) => setLook({ art }))),
-      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Top of the page'), Segmented('Top of the page', LOOKS.hero, st.look.hero, (hero) => setLook({ hero })))),
-
     h('h2', {}, 'Shows'),
     h('p', { class: 'muted' }, 'Featured shows lead the station page, in this order. Every show’s past episodes stay in the archive.'),
     shows.length
@@ -155,13 +148,13 @@ function Station() {
         h('h2', {}, 'Coming up and drafts'),
         upcoming.length ? h('ul', { class: 'episode-list' }, upcoming.map((e) => EpisodeRow(e, { showShow: true }))) : h('p', { class: 'empty' }, 'Nothing scheduled.'))),
 
-    h('section', { class: 'panel castopod-note' },
-      h('h2', {}, 'Hosting'),
-      isHosted()
-        ? h('p', {}, 'Uploads are stored on your Dashi server, which streams them with range requests so listeners can skip ahead. Episodes stay private until they are published. The fields follow ',
-          h('a', { href: 'https://castopod.org', target: '_blank', rel: 'noopener' }, 'Castopod'), '’s model, so moving to a Castopod server later would not mean reshaping your data.')
-        : h('p', {}, 'In this local preview, uploads are kept in this browser. On a Dashi server, the server stores the audio, serves it with range requests so listeners can skip ahead, and publishes each show’s RSS feed for podcast apps. The fields follow ',
-        h('a', { href: 'https://castopod.org', target: '_blank', rel: 'noopener' }, 'Castopod'), '’s model, so moving to a Castopod server later would not mean reshaping your data.')),
+
+    h('h2', {}, 'How the station looks'),
+    h('p', { class: 'muted' }, 'On top of your organisation’s colour palette and shape (Organisation → Public sites and theme).'),
+    h('div', { class: 'look-grid' },
+      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Player'), Segmented('Player', LOOKS.player, st.look.player, (player) => setLook({ player }))),
+      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Cover art'), Segmented('Cover art', LOOKS.art, st.look.art, (art) => setLook({ art }))),
+      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Top of the page'), Segmented('Top of the page', LOOKS.hero, st.look.hero, (hero) => setLook({ hero })))),
   );
 }
 

@@ -127,9 +127,9 @@ The fields follow [Castopod](https://castopod.org)'s model, so moving to a Casto
         {
           id: 'making-a-dashboard',
           title: 'Making a dashboard',
-          body: `Dashboards live in the **Workbench**. They are built from the measures you give objectives and goals in Strategy & Work.
+          body: `Dashboards live in the **Data Workbench**. They are built from the measures you give objectives and goals in Strategy & Work.
 
-1. In the Workbench, open **Dashboards**.
+1. In the Data Workbench, open **Dashboards**.
 2. Pick an objective or goal under **Start from** and press **Create dashboard**. You get a widget for each of its measures. Or start blank.
 3. Add, remove and reorder widgets: numbers (KPIs), lines over time, progress against targets, task progress.
 4. Press **Play** to watch the year change month by month.`,
@@ -144,7 +144,7 @@ The **Strategic data** tab in Strategy & Work shows every measure's latest value
         {
           id: 'sharing',
           title: 'Sharing and data postcards',
-          body: `A dashboard is **private** (staff and board) until you make it **public** and pick a site for it. The Workbench's **Publishing** mini-tool shows what each site carries.
+          body: `A dashboard is **private** (staff and board) until you make it **public** and pick a site for it. The Data Workbench's **Publishing** mini-tool shows what each site carries.
 
 **Data postcards** turn one measure into a picture in your colours, with alt text, for newsletters, social posts and slides. Pick a measure, add a headline, and download the PNG.`,
         },
@@ -247,7 +247,7 @@ Plugins never edit a document directly. They send small operations (add, update,
           id: 'extending',
           title: 'Extending Dashi',
           body: `- **A plugin**: make a page and its module, then add an entry to \`src/plugins.js\`. It appears on the dashboard, in the header and in Organisation → Plugins.
-- **A Workbench mini-tool**: write a function that returns its page and add it to \`MINI_TOOLS\` in \`src/palette/main.js\`.
+- **A Data Workbench mini-tool**: write a function that returns its page and add it to \`MINI_TOOLS\` in \`src/palette/main.js\`.
 - **A lens**: add a JSON file to \`src/lenses/\` with regions on the 0 to 1 depth scale. It shows up in the lens diagram by itself.
 - **A palette**: add a DaisyUI theme to \`src/platform/themes.js\`.
 - **A help page**: platform admins can edit this library in Help. Press **Edit help**.

@@ -104,7 +104,7 @@ function Sites() {
           h('span', { class: `badge badge-sm ${s.visibility === 'public' ? 'badge-success' : 'badge-ghost'}` }, s.visibility),
           s.url && h('small', { class: 'muted' }, s.url)),
         h('ul', { class: 'site-contents' },
-          row('chart', 'Dashboards', dashes.length, 'palette.html#publish', 'Workbench'),
+          row('chart', 'Dashboards', dashes.length, 'palette.html#publish', 'Data Workbench'),
           row('doc', 'Pages in the menu', c.nav.length),
           row('news', 'News articles', c.articles.length),
           drafts > 0 && row('doc', 'Drafts and scheduled', drafts),

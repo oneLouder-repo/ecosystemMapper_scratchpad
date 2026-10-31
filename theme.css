@@ -61,7 +61,10 @@ h1, h2, h3, .card-title { font-weight: 750; letter-spacing: -0.005em; }
 .shell-link.active { background: var(--color-base-100); color: var(--ink) !important; box-shadow: var(--card-shadow); }
 .shell-link.active .icon { background: var(--tone); color: #fff; }
 .shell-user summary { color: var(--ink); font-weight: 600; }
-@media (max-width: 1480px) { .shell-link { padding: 4px; } }
+/* A short label beside each icon; on narrow screens, icons only. */
+.shell-nav .shell-link span { display: inline; font-size: 13px; }
+.shell-link { padding: 4px 11px 4px 4px; gap: 7px; }
+@media (max-width: 1100px) { .shell-nav .shell-link span, .shell-user-name { display: none; } .shell-link { padding: 4px; } }
 .logo-initials { background: var(--color-neutral); color: #fff; }
 
 /* Content on floating white panels. */
@@ -129,3 +132,24 @@ body.login-page, body.platform-page { background: var(--color-base-200); }
   .topbar-title { max-width: 14ch; }
   #topbar { padding: 0 10px; }
 }
+
+/* Strategy & Work's tree: bigger, easier collapse and expand arrows. */
+.tree-row .caret { width: 26px; height: 26px; flex: none; display: inline-grid; place-items: center; font-size: 17px; line-height: 1; border-radius: 6px; color: var(--muted); }
+.tree-row button.caret:hover { background: color-mix(in oklab, var(--accent) 12%, transparent); color: var(--accent); }
+
+/* Badges and pills: text centred in the pill, the same padding top and bottom. */
+.badge { display: inline-flex; align-items: center; justify-content: center; line-height: 1; padding-block: 0; height: auto; min-height: 1.25rem; padding-inline: 0.5rem; vertical-align: middle; border-radius: 999px; font-weight: 650; }
+.badge-xs { min-height: 1rem; font-size: 0.66rem; padding-inline: 0.4rem; }
+.badge-sm { min-height: 1.15rem; font-size: 0.72rem; }
+.side-menu .badge { flex: none; margin-left: auto; }
+
+/* Dashboard: each plugin card wears its colour along the top. */
+.plugin-card { position: relative; overflow: hidden; border-top: 0; }
+.plugin-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 5px; background: var(--tone); }
+.plugin-card .stat-line { color: color-mix(in oklab, var(--tone) 70%, var(--ink)); font-weight: 650; }
+
+/* The saved / not saved note, bottom left. */
+.save-toast { position: fixed; left: 0; bottom: 0; right: auto; top: auto; width: auto; max-width: min(460px, 100vw); display: flex; background: none; z-index: 1000; padding: 14px; transition: opacity 0.25s, transform 0.25s; }
+.save-toast.leaving { opacity: 0; transform: translateY(6px); }
+.save-toast .alert { padding: 8px 14px; gap: 8px; font-size: 13.5px; font-weight: 650; box-shadow: var(--card-shadow); border-radius: 10px; }
+.tree-row .caret .icon { stroke-width: 2.2; }

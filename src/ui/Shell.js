@@ -13,9 +13,9 @@ import { orgList, openOrg, createOrg, currentUser, signInAs, can, signOut, signe
 export function Shell(el, { current, org }) {
   const me = currentUser(org);
   const role = ROLES.find((r) => r.id === me?.roleId);
-  const link = (id, href, label, iconName) =>
+  const link = (id, href, label, iconName, short = label) =>
     h('a', { href, title: label, class: `shell-link${id === current ? ' active' : ''}`, style: `--tone:${toneFor(id)}`, 'aria-current': id === current ? 'page' : null },
-      icon(iconName, 18), h('span', {}, label));
+      icon(iconName, 18), h('span', {}, short));
   const account = signedInUser();
 
   // The page takes its plugin's colour (buttons, links, highlights).
@@ -39,8 +39,8 @@ export function Shell(el, { current, org }) {
             } }, icon('plus', 16), 'New organisation…'))),
         h('li', {}, h('a', { href: 'org.html' }, icon('settings', 16), 'Organisation settings')))),
     h('nav', { class: 'shell-nav', 'aria-label': 'Plugins' },
-      link('home', 'index.html', 'Dashboard', 'home'),
-      enabledPlugins(org).filter((p) => p.nav !== false).map((p) => link(p.id, p.href, p.name, p.icon)),
+      link('home', 'index.html', 'Dashboard', 'home', 'Home'),
+      enabledPlugins(org).filter((p) => p.nav !== false).map((p) => link(p.id, p.href, p.name, p.icon, p.short)),
     ),
     link('help', 'help.html', 'Help', 'help'),
     h('details', { class: 'dropdown dropdown-end shell-user' },
@@ -56,13 +56,9 @@ export function Shell(el, { current, org }) {
               try { await signInAs(org.id, s.id); location.reload(); } catch (err) { alert(err.message); }
             } }, Avatar(s, 20), s.name)))])),
   );
-  // Tell people when a save didn't reach the server.
-  window.addEventListener('toolbox:save-failed', (e) => {
-    document.querySelector('.save-warning')?.remove();
-    const note = h('div', { class: 'alert alert-error save-warning', role: 'alert' }, `Not saved: ${e.detail.why}`);
-    document.body.append(note);
-    setTimeout(() => note.remove(), 6000);
-  });
+  // A small note in the bottom-left corner when a change is saved, or when it couldn't be.
+  window.addEventListener('toolbox:saved', () => toast('Saved', 'ok'));
+  window.addEventListener('toolbox:save-failed', (e) => toast(`Not saved: ${e.detail.why}`, 'error'));
   // Close a menu when clicking elsewhere.
   document.addEventListener('click', (e) => {
     for (const d of el.querySelectorAll('details[open]')) if (!d.contains(e.target)) d.open = false;
@@ -83,4 +79,21 @@ export function Logo(org, size = 28) {
   return org.logo
     ? h('img', { class: 'logo-img', src: org.logo, alt: `${org.name} logo`, style })
     : h('span', { class: 'logo-initials', style, 'aria-hidden': 'true' }, initials(org.name));
+}
+
+/** Show a short note in the bottom-left corner. A failure stays longer, and a "Saved" never covers it. */
+let toastTimer;
+export function toast(text, kind = 'ok') {
+  let box = document.querySelector('.save-toast');
+  if (box?.dataset.kind === 'error' && kind === 'ok') return;
+  if (!box) {
+    box = h('div', { class: 'toast toast-start toast-bottom save-toast', role: kind === 'error' ? 'alert' : 'status', 'aria-live': 'polite' });
+    document.body.append(box);
+  }
+  box.dataset.kind = kind;
+  box.replaceChildren(h('div', { class: `alert alert-soft ${kind === 'error' ? 'alert-error' : 'alert-success'}` },
+    icon(kind === 'error' ? 'close' : 'check', 16), h('span', {}, text)));
+  box.classList.remove('leaving');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { box.classList.add('leaving'); setTimeout(() => box.remove(), 250); }, kind === 'error' ? 7000 : 1600);
 }

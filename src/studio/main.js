@@ -203,9 +203,11 @@ document.addEventListener('keydown', (e) => {
     try { e.shiftKey ? store.redo() : store.undo(); } catch { /* someone else removed what that undo touches */ }
   }
 });
+// Open on the plan's home: the studio's plan if it has one, otherwise the first plan.
 if (!location.hash) {
-  const first = plansOf(strategy.doc).find((p) => store.doc.plans[p.id]);
-  if (first) history.replaceState(null, '', `#${first.id}/soar`);
+  const plans = plansOf(strategy.doc);
+  const first = plans.find((p) => store.doc.plans[p.id]) ?? plans[0];
+  if (first) history.replaceState(null, '', `#${first.id}`);
 }
 render();
 window.studio = ctx;

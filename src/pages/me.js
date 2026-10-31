@@ -103,7 +103,7 @@ function render() {
             h('li', { class: 'asset' }, icon('chart', 18),
               h('div', { class: 'asset-text' }, h('a', { href: `palette.html#${d.id}` }, d.title), h('small', {}, `${d.widgets.length} widgets`)),
               h('span', { class: `badge ${d.visibility}` }, d.visibility))))
-        : empty('Make one from an objective in Strategy & Work, or in the Workbench.')),
+        : empty('Make one from an objective in Strategy & Work, or in the Data Workbench.')),
 
       section('My ecosystem maps', myMaps.length, myMaps.length
         ? h('ul', { class: 'asset-list' }, myMaps.map((m) =>

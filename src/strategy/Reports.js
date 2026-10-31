@@ -49,7 +49,7 @@ export function StrategicData(ctx) {
   const withData = measures.filter((m) => ctx.data.series[m.id]?.points.length).length;
 
   return h('div', {},
-    h('p', { class: 'lede' }, `${measures.length} measures across the framework, ${withData} with program data. Values update from the Workbench’s Program data tool.`),
+    h('p', { class: 'lede' }, `${measures.length} measures across the framework, ${withData} with program data. Values update from the Data Workbench’s Program data tool.`),
     [...groups.values()].map(({ objective, rows }) => h('section', { class: 'report-group' },
       h('h2', {}, objective ? h('a', { href: `#${objective.id}` }, objective.title) : 'Other measures'),
       h('div', { class: 'table-scroll' }, h('table', { class: 'table table-sm report-table' },

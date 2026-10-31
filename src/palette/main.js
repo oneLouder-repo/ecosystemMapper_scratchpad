@@ -30,7 +30,7 @@ import { StoriesTool } from './StoriesTool.js';
  * #data, #postcards, #impact, #stories, #podcast, #publish.
  */
 const MINI_TOOLS = [
-  { id: 'home', name: 'Overview', blurb: 'Everything in the Workbench', icon: 'workbench', render: HomeTool },
+  { id: 'home', name: 'Overview', blurb: 'Everything in the Data Workbench', icon: 'workbench', render: HomeTool },
   { id: 'dashboards', name: 'Dashboards', blurb: 'Design private and public dashboards', about: 'Build dashboards from your strategy measures: for staff, for the board, or for a public site.', icon: 'chart', render: DashboardsTool },
   { id: 'data', name: 'Program data', blurb: 'The numbers behind the measures', about: 'Keep the monthly numbers behind each measure current. Every dashboard and site using them updates.', icon: 'timeline', render: DataTool },
   { id: 'postcards', name: 'Data postcards', blurb: 'Share one number, beautifully', about: 'Turn a measure into a shareable picture in your colours, with alt text, for newsletters, social posts and slides.', icon: 'media', render: PostcardTool },
@@ -91,8 +91,8 @@ function render() {
   const route = ctx.route;
   const dashList = Object.values(dashboards.doc.dashboards);
   const tool = tools.find((t) => t.id === route) ?? (dashboards.doc.dashboards[route] ? tools.find((t) => t.id === 'dashboards') : tools[0]);
-  const next = SideNav({ label: 'Workbench', sections: [
-    { title: 'Workbench', items: [
+  const next = SideNav({ label: 'Data Workbench', sections: [
+    { title: 'Data Workbench', items: [
       ...tools.map((t) => ({ label: t.name, sub: t.blurb, icon: t.icon, href: `#${t.id}`, on: t === tool, badge: t.isNew ? 'New' : null, badgeClass: 'badge-primary badge-soft' })),
       ...COMING.map((t) => ({ label: t.name, sub: 'Coming soon', icon: 'plus', disabled: true, title: t.blurb })),
     ] },

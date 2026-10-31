@@ -86,6 +86,7 @@ async function send(name) {
         method: 'PUT', headers: { 'content-type': 'application/json', 'x-toolbox': '1' }, body: JSON.stringify(doc),
       });
       if (!res.ok) saveProblem(name, res.status === 403 ? 'You can’t change this here.' : `The server said ${res.status}.`);
+      else if (job.loud && !job.next) { job.loud = false; saved(name); }
       job.retries = 0;
     } catch (err) {
       console.warn(`Saving ${name}: the request failed`, err);
@@ -109,6 +110,10 @@ if (hosted) window.addEventListener('pagehide', () => {
     fetch(`/api/docs/${encodeURIComponent(name)}`, { method: 'PUT', keepalive: true, headers: { 'content-type': 'application/json', 'x-toolbox': '1' }, body }).catch(() => {});
   }
 });
+/** Tell the page a change was saved (the header shows a short note). */
+function saved(name) {
+  window.dispatchEvent(new CustomEvent('toolbox:saved', { detail: { name } }));
+}
 function saveProblem(name, why) {
   console.warn(`Saving ${name} failed: ${why}`);
   window.dispatchEvent(new CustomEvent('toolbox:save-failed', { detail: { name, why } }));
@@ -119,16 +124,28 @@ export function loadDoc(name, orgId) {
   return readKey(docKey(name, orgId));
 }
 
-export function saveDoc(name, doc, orgId) {
+/**
+ * Save a document. Pages hear 'toolbox:saved' once it's stored, or
+ * 'toolbox:save-failed' if it can't be; `quiet` saves (first-time seeds)
+ * don't announce themselves.
+ */
+export function saveDoc(name, doc, orgId, { quiet = false } = {}) {
   if (hosted) {
     if (orgId && orgId !== activeOrgId) return false;
     cache[name] = structuredClone(doc);
     if (!hosted.canEdit) return false;
-    (sending[name] ??= {}).next = cache[name];
+    const job = (sending[name] ??= {});
+    job.next = cache[name];
+    if (!quiet) job.loud = true;
     send(name);
     return true;
   }
-  return writeKey(docKey(name, orgId), doc);
+  const ok = writeKey(docKey(name, orgId), doc);
+  if (!quiet && inBrowser) {
+    if (ok) saved(name);
+    else saveProblem(name, 'This browser wouldn’t store it (private window, or storage is full). It is kept until you close the page.');
+  }
+  return ok;
 }
 
 /** Remove every document of an org (local only; the server deletes hosted orgs). */
@@ -157,7 +174,7 @@ export function loadOrSeed(name, seed, orgId) {
   const doc = loadDoc(name, orgId);
   if (doc) return doc;
   const fresh = seed();
-  saveDoc(name, fresh, orgId);
+  saveDoc(name, fresh, orgId, { quiet: true });
   return fresh;
 }
 

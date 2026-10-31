@@ -29,7 +29,7 @@ export function loadDashboards() {
   const doc = loadOrSeed('dashboards', () => seedDashboards(loadStrategy()));
   if (doc.calculators && doc.stories) return doc;
   migrateDashboards(doc, seedFor('strategy') ? loadStrategy() : null);
-  saveDoc('dashboards', doc);
+  saveDoc('dashboards', doc, undefined, { quiet: true });
   return doc;
 }
 export const loadPodcasts = () => migratePodcasts(loadOrSeed('podcasts', seedFor('podcasts') ?? blankPodcasts));
