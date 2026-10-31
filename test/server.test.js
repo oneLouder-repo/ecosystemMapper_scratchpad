@@ -316,3 +316,12 @@ test('the security audit is for the platform admin, proves sessions are hashed, 
   assert.equal((await call('localhost', 'POST', '/api/admin/backups', { cookie: admin })).status, 201);
   assert.equal((await call('localhost', 'GET', '/api/admin/backups', { cookie: admin })).json.length, before + 1);
 });
+
+test('hosts can check health, and Caddy can ask which addresses are ours', async () => {
+  const health = await call('anything', 'GET', '/healthz');
+  assert.equal(health.status, 200);
+  assert.equal((await call('dashi', 'GET', '/tls-ask?domain=riverbend.localhost')).status, 200);
+  assert.equal((await call('dashi', 'GET', '/tls-ask?domain=localhost')).status, 200);
+  assert.equal((await call('dashi', 'GET', '/tls-ask?domain=nobody.localhost')).status, 404);
+  assert.equal((await call('dashi', 'GET', '/tls-ask?domain=evil.com')).status, 404);
+});

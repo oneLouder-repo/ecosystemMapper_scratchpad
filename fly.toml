@@ -1,0 +1,37 @@
+# Fly.io: one small machine in Toronto with a disk for the database and audio.
+# First time:  fly launch --no-deploy --copy-config --name <your-app>
+#              fly volumes create dashi_data --region yyz --size 10
+#              fly secrets set BASE_DOMAIN=yourdomain.ca SUPER_ADMIN_EMAIL=you@yourdomain.ca SUPER_ADMIN_PASSWORD='a long passphrase'
+#              fly deploy
+# Every update after that: fly deploy
+app = "dashi"
+primary_region = "yyz"
+
+[env]
+  NODE_ENV = "production"
+  TRUST_PROXY = "true"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Keep it running: live updates and uploads need a server that stays up.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+
+[mounts]
+  source = "dashi_data"
+  destination = "/data"
+  # Fly keeps daily snapshots of the disk; keep two weeks.
+  snapshot_retention = 14
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

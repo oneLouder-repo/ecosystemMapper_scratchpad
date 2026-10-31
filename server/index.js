@@ -43,6 +43,12 @@ export async function start({ port = config.port, quiet = false } = {}) {
       try { db.prepare('SELECT 1').get(); res.writeHead(200, { 'content-type': 'text/plain' }).end('ok'); } catch { res.writeHead(503).end('database unavailable'); }
       return;
     }
+    // Caddy (deploy/Caddyfile) asks before getting a certificate for an address: is it ours?
+    if (req.url.startsWith('/tls-ask?')) {
+      const domain = new URL(req.url, 'http://x').searchParams.get('domain') ?? '';
+      res.writeHead(app.knownHost(domain.toLowerCase()) ? 200 : 404).end();
+      return;
+    }
     app.handle(req, res);
   });
   // Hosts stop the app with SIGTERM when deploying: finish what's in flight, close the database cleanly.

@@ -664,5 +664,5 @@ export function createApp(db) {
     }
   }
 
-  return { handle, createOrg, deleteOrg, ensureUser, syncStaff, writeDoc, readDocs, hostOf };
+  return { handle, createOrg, deleteOrg, ensureUser, syncStaff, writeDoc, readDocs, hostOf, knownHost };
 }
