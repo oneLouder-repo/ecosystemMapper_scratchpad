@@ -92,12 +92,12 @@ export const PLUGINS = [
   },
   {
     id: 'pages',
-    short: 'Sites',
+    short: 'Web views',
     tone: '#3a8a3f',
-    name: 'Sites & Pages',
+    name: 'Web views',
     href: 'pages.html',
-    icon: 'news',
-    blurb: 'Run your public sites: information pages and news articles beside your dashboards and podcast station, with live embeds.',
+    icon: 'globe',
+    blurb: 'Your public face in one place: what visitors see of your dashboards, strategic plan, podcasts, pages and news, site by site.',
     stats: ({ pages }) => {
       const list = Object.values(pages?.pages ?? {});
       return `${list.filter((p) => p.kind === 'page').length} pages · ${list.filter((p) => p.kind === 'article').length} articles · ${list.filter((p) => p.status === 'draft').length} drafts`;

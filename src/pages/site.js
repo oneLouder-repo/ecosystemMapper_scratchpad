@@ -26,7 +26,7 @@ import { today, short } from '../strategy/dates.js';
  *
  *   ?site=x                   home: the site's public dashboards, calculators and stories, latest news, latest episode
  *   ?site=x&story=<id>        a data story (Workbench)
- *   ?site=x&page=<slug>       an information page or article (Sites & Pages plugin)
+ *   ?site=x&page=<slug>       an information page or article (Web views plugin)
  *   ?site=x&view=news         every article, newest first
  *   ?site=x&view=station      the podcast station, if this site hosts it (Podcasts plugin)
  *   ?site=x&show=<id>         a show, by season
