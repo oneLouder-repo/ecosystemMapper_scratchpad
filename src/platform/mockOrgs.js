@@ -14,6 +14,7 @@
  * person, place, title and finding is fictional; references use the DOI
  * prefix 10.5555, which is reserved for examples.
  */
+import { seedPlanDocs } from './plandocs.js';
 import { rng, FIRST, LAST, lorem, loremPara, annotationText, portrait, logo } from './mockText.js';
 import { SECTORS } from './mockSectors.js';
 import { migrateOrg } from './org.js';
@@ -424,6 +425,7 @@ export function mockDocs(spec, examples = null) {
     }
   }
 
+  docs.plandocs = seedPlanDocs(docs.strategy, docs.data, org, { art: ['hills', 'waves', 'topo', 'circles', 'rays', 'mosaic'][r.int(0, 5)] });
   const { library: lib, files } = library(r, spec, sector, staffIds, plan.bibs);
   docs.library = lib;
   return { docs, files, domain: spec.customDomain ?? null };

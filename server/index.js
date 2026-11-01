@@ -10,6 +10,7 @@ import { openDb } from './db.js';
 import { createApp, hashPassword } from './app.js';
 import { exampleDocs } from '../src/platform/seeds.js';
 import { MOCK_ORGS, mockDocs, mockFiles } from '../src/platform/mockOrgs.js';
+import { seedPlanDocs } from '../src/platform/plandocs.js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { scheduleBackups } from './backup.js';
@@ -100,6 +101,12 @@ async function seedTestPlatform(db, app) {
   for (const spec of MOCK_ORGS) {
     const existing = db.prepare('SELECT id FROM orgs WHERE id = ? OR slug = ?').get(spec.id, spec.slug);
     if (existing) {
+      // A test org from before plan documents: give it its first one.
+      if (existing.id === spec.id && !db.prepare("SELECT 1 FROM docs WHERE org_id = ? AND name = 'plandocs'").get(spec.id)) {
+        const read = (name) => JSON.parse(db.prepare('SELECT json FROM docs WHERE org_id = ? AND name = ?').get(spec.id, name)?.json ?? 'null');
+        const strategy = read('strategy');
+        if (strategy) { app.writeDoc(spec.id, 'plandocs', seedPlanDocs(strategy, read('data'), read('org'))); added.push(`${spec.name} (plan document)`); }
+      }
       // A test org from before the library: give it the test documents.
       const lib = db.prepare("SELECT json FROM docs WHERE org_id = ? AND name = 'library'").get(spec.id);
       if (existing.id !== spec.id || Object.keys(JSON.parse(lib?.json ?? '{}').items ?? {}).length) continue;

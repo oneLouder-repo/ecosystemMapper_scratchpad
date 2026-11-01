@@ -1,7 +1,11 @@
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { onDocChange, session, isHosted } from '../platform/storage.js';
-import { loadOrg, loadStrategy, loadData, loadDashboards, loadPodcasts, loadPages } from '../platform/docs.js';
+import { loadOrg, loadStrategy, loadData, loadDashboards, loadPodcasts, loadPages, loadPlanDocs } from '../platform/docs.js';
+import { loadDoc } from '../platform/storage.js';
+import { migratePlanDocs, isLivePlan } from '../platform/plandocs.js';
+import { PlanDocument } from '../plandoc/render.js';
+import { printPlan } from '../plandoc/print.js';
 import { migrateStrategy } from '../platform/strategy.js';
 import { migratePodcasts, published } from '../platform/podcasts.js';
 import { migratePages, siteContent } from '../platform/pages.js';
@@ -27,6 +31,7 @@ import { today, short } from '../strategy/dates.js';
  *   ?site=x&view=station      the podcast station, if this site hosts it (Podcasts plugin)
  *   ?site=x&show=<id>         a show, by season
  *   ?site=x&episode=<id>      an episode
+ *   ?site=x&plan=<id>         a published strategic plan document (Plan designer), printable as PDF
  *
  * Links inside the site change the page without reloading, so the
  * podcast player keeps playing. It reads live data: when staff change
@@ -38,6 +43,8 @@ import { today, short } from '../strategy/dates.js';
 const docs = {
   org: loadOrg(), strategy: loadStrategy(), data: loadData(), dashboards: loadDashboards(),
   podcasts: loadPodcasts(), pages: loadPages(),
+  // Visitors get only published plan documents from the server; staff previews read their own.
+  plandocs: migratePlanDocs((!isHosted() || session()?.member ? loadPlanDocs() : loadDoc('plandocs')) ?? { docs: {} }),
 };
 const root = document.querySelector('#site');
 const now = today();
@@ -75,6 +82,7 @@ function render() {
   const hasStation = pluginOn(org, 'podcasts') && pod.station.siteId === id;
   const content = pluginOn(org, 'pages') ? siteContent(docs.pages, id, now) : { nav: [], articles: [], bySlug: () => null };
   const publicSites = Object.values(org.sites).filter((s) => s.visibility === 'public');
+  const plansHere = Object.values(docs.plandocs.docs).filter((d) => d.siteId === id && isLivePlan(d));
   const ctx = { doc: pod, org, today: now, player, link };
   player.setLook(pod.station.look);
 
@@ -107,6 +115,12 @@ function render() {
     const ok = s?.visibility === 'public' && s.siteId === id;
     title = ok ? s.title : 'Not found';
     body = ok ? h('div', { class: 'story-page' }, StoryView(s, docs)) : h('p', { class: 'empty' }, 'That story is not here.');
+  } else if (p.plan) {
+    const pd = docs.plandocs.docs[p.plan];
+    const ok = pd && pd.siteId === id && isLivePlan(pd);
+    current = 'plan';
+    title = ok ? pd.snapshot.plan.title : 'Not found';
+    body = ok ? PlanView(pd) : h('p', { class: 'empty' }, 'That plan is not here.');
   } else if (p.episode && hasStation) {
     const e = pod.episodes[p.episode];
     current = 'station';
@@ -140,6 +154,7 @@ function render() {
           navLink('home', link({}), 'Home'),
           content.nav.map((pg) => navLink(`page:${pg.slug}`, link({ page: pg.slug }), pg.title)),
           content.articles.length > 0 && navLink('news', link({ view: 'news' }), 'News'),
+          plansHere.length > 0 && navLink('plan', link({ plan: plansHere[0].id }), 'Our plan'),
           hasStation && navLink('station', link({ view: 'station' }), pod.station.name)),
         publicSites.length > 1 && h('details', { class: 'dropdown dropdown-end site-switch' },
           h('summary', { class: 'btn btn-ghost btn-sm' }, icon('globe', 16), h('span', { class: 'sr-only' }, 'Our sites')),
@@ -183,6 +198,15 @@ function Home(site, content, hasStation, ctx) {
     shown.map(dashboard),
     calcs.map((c) => { const v = CalculatorView(c, docs); v.id = c.id; return v; }),
     !shown.length && !calcs.length && !stories.length && !content.articles.length && !latest && h('p', { class: 'empty' }, 'Nothing is published here yet.'));
+}
+
+function PlanView(pd) {
+  const make = () => PlanDocument(pd, pd.snapshot, { palette: pd.palette || docs.org.theme?.palette });
+  return h('div', { class: 'site-plan' },
+    h('div', { class: 'site-plan-bar' },
+      h('span', { class: 'muted small' }, `Published ${short(pd.publishedAt)}`),
+      h('button', { class: 'btn btn-sm btn-primary', onclick: () => printPlan(make(), pd.snapshot.plan.title) }, icon('download', 15), 'Download as PDF')),
+    make());
 }
 
 function NewsList(articles) {

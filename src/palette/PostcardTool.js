@@ -71,7 +71,7 @@ function altText(org, m, f, s) {
 }
 
 /** The org's theme colours, read from a hidden element wearing the theme. */
-function themeColours(org) {
+export function themeColours(org) {
   const probe = h('div', { hidden: true });
   applyTheme(probe, org.theme);
   document.body.append(probe);
