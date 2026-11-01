@@ -68,16 +68,40 @@ function tile(asset, docs, { remove, from } = {}) {
     from?.length > 1 && h('span', { class: 'tile-count', 'aria-hidden': 'true' }, `×${from.length}`),
   ];
   const attrs = { class: 'tile-face', 'aria-describedby': tipId };
-  return h('li', { class: `asset-tile${r.missing ? ' missing' : ''}` },
-    r.href
-      ? h('a', { ...attrs, href: r.href, target: external ? '_blank' : null, rel: external ? 'noopener' : null, download: asset.dataUrl ? asset.label : null }, face)
-      : h('span', { ...attrs, tabindex: '0' }, face),
-    h('div', { class: 'tile-tip', role: 'tooltip', id: tipId },
-      h('strong', {}, r.label),
-      h('span', {}, `${kindById[asset.kind]?.label ?? asset.kind} · ${r.sub}`),
-      from && h('span', {}, `Used in ${from.map((f) => f.title).join(', ')}`)),
-    remove && h('button', { class: 'tile-remove', title: 'Remove from toolbox', 'aria-label': `Remove ${r.label}`, onclick: remove }, '×'),
-  );
+  const tip = h('div', { class: 'tile-tip', role: 'tooltip', id: tipId },
+    h('strong', {}, r.label),
+    h('span', {}, `${kindById[asset.kind]?.label ?? asset.kind} · ${r.sub}`),
+    from && h('span', {}, `Used in ${from.map((f) => f.title).join(', ')}`));
+  const faceEl = r.href
+    ? h('a', { ...attrs, href: r.href, target: external ? '_blank' : null, rel: external ? 'noopener' : null, download: asset.dataUrl ? asset.label : null }, face)
+    : h('span', { ...attrs, tabindex: '0' }, face);
+  const li = h('li', { class: `asset-tile${r.missing ? ' missing' : ''}` }, faceEl, tip,
+    remove && h('button', { class: 'tile-remove', title: 'Remove from toolbox', 'aria-label': `Remove ${r.label}`, onclick: remove }, '×'));
+  // The tip floats on the page itself, so no panel or scroll box can hide it.
+  let watch = null;
+  const open = () => {
+    document.body.append(tip);
+    // Gone with its tile: a re-render can drop the tile while the mouse is on it.
+    watch ??= new MutationObserver(() => { if (!li.isConnected) close(); });
+    watch.observe(document.body, { childList: true, subtree: true });
+    tip.classList.add('open');
+    const box = faceEl.getBoundingClientRect();
+    const w = tip.offsetWidth;
+    const ht = tip.offsetHeight;
+    const left = Math.max(8, Math.min(box.left + box.width / 2 - w / 2, window.innerWidth - w - 8));
+    const below = box.top - ht - 10 < 8;
+    tip.classList.toggle('below', below);
+    tip.style.left = `${left}px`;
+    tip.style.top = `${below ? box.bottom + 10 : box.top - ht - 10}px`;
+    tip.style.setProperty('--arrow-x', `${box.left + box.width / 2 - left}px`);
+  };
+  const close = () => { tip.classList.remove('open'); watch?.disconnect(); if (li.isConnected) li.append(tip); else tip.remove(); };
+  li.addEventListener('mouseenter', open);
+  li.addEventListener('mouseleave', close);
+  li.addEventListener('focusin', open);
+  li.addEventListener('focusout', close);
+  li.addEventListener('click', close);
+  return li;
 }
 
 function row(asset, docs, { remove, from, select } = {}) {

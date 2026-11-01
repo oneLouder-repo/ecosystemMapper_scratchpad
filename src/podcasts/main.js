@@ -47,6 +47,15 @@ const now = today();
 const n = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 const stationSite = () => org.sites[doc().station.siteId];
+/** A show's episodes by state, and a short line saying so. */
+function countsOf(showId) {
+  const eps = episodesOf(doc(), showId);
+  const live = eps.filter((e) => published(e, now)).length;
+  const drafts = eps.filter((e) => e.status === 'draft').length;
+  const coming = eps.length - live - drafts;
+  return { live, coming, drafts, line: [n(live, 'episode'), coming && `${coming} coming`, drafts && n(drafts, 'draft')].filter(Boolean).join(' · ') };
+}
+const people = (ids, size = 22) => (ids?.length ? h('span', { class: 'avatar-row' }, ids.map((id) => org.staff[id] && h('span', { title: org.staff[id].name }, Avatar(org.staff[id], size)))) : null);
 const stationUrl = (extra = {}) => `site.html?${new URLSearchParams({ site: doc().station.siteId ?? '', view: 'station', ...extra })}`;
 
 function render() {
@@ -54,7 +63,7 @@ function render() {
   side = swapSide(side, SideNav({ label: 'Station and shows', sections: [
     { title: 'Station', items: [{ label: doc().station.name, sub: 'Public page, look, featured shows', icon: 'mic', href: '#station', on: r === 'station' }] },
     { title: 'Shows', action: { label: 'New show', onclick: newShow }, items: [
-      ...showsInOrder(doc()).map((p) => ({ label: p.title, sub: `${n(episodesOf(doc(), p.id).length, 'episode')}${p.featured ? ' · featured' : ''}`, lead: Cover(p, 24), href: `#${p.id}`, on: r === p.id })),
+      ...showsInOrder(doc()).map((p) => ({ label: p.title, sub: [countsOf(p.id).line, p.featured && 'featured'].filter(Boolean).join(' · '), lead: Cover(p, 24), href: `#${p.id}`, on: r === p.id })),
       { label: 'New show', icon: 'plus', onclick: newShow },
     ] },
   ] }));
@@ -105,76 +114,85 @@ function Station() {
   const upcoming = Object.values(doc().episodes).filter((e) => !published(e, now)).sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
   const publicSites = Object.values(org.sites);
 
-  return h('div', {},
+  const live = Object.values(doc().episodes).filter((e) => published(e, now)).sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+  const drafts = upcoming.filter((e) => e.status === 'draft').length;
+  const hostIds = new Set(shows.flatMap((s) => s.hostIds));
+
+  return h('div', { class: 'station-admin' },
     PluginHeader('podcasts', { actions: stationSite() && h('a', { class: 'btn btn-sm', href: stationUrl(), target: '_blank', rel: 'noopener' }, icon('globe', 14), 'View station') }),
     h('div', { class: 'station-admin-head' },
       CoverUpload({ title: st.name, cover: st.cover }, 112, (cover) => update({ cover }), 'Station art'),
       h('div', { class: 'show-fields' },
         h('input', { class: 'title-input station-name', name: 'station-name', value: st.name, 'aria-label': 'Station name', onchange: (e) => update({ name: e.target.value }) }),
         h('input', { class: 'title-input lede', name: 'station-tagline', value: st.tagline, placeholder: 'A tagline for your station', 'aria-label': 'Tagline', onchange: (e) => update({ tagline: e.target.value }) }),
-        h('textarea', { class: 'textarea textarea-sm', name: 'station-description', rows: 2, placeholder: 'What listeners will find here', 'aria-label': 'Description', onchange: (e) => update({ description: e.target.value }) }, st.description)),
+        h('textarea', { class: 'textarea textarea-sm station-desc-input', name: 'station-description', rows: 2, placeholder: 'What listeners will find here', 'aria-label': 'Description', onchange: (e) => update({ description: e.target.value }) }, st.description)),
       h('div', { class: 'card station-publish' },
         h('strong', {}, 'Public station page'),
         h('select', { class: 'select select-sm', name: 'station-site', 'aria-label': 'Site that hosts the station', onchange: (e) => update({ siteId: e.target.value || null }) },
           h('option', { value: '' }, 'Not on a site'), options(publicSites.map((s) => ({ id: s.id, label: `${s.name}${s.visibility === 'private' ? ' (private)' : ''}` })), st.siteId)),
-        stationSite()
-          ? h('a', { class: 'btn btn-sm btn-primary', href: stationUrl(), target: '_blank', rel: 'noopener' }, icon('globe', 14), 'View station')
-          : h('span', { class: 'muted' }, 'Pick a site to give the station a public page.'),
-        stationSite()?.visibility === 'private' && h('span', { class: 'muted' }, 'That site is private. Make it public in Organisation settings.'))),
+        h('span', { class: 'muted small' }, !stationSite()
+          ? 'Pick a site to give the station a public page.'
+          : stationSite().visibility === 'private' ? 'That site is private. Make it public in Organisation settings.' : `Listeners find it on ${stationSite().name}.`))),
 
-    h('h2', {}, 'Shows'),
-    h('p', { class: 'muted' }, 'Featured shows lead the station page, in this order. Every show’s past episodes stay in the archive.'),
+    h('ul', { class: 'stat-strip', 'aria-label': 'The station at a glance' },
+      [[shows.length, 'show'], [live.length, 'published episode'], [upcoming.length - drafts, 'scheduled'], [drafts, 'draft'], [hostIds.size, 'host']].map(([k, label]) =>
+        h('li', {}, h('strong', {}, String(k)), h('span', {}, label === 'scheduled' ? label : `${label}${k === 1 ? '' : 's'}`)))),
+
+    h('div', { class: 'section-head' }, h('h2', {}, 'Shows'), h('button', { class: 'btn btn-sm', onclick: newShow }, icon('plus', 14), 'New show')),
+    h('p', { class: 'muted section-note' }, 'Featured shows lead the station page, in this order. Every show’s past episodes stay in the archive.'),
     shows.length
-      ? h('ul', { class: 'feature-list' }, shows.map((s, i) => {
-          const count = episodesOf(doc(), s.id).filter((e) => published(e, now)).length;
-          return h('li', { class: s.featured ? 'on' : '' },
-            Cover(s, 40),
-            h('a', { href: `#${s.id}`, class: 'feature-title' }, h('strong', {}, s.title), h('small', { class: 'muted' }, `${n(count, 'episode')} · ${n(seasonsOf(doc(), s.id).length, 'season')}`)),
+      ? h('ul', { class: 'feature-list' }, shows.map((s, i) =>
+          h('li', { class: s.featured ? 'on' : '' },
+            Cover(s, 44),
+            h('a', { href: `#${s.id}`, class: 'feature-title' }, h('strong', {}, s.title),
+              h('small', { class: 'muted' }, `${countsOf(s.id).line} · ${n(seasonsOf(doc(), s.id).length, 'season')}`)),
+            people(s.hostIds),
             h('label', { class: 'feature-toggle' },
               h('input', { type: 'checkbox', class: 'toggle toggle-sm toggle-primary', checked: s.featured, onchange: (e) => store.apply(col.update('podcasts', s.id, { featured: e.target.checked })) }),
-              'Featured show'),
+              'Featured'),
             h('div', { class: 'join' },
               h('button', { class: 'btn btn-xs join-item', disabled: i === 0, 'aria-label': `Move ${s.title} up`, onclick: () => move(s, -1) }, '↑'),
-              h('button', { class: 'btn btn-xs join-item', disabled: i === shows.length - 1, 'aria-label': `Move ${s.title} down`, onclick: () => move(s, 1) }, '↓')));
-        }))
+              h('button', { class: 'btn btn-xs join-item', disabled: i === shows.length - 1, 'aria-label': `Move ${s.title} down`, onclick: () => move(s, 1) }, '↓'))))
+      )
       : h('p', { class: 'empty' }, 'No shows yet. Make one with New show.'),
 
-    h('div', { class: 'station-columns' },
-      h('section', {},
-        h('h2', {}, 'On the station now'),
-        v.current ? EpisodeRow(v.current, { showShow: true }) : h('p', { class: 'empty' }, 'Nothing published yet.')),
-      h('section', {},
-        h('h2', {}, 'Coming up and drafts'),
-        upcoming.length ? h('ul', { class: 'episode-list' }, upcoming.map((e) => EpisodeRow(e, { showShow: true }))) : h('p', { class: 'empty' }, 'Nothing scheduled.'))),
+    h('h2', {}, 'Coming up and drafts'),
+    upcoming.length ? h('ul', { class: 'episode-list' }, upcoming.map((e) => EpisodeRow(e, { showShow: true }))) : h('p', { class: 'empty' }, 'Nothing scheduled.'),
 
+    h('div', { class: 'section-head' }, h('h2', {}, 'Recently published'), live.length > 5 && h('span', { class: 'muted small' }, `The latest 5 of ${live.length}. Each show’s page has them all.`)),
+    live.length ? h('ul', { class: 'episode-list' }, live.slice(0, 5).map((e) => EpisodeRow(e, { showShow: true, now: e === v.current }))) : h('p', { class: 'empty' }, 'Nothing published yet.'),
 
     h('h2', {}, 'How the station looks'),
-    h('p', { class: 'muted' }, 'On top of your organisation’s colour palette and shape (Organisation → Public sites and theme).'),
-    h('div', { class: 'look-grid' },
-      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Player'), Segmented('Player', LOOKS.player, st.look.player, (player) => setLook({ player }))),
-      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Cover art'), Segmented('Cover art', LOOKS.art, st.look.art, (art) => setLook({ art }))),
-      h('div', {}, h('span', { class: 'fieldset-legend' }, 'Top of the page'), Segmented('Top of the page', LOOKS.hero, st.look.hero, (hero) => setLook({ hero })))),
+    h('div', { class: 'panel look-panel' },
+      h('p', { class: 'muted' }, 'On top of your organisation’s colour palette and shape (Organisation → Public sites and theme).'),
+      h('div', { class: 'look-grid' },
+        h('div', {}, h('span', { class: 'fieldset-legend' }, 'Player'), Segmented('Player', LOOKS.player, st.look.player, (player) => setLook({ player }))),
+        h('div', {}, h('span', { class: 'fieldset-legend' }, 'Cover art'), Segmented('Cover art', LOOKS.art, st.look.art, (art) => setLook({ art }))),
+        h('div', {}, h('span', { class: 'fieldset-legend' }, 'Top of the page'), Segmented('Top of the page', LOOKS.hero, st.look.hero, (hero) => setLook({ hero }))))),
   );
 }
 
-function EpisodeRow(e, { showShow = false } = {}) {
+function EpisodeRow(e, { showShow = false, now: onNow = false } = {}) {
   const show = doc().podcasts[e.podcastId];
   const live = published(e, now);
+  const code = e.type === 'full' ? `S${e.season} · E${e.number}` : `S${e.season} · ${e.type}`;
   return h('li', { class: 'episode' },
     h('button', { class: 'btn btn-circle btn-sm btn-primary', 'aria-label': `Play ${e.title}`, onclick: () => player.play([e]) }, icon('play', 14)),
     h('div', { class: 'episode-text' },
-      h('strong', {}, e.type === 'full' ? `${e.number}. ${e.title}` : `${e.title} (${e.type})`),
-      h('span', { class: 'muted' }, [showShow && show?.title, `Season ${e.season}`, short(e.publishedAt), fmtDuration(e.audio?.duration), e.audio?.mediaId ? 'uploaded' : null].filter(Boolean).join(' · ')),
-      e.description && h('p', {}, e.description),
-      e.personIds?.length > 0 && h('div', { class: 'avatar-row' }, e.personIds.map((id) => org.staff[id] && h('span', { title: org.staff[id].name }, Avatar(org.staff[id], 22))))),
+      h('div', { class: 'episode-title' }, h('strong', {}, e.title), onNow && h('span', { class: 'badge badge-sm badge-outline badge-primary' }, 'On the station now')),
+      h('div', { class: 'episode-meta' },
+        h('span', {}, [showShow && show?.title, code, short(e.publishedAt), fmtDuration(e.audio?.duration), e.audio?.mediaId ? 'uploaded' : null].filter(Boolean).join(' · ')),
+        people(e.personIds, 20)),
+      e.description && h('p', {}, e.description)),
     h('span', { class: `badge badge-sm ${live ? 'badge-success' : e.status === 'draft' ? 'badge-ghost' : 'badge-warning'}` },
-      live ? 'published' : e.status === 'draft' ? 'draft' : `scheduled ${short(e.publishedAt)}`),
-    h('button', { class: 'btn btn-xs btn-ghost', onclick: () => editEpisode(e) }, 'Edit'),
-    h('button', { class: 'icon-button', 'aria-label': `Delete ${e.title}`, onclick: () => {
-      if (!confirm(`Delete “${e.title}”?`)) return;
-      store.apply(col.remove('episodes', e.id));
-      if (e.audio?.mediaId) deleteMedia(e.audio.mediaId);
-    } }, '×'));
+      live ? 'Published' : e.status === 'draft' ? 'Draft' : `Scheduled ${short(e.publishedAt)}`),
+    h('div', { class: 'episode-actions' },
+      h('button', { class: 'btn btn-xs btn-ghost', onclick: () => editEpisode(e) }, 'Edit'),
+      h('button', { class: 'icon-button', 'aria-label': `Delete ${e.title}`, title: 'Delete', onclick: () => {
+        if (!confirm(`Delete “${e.title}”?`)) return;
+        store.apply(col.remove('episodes', e.id));
+        if (e.audio?.mediaId) deleteMedia(e.audio.mediaId);
+      } }, '×')));
 }
 
 /**
@@ -302,27 +320,34 @@ function Show(p) {
     h('summary', {}, icon('upload', 16), h('strong', {}, 'Upload a new episode')),
     EpisodeForm(p, null, () => {}));
 
+  const hosts = p.hostIds.map((id) => org.staff[id]).filter(Boolean);
+  const others = staffList(org).filter((x) => !p.hostIds.includes(x.id));
+  const counts = countsOf(p.id);
   return h('div', {},
     h('div', { class: 'show-head' },
       CoverUpload(p, 128, (cover) => update({ cover }), 'Show cover art'),
       h('div', { class: 'show-fields' },
         h('input', { class: 'title-input station-name', name: 'show-title', value: p.title, 'aria-label': 'Show title', onchange: (e) => update({ title: e.target.value }) }),
-        h('span', { class: 'muted' }, `@${p.handle} · ${p.category} · ${p.type === 'serial' ? 'serial' : 'episodic'}`),
-        h('textarea', { class: 'textarea textarea-sm', name: 'show-description', rows: 2, 'aria-label': 'Description', onchange: (e) => update({ description: e.target.value }) }, p.description),
-        h('div', { class: 'inline-form' },
-          h('label', { class: 'feature-toggle' },
-            h('input', { type: 'checkbox', class: 'toggle toggle-sm toggle-primary', name: 'show-featured', checked: p.featured, onchange: (e) => update({ featured: e.target.checked }) }), 'Featured show'),
-          h('select', { class: 'select select-sm', name: 'show-category', 'aria-label': 'Category', onchange: (e) => update({ category: e.target.value }) }, options(CATEGORIES.map((c) => ({ id: c, label: c })), p.category)),
-          h('select', { class: 'select select-sm', name: 'show-type', 'aria-label': 'Show type', onchange: (e) => update({ type: e.target.value }) },
-            options([{ id: 'episodic', label: 'Episodic (newest first)' }, { id: 'serial', label: 'Serial (in order)' }], p.type)),
-          h('button', { class: 'btn btn-sm', onclick: () => showRss(p) }, icon('rss', 16), 'RSS feed'),
-          stationSite() && h('a', { class: 'btn btn-sm', href: stationUrl({ view: '', show: p.id }), target: '_blank', rel: 'noopener' }, icon('globe', 14), 'View on site')))),
+        h('span', { class: 'muted' }, `@${p.handle} · ${counts.line} · ${n(seasonsOf(doc(), p.id).length, 'season')}`),
+        h('textarea', { class: 'textarea textarea-sm station-desc-input', name: 'show-description', rows: 2, placeholder: 'What the show is about', 'aria-label': 'Description', onchange: (e) => update({ description: e.target.value }) }, p.description)),
+      h('div', { class: 'show-actions' },
+        h('button', { class: 'btn btn-sm', onclick: () => showRss(p) }, icon('rss', 16), 'RSS feed'),
+        stationSite() && h('a', { class: 'btn btn-sm', href: stationUrl({ view: '', show: p.id }), target: '_blank', rel: 'noopener' }, icon('globe', 14), 'View on site'))),
+    h('div', { class: 'show-settings' },
+      h('label', { class: 'feature-toggle' },
+        h('input', { type: 'checkbox', class: 'toggle toggle-sm toggle-primary', name: 'show-featured', checked: p.featured, onchange: (e) => update({ featured: e.target.checked }) }), 'Featured on the station'),
+      h('label', { class: 'setting' }, h('span', {}, 'Category'),
+        h('select', { class: 'select select-sm', name: 'show-category', onchange: (e) => update({ category: e.target.value }) }, options(CATEGORIES.map((c) => ({ id: c, label: c })), p.category))),
+      h('label', { class: 'setting' }, h('span', {}, 'Episode order'),
+        h('select', { class: 'select select-sm', name: 'show-type', onchange: (e) => update({ type: e.target.value }) },
+          options([{ id: 'episodic', label: 'Episodic (newest first)' }, { id: 'serial', label: 'Serial (in order)' }], p.type)))),
     h('h2', {}, 'Hosts'),
-    h('div', { class: 'chips' }, staffList(org).map((s) =>
-      h('label', { class: 'chip' },
-        h('input', { type: 'checkbox', class: 'checkbox checkbox-xs', checked: p.hostIds.includes(s.id), onchange: (e) =>
-          update({ hostIds: e.target.checked ? [...p.hostIds, s.id] : p.hostIds.filter((id) => id !== s.id) }) }),
-        Avatar(s, 18), s.name))),
+    h('div', { class: 'host-picker' },
+      hosts.length ? hosts.map((s) => h('span', { class: 'host-chip' }, Avatar(s, 24), h('span', {}, s.name, s.title && h('small', {}, s.title)),
+        h('button', { class: 'icon-button', 'aria-label': `Remove ${s.name} as host`, onclick: () => update({ hostIds: p.hostIds.filter((id) => id !== s.id) }) }, '×')))
+        : h('span', { class: 'muted' }, 'No hosts yet.'),
+      others.length > 0 && h('select', { class: 'select select-sm host-add', name: 'show-add-host', 'aria-label': 'Add a host', onchange: (e) => { if (e.target.value) update({ hostIds: [...p.hostIds, e.target.value] }); } },
+        h('option', { value: '' }, '+ Add a host'), options(others.map((x) => ({ id: x.id, label: x.name }))))),
     newEp,
     h('div', { class: 'section-head' }, h('h2', {}, 'Seasons and episodes'), h('button', { class: 'btn btn-sm', onclick: addSeason }, icon('plus', 14), 'Add season')),
     seasons.map((s) => {
@@ -331,7 +356,7 @@ function Show(p) {
         h('header', {},
           h('span', { class: 'badge badge-neutral' }, `S${s.number}`),
           h('input', { class: 'title-input season-title', name: `season-${s.number}-title`, value: s.title, 'aria-label': `Season ${s.number} title`, onchange: (e) => setSeason(s.number, { title: e.target.value }) }),
-          h('span', { class: 'muted' }, n(inSeason.length, 'episode')),
+          h('span', { class: 'muted season-count' }, n(inSeason.length, 'episode')),
           inSeason.length > 0 && h('button', { class: 'btn btn-xs', onclick: () => player.play([...inSeason].filter((e) => published(e, now)).sort((a, b) => a.number - b.number)) }, icon('play', 12), 'Play season'),
           !inSeason.length && h('button', { class: 'icon-button', 'aria-label': `Remove season ${s.number}`, onclick: () => removeSeason(s.number) }, '×')),
         h('input', { class: 'title-input season-desc', name: `season-${s.number}-desc`, value: s.description, placeholder: 'What this season is about', 'aria-label': `Season ${s.number} description`, onchange: (e) => setSeason(s.number, { description: e.target.value }) }),

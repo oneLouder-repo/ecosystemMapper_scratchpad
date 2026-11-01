@@ -6,7 +6,7 @@ import { PluginHeader } from '../ui/PluginHeader.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp } from '../core/collections.js';
 import { autosaveDoc, saveDoc, onDocChange } from '../platform/storage.js';
-import { loadOrg, loadStrategy, loadStudio, loadMaps } from '../platform/docs.js';
+import { loadOrg, loadStrategy, loadStudio, loadMaps, loadLibrary } from '../platform/docs.js';
 import { loadAllMaps } from '../platform/maps.js';
 import { migrateStrategy, strategyOps, rootOf } from '../platform/strategy.js';
 import { currentUser } from '../platform/session.js';
@@ -102,7 +102,7 @@ const ctx = {
   render: () => render(),
   live,
 };
-const docsCache = (() => { const maps = loadMaps(); return { org, maps, mapContents: loadAllMaps(maps), strategy: strategy.doc }; })();
+const docsCache = (() => { const maps = loadMaps(); return { org, maps, mapContents: loadAllMaps(maps), strategy: strategy.doc, library: loadLibrary() }; })();
 
 /** The studio's record for a plan, made the first time someone opens it. */
 ctx.planRecord = (planId) => store.doc.plans[planId] ?? { id: planId, team: [], notes: '' };

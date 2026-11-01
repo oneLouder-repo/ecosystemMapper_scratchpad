@@ -88,7 +88,17 @@ function strategy(r, spec, sector, staffIds) {
       if (s <= TODAY) events.push({ id: uid('ev'), date: s, kind: 'status', text: 'active' });
       if (status === 'done') events.push({ id: uid('ev'), date: e, kind: 'status', text: 'done' });
       if (status === 'blocked') events.push({ id: uid('ev'), date: day(s, 7) < TODAY ? day(s, 7) : s, kind: 'status', text: 'blocked' });
-      return { type: 'task', title: r.pick(sector.tasks), start: s, end: e, status, assigneeIds: r.some(staffIds, r.int(1, 2)), events, assets: [] };
+      const assigneeIds = r.some(staffIds, r.int(1, 2));
+      // A toolbox for most tasks: who knows it, who outside helps, what to read.
+      const assets = [];
+      if (r.chance(0.7)) {
+        const [actor] = r.pick(sector.actors);
+        assets.push({ id: uid('as'), kind: 'staff', ref: r.pick(staffIds), label: 'Staff' });
+        if (r.chance(0.6)) assets.push({ id: uid('as'), kind: 'person', label: `${r.pick(FIRST)} ${r.pick(LAST)}`, detail: actor });
+        if (r.chance(0.5)) assets.push({ id: uid('as'), kind: 'literature', label: r.pick(sector.refTitles), year: String(r.int(2012, 2025)) });
+        if (r.chance(0.3)) assets.push({ id: uid('as'), kind: 'link', label: `${actor}: website`, url: `https://${actor.toLowerCase().replace(/[^a-z]+/g, '')}.example`, detail: 'Partner site' });
+      }
+      return { type: 'task', title: r.pick(sector.tasks), start: s, end: e, status, assigneeIds, events, assets };
     });
   };
   const measureIds = [];
@@ -99,7 +109,7 @@ function strategy(r, spec, sector, staffIds) {
       measures: o.measures.map(([name, unit, target], mi) => { const id = `m-${spec.slug}-${p}-${oi}-${mi}`; measureIds.push({ id, o, mi, p }); return { id, name, unit, target: String(target) }; }),
       children: o.goals.map((g, gi) => ({
         type: 'goal', title: g, measures: [],
-        children: [{ type: 'workplan', title: `${g}: workplan`, start: `${startYear}-0${4 + gi}-01`.slice(0, 10), end: `${startYear + 1}-03-31`, staffIds: r.some(staffIds, 3), teamIds: [], children: tasksFor(day(`${startYear}-0${7 + gi}-01`, -30 * (p === 0 ? 2 : 0))) }],
+        children: [{ type: 'workplan', title: `Workplan: ${g}`, start: `${startYear}-0${4 + gi}-01`.slice(0, 10), end: `${startYear + 1}-03-31`, staffIds: r.some(staffIds, 3), teamIds: [], children: tasksFor(day(`${startYear}-0${7 + gi}-01`, -30 * (p === 0 ? 2 : 0))) }],
       })),
     }));
     return { type: 'plan', title: p === 0 ? `Strategic Plan ${startYear}–${startYear + 3}` : p === 1 ? `Operational plan ${startYear}–${startYear + 1}` : `Plan ${startYear}–${startYear + 1}: ${['Growth', 'Renewal', 'Reach'][p % 3]}`, start: `${startYear}-04-01`, end: `${startYear + (p === 0 ? 4 : 1)}-03-31`, theme: ['Foundations', 'Momentum', 'Scale'][p % 3], children: objs };
@@ -177,6 +187,10 @@ function maps(r, spec, sector, staffIds, titles) {
 function podcasts(r, spec, sector, staffIds) {
   const pods = {};
   const episodes = {};
+  // Titles dealt from one shuffled pool, so no two shows share an episode title.
+  const pool = r.some(sector.episodes, sector.episodes.length);
+  let dealt = 0;
+  const nextTitle = () => { const t = pool[dealt % pool.length]; const round = Math.floor(dealt++ / pool.length); return round ? `${t}, part ${round + 1}` : t; };
   sector.shows.slice(0, spec.shows).forEach(([title, description], si) => {
     const id = `pod-${spec.slug}-${si}`;
     pods[id] = {
@@ -188,7 +202,7 @@ function podcasts(r, spec, sector, staffIds) {
     // Free plan: one show, one episode a week. Others: every few weeks, two seasons on the lead show.
     const count = spec.weekly ? 12 : si === 0 ? 8 : r.int(3, 5);
     const gap = spec.weekly ? 7 : r.int(14, 28);
-    const titles = r.some(sector.episodes, Math.min(count, sector.episodes.length));
+    const titles = Array.from({ length: count }, nextTitle);
     titles.forEach((t, ei) => {
       const date = day(TODAY, -gap * (count - 1 - ei) + (ei === count - 1 && !spec.weekly ? gap : 0));
       const season = !spec.weekly && si === 0 && ei >= count / 2 ? 2 : 1;

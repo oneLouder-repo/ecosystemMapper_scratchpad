@@ -4,9 +4,10 @@
  * item) or stand on its own (a document, link, citation, media, a person
  * outside the org). Stored on the node as `assets: [Asset]`.
  *
- * Asset { id, kind, label, ref?, mapId?, url?, detail?, year?, dataUrl? }
+ * Asset { id, kind, label, ref?, mapId?, libraryId?, url?, detail?, year?, dataUrl? }
  *   `ref` is the id in the other plugin's document (for an actor, `mapId`
- *   says which map); `label` is a fallback used if that item is later deleted.
+ *   says which map); `libraryId` is an item in the document library (for a
+ *   document or literature); `label` is a fallback used if that item is later deleted.
  *
  * To add a kind (for a future tool): add it here, give it a resolver below
  * and a picker in ui/AssetChooser.js.
@@ -53,9 +54,18 @@ export function resolveAsset(asset, docs) {
       return n ? { label: n.title, sub: `Strategy · ${n.type}`, href: `strategy.html#${n.id}` } : { label: asset.label, sub: 'Removed from the strategy', missing: true };
     }
     case 'document':
-      return { label: asset.label, sub: asset.detail ?? 'Document', href: asset.dataUrl ?? asset.url };
-    case 'literature':
+    case 'literature': {
+      if (asset.libraryId) {
+        const it = docs.library?.items?.[asset.libraryId];
+        if (!it) return { label: asset.label, sub: 'Removed from the library', missing: true };
+        const year = String(it.meta.issued ?? '').slice(0, 4);
+        const who = (it.meta.creators ?? [])[0];
+        const by = who ? (who.literal ?? who.family) + ((it.meta.creators.length > 1) ? ' et al.' : '') : '';
+        return { label: it.meta.title || asset.label, sub: ['In the library', by, year].filter(Boolean).join(' · '), href: `library.html#item/${asset.libraryId}` };
+      }
+      if (asset.kind === 'document') return { label: asset.label, sub: asset.detail ?? 'Document', href: asset.dataUrl ?? asset.url };
       return { label: asset.label, sub: ['Literature', asset.year].filter(Boolean).join(' · '), href: asset.url };
+    }
     default:
       return { label: asset.label, sub: asset.detail ?? kindById[asset.kind]?.label ?? asset.kind, href: asset.url };
   }
@@ -72,7 +82,7 @@ export function assetsInWorkplan(strategy, workplanId) {
 }
 
 /** Same item used more than once (e.g. one actor across several tasks) counts once. */
-export const assetKey = (a) => (a.ref ? `${a.kind}:${a.mapId ? `${a.mapId}/` : ''}${a.ref}` : `${a.kind}:${a.url ?? a.label}`);
+export const assetKey = (a) => (a.ref ? `${a.kind}:${a.mapId ? `${a.mapId}/` : ''}${a.ref}` : a.libraryId ? `${a.kind}:lib/${a.libraryId}` : `${a.kind}:${a.url ?? a.label}`);
 
 /** Every asset used at or below a node (a plan, objective, goal or workplan), each tagged with where it came from. */
 export function assetsUnder(strategy, id) {

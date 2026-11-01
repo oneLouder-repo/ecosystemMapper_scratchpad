@@ -3,7 +3,7 @@ import { Shell } from '../ui/Shell.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp } from '../core/collections.js';
 import { autosaveDoc, saveDoc, onDocChange } from '../platform/storage.js';
-import { loadOrg, loadStrategy, loadMaps, loadData } from '../platform/docs.js';
+import { loadOrg, loadStrategy, loadMaps, loadData, loadLibrary } from '../platform/docs.js';
 import { loadAllMaps } from '../platform/maps.js';
 import { seedStrategy } from '../platform/strategySeed.js';
 import { childrenOf, rootOf, migrateStrategy, strategyOps } from '../platform/strategy.js';
@@ -48,7 +48,7 @@ const ctx = {
     return TABS.some((t) => t.id === hash) ? hash : store.doc.nodes[hash] ? 'framework' : 'overview';
   },
   // Other tools' documents, for assets that point into them.
-  docs: (() => { const maps = loadMaps(); return { org, maps, mapContents: loadAllMaps(maps) }; })(),
+  docs: (() => { const maps = loadMaps(); return { org, maps, mapContents: loadAllMaps(maps), library: loadLibrary() }; })(),
   collapsed: new Set(),
   get selectedId() {
     const id = decodeURIComponent(location.hash.slice(1));
