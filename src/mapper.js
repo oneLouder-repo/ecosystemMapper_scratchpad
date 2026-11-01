@@ -11,12 +11,13 @@ import PanTool from './tools/PanTool.js';
 import DataVizTool from './tools/DataVizTool.js';
 import { Toolbar } from './ui/Toolbar.js';
 import { TopBar } from './ui/TopBar.js';
-import { Inspector } from './ui/Inspector.js';
+import { ItemDetails } from './ui/Inspector.js';
+import { DockPanels } from './ui/DockPanels.js';
+import { SelectionBar } from './ui/SelectionBar.js';
 import { LayersPanel } from './ui/LayersPanel.js';
 import { LabelEditor } from './ui/LabelEditor.js';
-import { seedMap, migrateMap } from './seed.js';
+import { migrateMap } from './seed.js';
 import { Shell } from './ui/Shell.js';
-import { SideNav } from './ui/SideNav.js';
 import { h } from './ui/dom.js';
 import { autosaveDoc, saveDoc } from './platform/storage.js';
 import { loadOrg, loadMaps } from './platform/docs.js';
@@ -40,16 +41,39 @@ const store = new Store(migrateMap(loadMapContent(mapId), lenses));
 const stage = new Stage(document.querySelector('#board'));
 const mapView = new MapView(stage, store, lenses);
 
-/** Zoom and centre so the whole lens backdrop fits the board. */
+/**
+ * Zoom and centre so the whole map fits the board: the lens backdrop and
+ * every actor, wide or tall, clear of the docked panels.
+ */
+let fittedCamera = null;
 function fitView() {
-  const b = lensBounds(mapView.lens);
+  const b = { ...lensBounds(mapView.lens) };
+  for (const a of Object.values(mapView.world.actors)) {
+    const x0 = Math.min(b.x, a.x - a.w / 2), y0 = Math.min(b.y, a.y - a.h / 2);
+    const x1 = Math.max(b.x + b.w, a.x + a.w / 2), y1 = Math.max(b.y + b.h, a.y + a.h / 2);
+    Object.assign(b, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+  }
   const { clientWidth, clientHeight } = stage.svgEl;
-  const pad = 32;
-  stage.scale = Math.min(1, Math.max(0.2, Math.min((clientWidth - pad * 2) / b.w, (clientHeight - pad * 2) / b.h)));
-  stage.moveTo(clientWidth / 2 - (b.x + b.w / 2) * stage.scale, clientHeight / 2 - (b.y + b.h / 2) * stage.scale);
+  if (!clientWidth || !clientHeight) return;
+  const box = stage.svgEl.getBoundingClientRect();
+  const inset = (sel, side) => {
+    const col = document.querySelector(sel);
+    if (!col?.children.length) return 0;
+    const r = col.getBoundingClientRect();
+    return side === 'left' ? Math.max(0, r.right - box.left) : Math.max(0, box.right - r.left);
+  };
+  const left = inset('.dock-left', 'left'), right = inset('.dock-right', 'right');
+  const pad = 28;
+  const w = clientWidth - left - right - pad * 2, h = clientHeight - pad * 2 - 44; // room for the selection bar
+  stage.scale = Math.min(1.75, Math.max(0.15, Math.min(w / b.w, h / b.h)));
+  stage.moveTo(left + pad + w / 2 - (b.x + b.w / 2) * stage.scale, pad + h / 2 - (b.y + b.h / 2) * stage.scale);
   stage.dispatchEvent('camera');
+  fittedCamera = { x: stage.x, y: stage.y, scale: stage.scale };
 }
-fitView();
+// Keep it fitted when the window changes size, until someone pans or zooms.
+window.addEventListener('resize', () => {
+  if (fittedCamera && stage.x === fittedCamera.x && stage.y === fittedCamera.y && stage.scale === fittedCamera.scale) fitView();
+});
 
 /**
  * The context every tool and panel receives. Add shared helpers to
@@ -154,11 +178,20 @@ const ctx = {
       mapView.select([]);
     },
     migrate: (map) => migrateMap(map, lenses),
-    loadExample() {
-      store.load({ ...seedMap(), id: mapId, name: index.maps[mapId].title });
+    /** Replace this map's contents with a map from a file (keeps its name and place in the list). */
+    replaceWith(map) {
+      store.load({ ...map, id: mapId, name: index.maps[mapId].title });
       mapView.select([]);
-      fitView();
+      requestAnimationFrame(fitView);
     },
+    /** Add a map from a file to this org, as a new map, and open it. */
+    openAsNew(map, entry) {
+      const created = createMapIn(index, { title: entry.title || 'Opened map', ownerId: currentUser(org)?.id, content: structuredClone(map) });
+      if (entry.description) { index.maps[created.id].description = entry.description; saveDoc('maps', index); }
+      saveDoc(mapDocName(mapId), store.map);
+      location.hash = created.id;
+    },
+    openDetails() { if (mapView.selection.size) ItemDetails(ctx); },
     addLayer() {
       // Active first, so the layers list draws with the new one chosen.
       ctx.ui.activeLayerId = uid('layer');
@@ -189,24 +222,29 @@ const ctx = {
 ctx.tools = new ToolRegistry(ctx).register(SelectTool).register(ConnectTool).register(PanTool).register(DataVizTool);
 ctx.ui.editLabel = LabelEditor(ctx);
 
-// The sidebar every plugin shares: this org's maps, the tools, and the layers.
+// Maps, Tools and Layers are separate panels over the board: dock them left or right, or float them.
 const toolMenu = h('ul');
 const layersEl = h('div', { class: 'side-layers' });
-const side = SideNav({ label: 'Ecosystem Mapper', sections: [
-  { title: 'Maps', action: { label: 'New map', onclick: () => { const title = prompt('Name of the new map', 'Untitled map'); if (title?.trim()) ctx.actions.newMap(title.trim()); } },
-    items: Object.values(index.maps).map((m) => ({ label: m.title, icon: 'mapper', href: `#${m.id}`, on: m.id === mapId })) },
-  { title: 'Tools', menu: toolMenu },
-  { title: 'Layers', action: { label: 'Add layer', onclick: () => ctx.actions.addLayer() }, body: layersEl, className: 'side-layers-section' },
-] });
-side.id = 'toolbar';
-document.querySelector('#toolbar').replaceWith(side);
+const mapsEl = h('ul', { class: 'menu side-menu dock-maps' });
+const drawMaps = () => mapsEl.replaceChildren(...Object.values(index.maps).map((m) =>
+  h('li', {}, h('a', { href: `#${m.id}`, class: m.id === mapId ? 'menu-active' : null, title: m.description || m.title }, m.title))));
+drawMaps();
+document.addEventListener('dashi:map-renamed', drawMaps);
+const main = document.querySelector('main');
+ctx.dock = DockPanels(main, [
+  { id: 'tools', title: 'Tools', body: toolMenu, dock: 'left', compact: true, closable: false },
+  { id: 'maps', title: 'Maps', body: mapsEl, dock: 'left', width: 220,
+    action: { label: 'New map', onclick: () => { const title = prompt('Name of the new map', 'Untitled map'); if (title?.trim()) ctx.actions.newMap(title.trim()); } } },
+  { id: 'layers', title: 'Layers', body: layersEl, dock: 'right', width: 240, action: { label: 'Add layer', onclick: () => ctx.actions.addLayer() } },
+], { key: 'dashi.mapper.panels' });
 Toolbar(toolMenu, ctx);
 TopBar(document.querySelector('#topbar'), ctx);
-Inspector(document.querySelector('#inspector'), ctx);
 LayersPanel(layersEl, ctx);
+SelectionBar(main, ctx);
 
 ctx.tools.use('select');
 mapView.sync();
+requestAnimationFrame(() => requestAnimationFrame(fitView));
 autosaveDoc(mapDocName(mapId), store);
 // The map's name and its title in the org's list of maps stay the same.
 store.map.name = index.maps[mapId].title;
@@ -257,6 +295,9 @@ document.addEventListener('keydown', (e) => {
   } else if (mod && e.key.toLowerCase() === 'y') {
     e.preventDefault();
     store.redo();
+  } else if (e.key === 'Enter' && mapView.selection.size) {
+    e.preventDefault();
+    ctx.actions.openDetails();
   } else if (e.key === 'Escape') {
     mapView.select([]);
     ctx.tools.use('select');

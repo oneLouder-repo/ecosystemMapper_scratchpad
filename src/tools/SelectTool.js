@@ -11,7 +11,8 @@ import { startConnect, moveConnect, endConnect, cancelConnect } from './connectD
  *   drag a selected actor         move every selected actor together
  *   drag a group's frame or tab   move the whole group
  *   drag a connector end handle   re-dock it onto an actor, or leave it floating
- *   double-click an actor         edit its label
+ *   double-click an actor,
+ *     connector or group          open its details
  *   double-click empty board      add an actor there
  *   Delete / Backspace            remove the selection
  * Panning lives in the pan tool, middle-drag, scroll, or holding Space.
@@ -133,7 +134,7 @@ export default {
   },
 
   onDoubleClick(e, ctx) {
-    if (e.view?.kind === 'actor') ctx.ui.editLabel(e.view.id);
+    if (e.view) { ctx.mapView.select([e.view.id]); ctx.actions.openDetails(); }
     else if (!e.view) ctx.actions.addActorAt(e.worldX, e.worldY);
   },
 
