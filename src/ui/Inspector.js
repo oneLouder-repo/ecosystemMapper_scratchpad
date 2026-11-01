@@ -2,8 +2,12 @@ import { h, options } from './dom.js';
 import { columnAt, regionAt } from '../lenses/index.js';
 import { STRENGTH_WIDTH } from '../display/ConnectorView.js';
 
-/** Side panel for editing whatever is selected. */
-export function Inspector(el, ctx) {
+/**
+ * A dialog for whatever is selected on the board: an actor or agent, a
+ * connector, a group, or several things. Changes apply as you make them.
+ * Opens on double-click, Enter, or the Details button on the selection bar.
+ */
+export function ItemDetails(ctx) {
   const { store, ops, mapView } = ctx;
 
   const field = (label, control) => h('label', { class: 'field' }, h('span', {}, label), control);
@@ -97,44 +101,47 @@ export function Inspector(el, ctx) {
     ];
   }
 
-  function renderNothing() {
-    const lens = mapView.lens;
+  function renderMulti({ actorIds, connectorIds, groupIds }) {
+    const count = actorIds.length + connectorIds.length + groupIds.length;
     return [
-      h('h2', {}, 'Map'),
-      field('Name', h('input', { value: store.map.name, onchange: (e) => store.apply(ops.renameMap(e.target.value)) })),
-      h('p', { class: 'muted' }, lens.description ?? ''),
-      h('ul', { class: 'tips' },
-        h('li', {}, 'Click Actor or Agent to add one, or drag it onto the board. A adds one where the pointer is.'),
-        h('li', {}, 'Drag from the small box on an actor’s top-left corner to another actor to connect them.'),
-        h('li', {}, 'Click a zone of the lens to make its actors signal.'),
-        h('li', {}, 'Drag a box to select several. Ctrl or ⌘ + G groups them.'),
-        h('li', {}, 'Select a connector, then drag its round ends to re-dock it.'),
-        h('li', {}, 'Data viz (D): click anything to light up what it’s connected to for 15 seconds.'),
-        h('li', {}, 'Scroll or hold Space to pan, Ctrl or ⌘ + scroll to zoom, F to fit, Tidy to space actors out.'),
-      ),
+      h('h2', {}, `${count} selected`),
+      actorIds.length > 1 && h('button', { class: 'btn btn-sm btn-primary', onclick: () => { ctx.actions.groupSelection(); close(); } }, 'Group these actors (Ctrl+G)'),
+      h('p', { class: 'muted' }, 'Press Delete to remove them.'),
     ];
   }
 
   function render() {
-    if (el.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) return; // don't clobber a field being typed in
-    const { actorIds, connectorIds, groupIds } = mapView.selectedItems();
-    const count = actorIds.length + connectorIds.length + groupIds.length;
-    let body;
-    if (count > 1) {
-      body = [
-        h('h2', {}, `${count} selected`),
-        actorIds.length > 1 && h('button', { class: 'btn btn-sm btn-primary', onclick: () => ctx.actions.groupSelection() }, 'Group these actors (Ctrl+G)'),
-        h('p', { class: 'muted' }, 'Press Delete to remove them.'),
-      ];
-    } else if (actorIds.length) body = renderActor(store.map.actors[actorIds[0]]);
-    else if (connectorIds.length) body = renderConnector(store.map.connectors[connectorIds[0]]);
-    else if (groupIds.length) body = renderGroup(store.map.groups[groupIds[0]]);
-    else body = renderNothing();
-    el.replaceChildren(...body);
+    if (body.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) return; // don't clobber a field being typed in
+    const sel = mapView.selectedItems();
+    const count = sel.actorIds.length + sel.connectorIds.length + sel.groupIds.length;
+    if (!count) return close();
+    let parts;
+    if (count > 1) parts = renderMulti(sel);
+    else if (sel.actorIds.length) parts = renderActor(store.map.actors[sel.actorIds[0]]);
+    else if (sel.connectorIds.length) parts = renderConnector(store.map.connectors[sel.connectorIds[0]]);
+    else parts = renderGroup(store.map.groups[sel.groupIds[0]]);
+    body.replaceChildren(...parts.filter(Boolean));
   }
 
+  const body = h('div', { class: 'item-details-body' });
+  const dialog = h('dialog', { class: 'modal item-details' },
+    h('div', { class: 'modal-box' },
+      body,
+      h('div', { class: 'modal-action' },
+        h('button', { type: 'button', class: 'btn btn-sm btn-ghost text-error', onclick: () => { ctx.actions.deleteSelection(); close(); } }, 'Delete'),
+        h('button', { type: 'button', class: 'btn btn-sm btn-primary', onclick: () => close() }, 'Done'))),
+    h('form', { method: 'dialog', class: 'modal-backdrop' }, h('button', {}, 'close')));
+  const close = () => { if (dialog.open) dialog.close(); };
+  dialog.addEventListener('close', () => {
+    mapView.removeEventListener('selection', render);
+    store.removeEventListener('change', render);
+    dialog.remove();
+  });
+  document.body.append(dialog);
+  render();
+  dialog.showModal();
+  dialog.querySelector('input')?.focus();
   mapView.addEventListener('selection', render);
   store.addEventListener('change', render);
-  el.addEventListener('focusout', () => setTimeout(render));
-  render();
+  body.addEventListener('focusout', () => setTimeout(render));
 }

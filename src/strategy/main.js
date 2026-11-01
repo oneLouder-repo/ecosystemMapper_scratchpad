@@ -92,6 +92,7 @@ function drawSide(tab) {
   const plans = Object.values(store.doc.nodes).filter((n) => n.type === 'plan').sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   side = swapSide(side, SideNav({ label: 'Strategy & Work', sections: [
     { title: 'Strategy & Work', items: TABS.map((t) => ({ label: t.label, icon: t.icon, href: `#${t.id}`, on: t.id === tab && !(tab === 'framework' && plans.some((p) => p.id === ctx.selectedId)) })) },
+    { title: 'Share your plan', items: [{ label: 'Plan designer', sub: 'A designed plan document to print, PDF or publish', icon: 'doc', href: 'plandoc.html' }] },
     plans.length && { title: 'Plans', items: plans.map((p) => ({ label: p.title, sub: [p.start, p.end].filter(Boolean).map(short).join(' – '), icon: 'doc', href: `#${p.id}`, on: tab === 'framework' && ctx.selectedId === p.id })) },
   ] }));
 }

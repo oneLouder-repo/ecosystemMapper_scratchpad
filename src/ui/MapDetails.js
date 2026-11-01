@@ -14,9 +14,11 @@ export function MapDetails(ctx) {
   const dialog = h('dialog', { class: 'modal' },
     h('form', { class: 'modal-box map-details', method: 'dialog', onsubmit: () => {
       ctx.actions.updateEntry({ title: title.value.trim() || entry.title, description: description.value, ownerId: owner.value || null, memberIds: [...members] });
-      document.querySelector('.map-picker option:checked').textContent = title.value.trim() || entry.title;
+      const t = title.value.trim() || entry.title;
+      ctx.store.apply(ctx.ops.renameMap(t));
+      document.dispatchEvent(new CustomEvent('dashi:map-renamed'));
     } },
-      h('h3', {}, 'Map details'),
+      h('h3', {}, 'Map details and sharing'),
       h('label', { class: 'fieldset' }, h('span', { class: 'fieldset-legend' }, 'Title'), title),
       h('label', { class: 'fieldset' }, h('span', { class: 'fieldset-legend' }, 'Description'), description),
       h('label', { class: 'fieldset' }, h('span', { class: 'fieldset-legend' }, 'Owner'), owner),

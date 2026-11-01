@@ -12,6 +12,7 @@
  *   data        just the series those dashboards chart
  *   podcasts    the station, its shows, and episodes that are out
  *   pages       pages and articles that are out, on public sites
+ *   plandocs    published plan documents on public sites: their design and the snapshot taken when published
  *   maps        nothing
  */
 import { published } from '../src/platform/podcasts.js';
@@ -88,6 +89,11 @@ export function publicDocs(docs, today = new Date().toISOString().slice(0, 10)) 
     : {};
   for (const p of Object.values(pages)) if (p.authorId) people.add(p.authorId);
   out.pages = { id: 'pages', pages };
+
+  // Plan documents: only the published snapshot, never the live strategy.
+  out.plandocs = { id: 'plandocs', docs: Object.fromEntries(Object.entries(docs.plandocs?.docs ?? {})
+    .filter(([, d]) => d.status === 'published' && d.snapshot && onSite(d.siteId))
+    .map(([id, d]) => [id, pick(d, ['id', 'planId', 'template', 'palette', 'text', 'hidden', 'images', 'siteId', 'status', 'publishedAt', 'snapshot'])])) };
 
   out.org = {
     ...pick(org, ['id', 'name', 'description', 'mission', 'contact', 'logo', 'theme', 'plugins', 'platform']),

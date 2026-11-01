@@ -18,6 +18,7 @@ import {
 } from '../platform/library.js';
 import { FORMATS, download, fileName, renderMarkdown, exportDoc, printHtml, exportDublinCore, exportCsl, referenceBlocks, byline } from './exports.js';
 import { parseMarkdown, toHtml } from '../core/markdown.js';
+import { dashiToolbarItems } from './DashiTools.js';
 
 /**
  * The document library.
@@ -505,7 +506,7 @@ function DocPage(item) {
       usageStatistics: false,
       autofocus: false,
       placeholder: 'Write here. The toolbar has headings, lists, tables, links and quotes.',
-      toolbarItems: [['heading', 'bold', 'italic', 'strike'], ['hr', 'quote'], ['ul', 'ol', 'task', 'indent', 'outdent'], ['table', 'link'], ['code', 'codeblock']],
+      toolbarItems: [['heading', 'bold', 'italic', 'strike'], dashiToolbarItems(() => editor), ['ul', 'ol', 'task'], ['table', 'link', 'image', 'quote', 'hr'], ['indent', 'outdent', 'code', 'codeblock']],
       events: {
         change: () => { words.textContent = `${wordCount(editor.getMarkdown())} words`; clearTimeout(timer); timer = setTimeout(save, 600); },
         blur: save,

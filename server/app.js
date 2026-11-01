@@ -478,6 +478,26 @@ export function createApp(db, options = {}) {
       return json(res, 201, { ok: true });
     }
 
+    /* Openly licensed pictures for plan documents and pages, from Openverse. Members only. */
+    if (path === '/api/images' && method === 'GET') {
+      if (!a.member) throw new HttpError(403, 'Members only');
+      const term = String(url.searchParams.get('q') ?? '').trim().slice(0, 100);
+      if (!term) return json(res, 200, { results: [] });
+      bump(`images:${a.user.id}`, 150);
+      let data;
+      try {
+        const r = await fetch(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}&page_size=18&mature=false`, { signal: AbortSignal.timeout(8000), headers: { 'user-agent': 'Dashi (https://dashi.app)' } });
+        if (!r.ok) throw new Error(String(r.status));
+        data = await r.json();
+      } catch {
+        throw new HttpError(502, 'The open picture library couldn’t be reached just now');
+      }
+      const results = (data.results ?? []).filter((x) => /^https:/.test(x.url ?? '')).map((x) => ({
+        url: x.url, thumbnail: /^https:/.test(x.thumbnail ?? '') ? x.thumbnail : null, title: String(x.title ?? '').slice(0, 200),
+        creator: String(x.creator ?? '').slice(0, 120), license: `${String(x.license ?? '').toUpperCase()} ${x.license_version ?? ''}`.trim(), source: x.foreign_landing_url ?? null,
+      }));
+      return json(res, 200, { results });
+    }
     if (path === '/api/auth/options' && method === 'GET') {
       const dev = config.devLogin
         ? q('SELECT id, email, name, is_super FROM users ORDER BY is_super DESC, name').all().map((u) => ({

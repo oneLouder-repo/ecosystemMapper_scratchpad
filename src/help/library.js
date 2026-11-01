@@ -205,7 +205,7 @@ Visitors only ever see what is published: public dashboards, published episodes 
         {
           id: 'pages-and-news',
           title: 'Pages and news',
-          body: `**Sites & Pages** is where you write information pages and news articles.
+          body: `**Web views** (formerly Sites & Pages) is where you write information pages and news articles.
 
 # Writing
 Bodies use light markdown: **bold**, _italic_, lists, links, quotes and headings that start with #.

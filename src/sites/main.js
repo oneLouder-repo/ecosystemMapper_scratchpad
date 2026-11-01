@@ -5,7 +5,10 @@ import { SideNav, swapSide } from '../ui/SideNav.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp, col } from '../core/collections.js';
 import { autosaveDoc } from '../platform/storage.js';
-import { loadOrg, loadStrategy, loadData, loadDashboards, loadPodcasts, loadPages } from '../platform/docs.js';
+import { loadOrg, loadStrategy, loadData, loadDashboards, loadPodcasts, loadPages, loadPlanDocs } from '../platform/docs.js';
+import { isLivePlan } from '../platform/plandocs.js';
+import { applyTheme, paletteById, shapeById } from '../platform/themes.js';
+import { Logo } from '../ui/Shell.js';
 import { PAGE_KINDS, uniqueSlug, isLive, embedsIn, siteContent } from '../platform/pages.js';
 import { published } from '../platform/podcasts.js';
 import { pluginOn, staffList } from '../platform/org.js';
@@ -20,11 +23,13 @@ import { today, short } from '../strategy/dates.js';
 import { PluginHeader } from '../ui/PluginHeader.js';
 
 /**
- * Sites & Pages: the admin for an org's public sites. One place to see
- * what each site shows (dashboards from the Workbench, the podcast
- * station, pages and news), and to write the pages and articles.
+ * Web views (formerly Sites & Pages): the org's public face in one place.
+ * The overview walks through getting the public side working (look,
+ * dashboards, the plan, podcasts, pages and news), then shows each site
+ * as visitors will meet it, with everything on it and where to change it.
+ * Pages and news articles are written here too.
  *
- *   #sites        every site and what is on it
+ *   #sites        the overview: steps, then every site and what is on it
  *   #<page id>    edit a page or article, with a live preview
  *
  * Bodies are light markdown with shortcodes for live embeds
@@ -35,7 +40,7 @@ const store = new Store(loadPages(), applyCollectionOp);
 autosaveDoc('pages', store, 250);
 Shell(document.querySelector('#shell'), { current: 'pages', org });
 // Other plugins' content, for embeds and the site overview.
-const docs = { org, strategy: loadStrategy(), data: loadData(), dashboards: loadDashboards(), podcasts: loadPodcasts() };
+const docs = { org, strategy: loadStrategy(), data: loadData(), dashboards: loadDashboards(), podcasts: loadPodcasts(), plandocs: loadPlanDocs() };
 
 const app = document.querySelector('#app');
 app.classList.add('palette', 'sites-app', 'frame');
@@ -62,8 +67,13 @@ function renderSide() {
     lead: h('span', { class: 'side-lead' }, h('span', { class: `status-dot ${isLive(p, now) ? 'live' : p.status}`, title: isLive(p, now) ? 'Published' : p.status === 'draft' ? 'Draft' : 'Scheduled' })),
     sub: [org.sites[p.siteId]?.name ?? 'No site', p.kind === 'article' ? short(p.publishedAt) : p.inNav ? 'in menu' : null].filter(Boolean).join(' · '),
   });
-  side = swapSide(side, SideNav({ label: 'Sites and pages', sections: [
-    { title: 'Sites', items: [{ label: 'Your sites', sub: 'What each one shows', icon: 'globe', href: '#sites', on: r === 'sites' }] },
+  side = swapSide(side, SideNav({ label: 'Web views', sections: [
+    { title: 'Web views', items: [
+      { label: 'Overview', sub: 'Your sites and what visitors see', icon: 'globe', href: '#sites', on: r === 'sites' },
+      { label: 'Dashboards', sub: 'Data Workbench', icon: 'chart', href: 'palette.html#dashboards' },
+      { label: 'Strategic plan', sub: 'Plan designer', icon: 'strategy', href: 'plandoc.html' },
+      pluginOn(org, 'podcasts') && { label: 'Podcast station', sub: 'Podcasts', icon: 'mic', href: 'podcasts.html#station' },
+    ] },
     { title: 'Pages', action: { label: 'New page', onclick: () => newPage('page') }, items: [...list('page').map(item), { label: 'New page', icon: 'plus', onclick: () => newPage('page') }] },
     { title: 'News articles', action: { label: 'New article', onclick: () => newPage('article') }, items: [...list('article').map(item), { label: 'New article', icon: 'plus', onclick: () => newPage('article') }] },
   ] }));
@@ -88,40 +98,77 @@ function newPage(kind) {
 
 function Sites() {
   const sites = Object.values(org.sites);
-  return h('div', {},
+  const publicSites = sites.filter((s) => s.visibility === 'public');
+  const pages = Object.values(doc().pages);
+  const dashes = Object.values(docs.dashboards.dashboards);
+  const plans = Object.values(docs.plandocs.docs);
+  const hasPods = pluginOn(org, 'podcasts');
+  const station = hasPods && org.sites[docs.podcasts.station.siteId];
+
+  // Getting the public side working, step by step.
+  const steps = [
+    { done: publicSites.length > 0 && !!org.theme?.palette, title: 'Your look and your sites', text: org.theme?.palette ? `${paletteById[org.theme.palette]?.label ?? org.theme.palette} colours, ${shapeById[org.theme.shape]?.label?.toLowerCase() ?? 'rounded'} shapes, ${publicSites.length} public site${publicSites.length === 1 ? '' : 's'}.` : 'Pick your colours and shape, and name your public sites.', href: 'org.html#sites', action: 'Theme and sites' },
+    { done: dashes.some((d) => d.visibility === 'public' && d.siteId), title: 'Live dashboards', text: `${dashes.filter((d) => d.visibility === 'public' && d.siteId).length} of ${dashes.length} dashboards are public. Design them as visitors will see them.`, href: 'palette.html#dashboards', action: 'Design dashboards' },
+    { done: plans.some(isLivePlan), title: 'Your strategic plan', text: plans.some(isLivePlan) ? 'Your plan is online, and downloads as a PDF.' : 'Turn your strategy into a designed plan to read online or download as a PDF.', href: 'plandoc.html', action: 'Plan designer' },
+    hasPods && { done: !!station, title: 'Your podcast station', text: station ? `On ${station.name}, with ${liveEpisodes().length} episodes out.` : 'Put the station on a site so listeners can find it.', href: 'podcasts.html#station', action: 'Station' },
+    { done: pages.some((p) => p.kind === 'page' && isLive(p, now)), title: 'Pages and news', text: `${pages.filter((p) => p.kind === 'page' && isLive(p, now)).length} pages and ${pages.filter((p) => p.kind === 'article' && isLive(p, now)).length} articles are live. Say who you are and what’s new.`, onclick: () => newPage('page'), action: 'New page' },
+  ].filter(Boolean);
+  const doneCount = steps.filter((x) => x.done).length;
+
+  return h('div', { class: 'wv' },
     PluginHeader('pages'),
-    h('h2', {}, 'Your sites'),
-    h('p', { class: 'muted' }, 'Each public site can carry dashboards, information pages, news and your podcast station. They all wear your organisation’s theme.'),
-    h('div', { class: 'site-cards' }, sites.map((s) => {
-      const c = siteContent(doc(), s.id, now);
-      const dashes = publicDashboards().filter((d) => d.siteId === s.id);
-      const station = pluginOn(org, 'podcasts') && docs.podcasts.station.siteId === s.id;
-      const drafts = Object.values(doc().pages).filter((p) => p.siteId === s.id && !isLive(p, now)).length;
-      const row = (ic, label, n, href, hint) => h('li', {}, icon(ic, 16), h('span', {}, label), h('strong', {}, n), href && h('a', { href, class: 'link' }, hint));
-      return h('article', { class: 'site-card card' },
-        h('header', {},
-          h('strong', {}, s.name),
-          h('span', { class: `badge badge-sm ${s.visibility === 'public' ? 'badge-success' : 'badge-ghost'}` }, s.visibility),
-          s.url && h('small', { class: 'muted' }, s.url)),
-        h('ul', { class: 'site-contents' },
-          row('chart', 'Dashboards', dashes.length, 'palette.html#publish', 'Data Workbench'),
-          row('doc', 'Pages in the menu', c.nav.length),
-          row('news', 'News articles', c.articles.length),
-          drafts > 0 && row('doc', 'Drafts and scheduled', drafts),
-          pluginOn(org, 'podcasts') && row('mic', 'Podcast station', station ? 'Yes' : 'No', 'podcasts.html#station', station ? 'Station settings' : 'Put it here')),
-        h('div', { class: 'site-card-actions' },
-          s.visibility === 'public'
-            ? h('a', { class: 'btn btn-sm btn-primary', href: siteUrl(s.id), target: '_blank', rel: 'noopener' }, icon('globe', 14), 'View site')
-            : h('span', { class: 'muted' }, 'Private: only staff and the board see it.'),
-          h('a', { class: 'btn btn-sm', href: 'org.html#sites' }, icon('settings', 14), 'Theme and visibility')));
-    })),
-    h('section', { class: 'panel castopod-note' },
-      h('h2', {}, 'How a site is put together'),
-      h('ul', { class: 'help-list' },
-        h('li', {}, h('strong', {}, 'Home: '), 'the site’s public dashboards, with the latest news and the newest episode above them.'),
-        h('li', {}, h('strong', {}, 'Menu: '), 'pages marked “In the menu”, then News and the podcast station when the site has them.'),
-        h('li', {}, h('strong', {}, 'Embeds: '), 'put a line like ', h('code', {}, '[[dashboard:dash-equity]]'), ' or ', h('code', {}, '[[episode:ep-sv-3]]'), ' in a page to show live content. Use the Insert menu in the editor.'),
-        h('li', {}, h('strong', {}, 'Look: '), 'colour palette and shape come from Organisation settings; the station adds its own player and cover art style.'))));
+    h('section', { class: 'wv-steps' },
+      h('div', { class: 'wv-steps-head' },
+        h('h2', {}, 'Getting your public side working'),
+        h('span', { class: 'wv-progress' }, h('span', { style: `width:${(doneCount / steps.length) * 100}%` })),
+        h('span', { class: 'muted small' }, `${doneCount} of ${steps.length} done`)),
+      h('ol', {}, steps.map((x, i) => h('li', { class: x.done ? 'done' : '' },
+        h('span', { class: 'wv-step-num' }, x.done ? '✓' : String(i + 1)),
+        h('div', {}, h('strong', {}, x.title), h('p', {}, x.text)),
+        x.href ? h('a', { class: `btn btn-sm ${x.done ? 'btn-ghost' : 'btn-primary'}`, href: x.href }, x.action) : h('button', { class: `btn btn-sm ${x.done ? 'btn-ghost' : 'btn-primary'}`, onclick: x.onclick }, x.action))))),
+    h('h2', { class: 'wv-h2' }, 'Your sites, as visitors see them'),
+    h('div', { class: 'wv-sites' }, sites.map((s) => SiteView(s))));
+}
+
+/** One site: a small picture of its front page in its theme, then everything on it and where to change it. */
+function SiteView(s) {
+  const c = siteContent(doc(), s.id, now);
+  const dashes = Object.values(docs.dashboards.dashboards).filter((d) => d.siteId === s.id);
+  const plans = Object.values(docs.plandocs.docs).filter((d) => d.siteId === s.id);
+  const stories = Object.values(docs.dashboards.stories ?? {}).filter((x) => x.siteId === s.id);
+  const calcs = Object.values(docs.dashboards.calculators ?? {}).filter((x) => x.siteId === s.id);
+  const station = pluginOn(org, 'podcasts') && docs.podcasts.station.siteId === s.id;
+  const drafts = Object.values(doc().pages).filter((p) => p.siteId === s.id && !isLive(p, now));
+  const isPublic = s.visibility === 'public';
+  const shown = (on) => h('span', { class: `wv-chip ${on ? 'on' : ''}` }, on ? 'Public' : 'Hidden');
+  const row = (ic, kind, title, on, href, editLabel = 'Edit') => h('li', {}, icon(ic, 16), h('span', { class: 'wv-kind' }, kind), h('span', { class: 'wv-title' }, title), shown(on), href && h('a', { class: 'link', href }, editLabel));
+
+  const thumb = h('div', { class: 'wv-thumb site-page' },
+    h('div', { class: 'wv-thumb-head' }, Logo(org, 18), h('b', {}, org.name),
+      h('span', { class: 'wv-thumb-nav' }, 'Home', c.nav.slice(0, 3).map((p) => h('span', {}, p.title)), plans.some(isLivePlan) && h('span', {}, 'Our plan'), station && h('span', {}, docs.podcasts.station.name))),
+    h('div', { class: 'wv-thumb-hero' }, h('b', {}, s.name), h('span', {}, org.mission ?? '')),
+    h('div', { class: 'wv-thumb-grid' }, dashes.filter((d) => d.visibility === 'public').slice(0, 1).flatMap((d) => d.widgets.slice(0, 4).map((w) => h('span', { class: `wv-thumb-w ${w.size ?? 'wide'} t-${w.type}` }))),
+      !dashes.some((d) => d.visibility === 'public') && h('span', { class: 'wv-thumb-w full t-text' })));
+  applyTheme(thumb, org.theme);
+
+  return h('article', { class: 'wv-site card' },
+    h('header', {},
+      h('div', {}, h('strong', {}, s.name), h('span', { class: `badge badge-sm ${isPublic ? 'badge-success' : 'badge-ghost'}` }, s.visibility), s.url && h('small', { class: 'muted' }, s.url)),
+      h('div', { class: 'wv-site-actions' },
+        isPublic && h('a', { class: 'btn btn-sm btn-primary', href: siteUrl(s.id), target: '_blank', rel: 'noopener' }, icon('globe', 14), 'Open the site'),
+        h('a', { class: 'btn btn-sm btn-ghost', href: 'org.html#sites' }, icon('settings', 14), 'Look and visibility'))),
+    h('div', { class: 'wv-site-body' },
+      h('a', { class: 'wv-thumb-link', href: isPublic ? siteUrl(s.id) : 'org.html#sites', target: isPublic ? '_blank' : null, title: 'The front page, roughly' }, thumb),
+      h('ul', { class: 'wv-contents' },
+        dashes.map((d) => row('chart', 'Dashboard', d.title, d.visibility === 'public', `palette.html#${d.id}`, 'Design')),
+        plans.map((d) => row('strategy', 'Strategic plan', docs.strategy.nodes[d.planId]?.title ?? d.snapshot?.plan?.title ?? 'Plan', isLivePlan(d), `plandoc.html#${d.id}`, 'Design')),
+        station && row('mic', 'Podcast station', docs.podcasts.station.name, true, 'podcasts.html#station', 'Settings'),
+        stories.map((x) => row('story', 'Data story', x.title, x.visibility === 'public', 'palette.html#stories')),
+        calcs.map((x) => row('gift', 'Impact calculator', x.title, x.visibility === 'public', 'palette.html#impact')),
+        c.nav.map((p) => row('doc', 'Page', p.title, true, `#${p.id}`)),
+        c.articles.length > 0 && row('news', 'News', `${c.articles.length} article${c.articles.length === 1 ? '' : 's'}, newest ${short(c.articles[0].publishedAt)}`, true, `#${c.articles[0].id}`),
+        drafts.length > 0 && row('doc', 'Drafts', `${drafts.length} not out yet`, false, `#${drafts[0].id}`),
+        !isPublic && h('li', { class: 'muted' }, 'This site is private: only signed-in staff and board members see it.'))));
 }
 
 function Editor(p) {

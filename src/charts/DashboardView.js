@@ -1,16 +1,15 @@
 import { h } from '../ui/dom.js';
 import { dashboardMonths } from '../platform/dashboards.js';
 import { renderWidget } from './widgets.js';
-import { Player } from './Player.js';
 
 /**
- * A whole dashboard: title, description, the timeline player and the
- * widget grid. Used by the Workbench (with `decorate` to add edit
+ * A whole dashboard: title, description and the widget grid, as of the
+ * latest month of data (the timeline player is set aside for now). Used by the Workbench (with `decorate` to add edit
  * controls to each widget) and by public sites.
  */
 export function DashboardView(dash, docs, { decorate, asOf: start } = {}) {
   const months = dashboardMonths(dash, docs.data);
-  let asOf = start && months.includes(start) ? start : months.at(-1);
+  const asOf = start && months.includes(start) ? start : months.at(-1);
   const grid = h('div', { class: 'widget-grid' });
   const draw = () => {
     grid.replaceChildren(...dash.widgets.map((w) => {
@@ -21,7 +20,6 @@ export function DashboardView(dash, docs, { decorate, asOf: start } = {}) {
   draw();
   const view = h('section', { class: 'dashboard', 'aria-label': dash.title },
     h('header', { class: 'dashboard-head' }, h('h2', {}, dash.title), dash.description && h('p', {}, dash.description)),
-    months.length > 1 && Player({ months, value: asOf, onChange: (m) => { asOf = m; view.dataset.asOf = m; draw(); } }),
     grid,
   );
   view.dataset.asOf = asOf ?? '';
