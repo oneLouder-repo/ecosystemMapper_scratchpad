@@ -191,8 +191,11 @@ export function apaReference(meta) {
     dataset: '[Data set]',
     broadcast: `[${meta.medium || 'Audio podcast episode'}]`,
     interview: meta.medium ? `[${meta.medium}]` : '',
+    manuscript: `[${meta.genre || 'Unpublished manuscript'}]`,
   }[type] ?? (meta.genre && ['report', 'manuscript', 'document'].includes(type) ? '' : '');
   const paren = [];
+  const translators = creatorsBy(meta, 'translator');
+  if (translators.length) paren.push(`${nameList(translators.map(nameForward), { forward: true })}, Trans.`);
   if (meta.edition && ['book', 'chapter', 'dataset'].includes(type)) paren.push(type === 'dataset' ? `Version ${meta.edition}` : `${ordinal(meta.edition)} ed.`);
   if (meta.number && ['report', 'broadcast'].includes(type)) paren.push(`${type === 'report' ? (meta.genre ? `${meta.genre} No.` : 'Report No.') : 'No.'} ${meta.number}`);
   if (meta.number && type === 'legislation') paren.push(meta.number);
@@ -213,7 +216,7 @@ export function apaReference(meta) {
       if (meta.containerTitle) {
         add(meta.containerTitle, true);
         if (meta.volume) { add(', '); add(String(meta.volume), true); }
-        if (meta.issue) add(`(${meta.issue})`);
+        if (meta.issue) add(meta.volume ? `(${meta.issue})` : `, (${meta.issue})`);
         if (pages) add(`, ${pages}`);
         add('. ');
       }
@@ -223,7 +226,7 @@ export function apaReference(meta) {
       break;
     case 'chapter': {
       add('In ');
-      if (editors.length) add(`${nameList(editors.map(nameForward))} (${editors.length > 1 ? 'Eds.' : 'Ed.'}), `);
+      if (editors.length) add(`${nameList(editors.map(nameForward), { forward: true })} (${editors.length > 1 ? 'Eds.' : 'Ed.'}), `);
       add(meta.containerTitle || 'Untitled book', true);
       const bits = [meta.edition && `${ordinal(meta.edition)} ed.`, pages && `pp. ${pages}`].filter(Boolean);
       if (bits.length) add(` (${bits.join(', ')})`);
@@ -256,8 +259,10 @@ export function apaReference(meta) {
   return tidyRuns(r);
 }
 
-function nameList(names) {
+function nameList(names, { forward = false } = {}) {
   if (names.length <= 1) return names[0] ?? '';
+  // "In A. Editor & B. Editor (Eds.)": no comma between two names written forwards.
+  if (forward) return names.length === 2 ? names.join(' & ') : `${names.slice(0, -1).join(', ')}, & ${names.at(-1)}`;
   if (names.length <= 20) return `${names.slice(0, -1).join(', ')}, & ${names.at(-1)}`;
   return `${names.slice(0, 19).join(', ')}, … ${names.at(-1)}`;
 }

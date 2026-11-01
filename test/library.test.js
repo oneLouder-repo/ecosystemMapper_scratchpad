@@ -120,3 +120,11 @@ test('uploaded files find their references: DOI inside, DOI or ISBN in the name,
   items.gaia.file = { mediaId: 'm' };
   assert.equal(match('gaia-again.pdf', '10.1126/science.aau0427'), null, 'only references with no file yet');
 });
+
+test('APA details: translators, unpublished manuscripts, issue-only magazines, two editors', () => {
+  const ref = (m) => L.runsToText(L.apaReference({ creators: [], ...m }));
+  assert.equal(ref({ type: 'manuscript', title: 'A clear inversion', issued: '2018', creators: [{ role: 'author', family: 'Latour', given: 'Bruno' }, { role: 'translator', family: 'Muecke', given: 'Stephen' }] }),
+    'Latour, B. (2018). A clear inversion (S. Muecke, Trans.) [Unpublished manuscript].');
+  assert.match(ref({ type: 'article-magazine', title: 'Intra-actions', containerTitle: 'Mousse', issue: '34', page: '76-81', issued: '2012', creators: [{ role: 'author', family: 'Kleinman', given: 'Adam' }] }), /Mousse, \(34\), 76–81\.$/);
+  assert.match(ref({ type: 'chapter', title: 'Epistemology', containerTitle: 'Reader', creators: [{ role: 'editor', family: 'Coetzee', given: 'P. H.' }, { role: 'editor', family: 'Roux', given: 'A. P. J.' }] }), /In P\. H\. Coetzee & A\. P\. J\. Roux \(Eds\.\), Reader/);
+});
