@@ -1377,3 +1377,61 @@ table.sheet { border-collapse: separate; border-spacing: 0; font-size: 13.5px; f
 .domain-help { max-width: 760px; margin-top: 12px; }
 .dns-table td:first-child code { white-space: nowrap; }
 .chooser-section .pick-list { max-height: 260px; }
+
+/* ── The dashboard designer: the dashboard as visitors see it, edited in place ── */
+.dd { display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
+.dd-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dd-status { font-size: 13px; font-weight: 700; color: var(--muted); padding: 4px 10px; border-radius: 999px; background: var(--color-base-200); }
+.dd-status.on { color: #1f7a4d; background: #e3f5ea; }
+.dd-field { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.dd-body { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
+.dd-canvas { border-radius: 14px; overflow: hidden; border: 1px solid var(--line-soft); box-shadow: 0 6px 24px rgb(30 30 40 / 0.06); background: var(--color-base-100); color: var(--color-base-content); min-height: 520px; }
+.dd-site-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--color-base-200); border-bottom: 1px solid var(--color-base-300); }
+.dd-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-base-300); }
+.dd-url { margin-left: 10px; font-size: 12px; color: color-mix(in oklab, var(--color-base-content) 55%, transparent); background: var(--color-base-100); padding: 3px 12px; border-radius: 999px; }
+.dd-page { padding: 28px 30px 36px; }
+.dd-head { margin-bottom: 18px; }
+.dd-title { font-size: 26px !important; font-weight: 800 !important; }
+.dd-inline { outline: none; border-radius: 6px; cursor: text; padding: 2px 4px; margin-left: -4px; }
+.dd-inline:hover { box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 30%, transparent); }
+.dd-inline:focus { box-shadow: 0 0 0 2px var(--color-primary); }
+.dd-inline:empty::before { content: attr(data-placeholder); opacity: 0.45; }
+.dd-canvas .widget { border-radius: var(--radius-box); border-color: var(--color-base-300); background: var(--color-base-100); }
+.dd-widget { cursor: pointer; transition: box-shadow 120ms; }
+.dd-widget:hover { box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 35%, transparent); }
+.dd-widget.dd-selected { box-shadow: 0 0 0 3px var(--color-primary); }
+.dd-widget.dd-dragging { opacity: 0.4; }
+.dd-widget.dd-drop { box-shadow: -4px 0 0 0 var(--color-primary); }
+.dd-bar { position: absolute; top: -14px; right: 10px; display: flex; gap: 2px; background: var(--panel); border: 1px solid var(--line-soft); border-radius: 999px; padding: 2px 6px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.1); opacity: 0; transition: opacity 120ms; z-index: 2; color: var(--ink); }
+.dd-widget:hover .dd-bar, .dd-widget.dd-selected .dd-bar, .dd-widget:focus-within .dd-bar { opacity: 1; }
+.dd-bar button { width: 24px; height: 24px; display: inline-grid; place-items: center; border-radius: 6px; font-size: 13px; }
+.dd-bar button:hover:not(:disabled) { background: var(--color-base-200); }
+.dd-bar .dd-del:hover { color: #b5442f; }
+.dd-grip { cursor: grab; color: var(--muted); font-size: 11px; letter-spacing: -2px; align-self: center; padding: 0 4px; }
+.dd-empty { border: 2px dashed var(--color-base-300); border-radius: var(--radius-box); padding: 48px; text-align: center; }
+.dd-panel { position: sticky; top: 0; background: var(--panel); border: 1px solid var(--line-soft); border-radius: 14px; padding: 14px; max-height: calc(100vh - 150px); overflow-y: auto; }
+.dd-panel h3 { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 6px 0 8px; }
+.dd-panel-head { display: flex; justify-content: space-between; align-items: center; }
+.dd-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.dd-kind { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px; border: 1px solid var(--line-soft) !important; border-radius: 10px; font-size: 12px; font-weight: 650; text-align: center; }
+.dd-kind:hover { border-color: var(--accent) !important; background: color-mix(in oklab, var(--accent) 6%, transparent) !important; }
+.dd-kind-icon { width: 46px; height: 28px; border-radius: 4px; background: var(--color-base-200); position: relative; overflow: hidden; }
+.dd-kind-icon::after { content: ''; position: absolute; }
+.k-kpi::after { content: '42'; inset: 0; display: grid; place-items: center; font-weight: 900; color: var(--accent); font-size: 15px; }
+.k-line::after { inset: 6px 4px; background: linear-gradient(160deg, transparent 45%, var(--accent) 46%, var(--accent) 54%, transparent 55%); }
+.k-bar::after { left: 6px; right: 6px; bottom: 4px; height: 16px; background: repeating-linear-gradient(90deg, var(--accent) 0 5px, transparent 5px 9px); clip-path: polygon(0 60%, 25% 60%, 25% 30%, 50% 30%, 50% 0, 75% 0, 75% 20%, 100% 20%, 100% 100%, 0 100%); }
+.k-compare::after { inset: 6px 4px; background: linear-gradient(170deg, transparent 40%, var(--accent) 41%, var(--accent) 49%, transparent 50%), linear-gradient(195deg, transparent 50%, #2a9d8f 51%, #2a9d8f 59%, transparent 60%); }
+.k-progress::after { left: 5px; right: 5px; top: 11px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--accent) 65%, var(--color-base-300) 65%); }
+.k-text::after { left: 7px; right: 7px; top: 7px; height: 3px; background: var(--muted); box-shadow: 0 6px 0 var(--color-base-300), 0 12px 0 var(--color-base-300); }
+.dd-measures { margin-top: 8px; display: flex; flex-direction: column; gap: 10px; }
+.dd-group h4 { font-size: 12px; font-weight: 750; color: var(--muted); margin: 0 0 4px; }
+.dd-measure { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 6px; border-radius: 8px; font-size: 13px; }
+.dd-measure:hover { background: var(--color-base-200); }
+.dd-measure.used .dd-measure-name { color: var(--muted); }
+.dd-measure-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-measure-add { display: flex; gap: 2px; flex: none; }
+.dd-measure-add button { font-size: 11px; font-weight: 800; padding: 2px 6px; border-radius: 6px; color: var(--accent); border: 1px solid var(--line-soft) !important; }
+.dd-measure-add button:hover { background: color-mix(in oklab, var(--accent) 10%, transparent) !important; }
+.dd-checks { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; font-size: 13px; }
+.dd-checks label { display: flex; gap: 6px; align-items: center; }
+@media (max-width: 1200px) { .dd-body { grid-template-columns: 1fr; } .dd-panel { position: static; max-height: none; } }

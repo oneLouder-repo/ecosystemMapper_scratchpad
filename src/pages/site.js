@@ -182,7 +182,7 @@ function Home(site, content, hasStation, ctx) {
     h('section', { class: 'site-hero' },
       h('h1', {}, site.name),
       h('p', {}, docs.org.mission, site.shows ? ` This site shares ${site.shows.charAt(0).toLowerCase()}${site.shows.slice(1)}.` : ''),
-      shown.length > 0 && h('p', { class: 'live-dot', style: 'margin-top:12px' }, 'Live program data. Press Play on a dashboard to watch the year change.')),
+      shown.length > 0 && h('p', { class: 'live-dot', style: 'margin-top:12px' }, 'Live program data, updated as our programs report.')),
     (content.articles.length > 0 || latest) && h('section', { class: 'home-teasers' },
       content.articles.length > 0 && h('div', {},
         h('div', { class: 'section-head' }, h('h2', {}, 'Latest news'), h('a', { href: link({ view: 'news' }) }, 'All news')),
