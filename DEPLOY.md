@@ -10,13 +10,19 @@ cd ecosystemMapper_scratchpad
 npm start
 ```
 
-The first start creates `data/` and adds the two example organisations. Then open these:
+The first start creates `data/` and adds a test platform of six made-up organisations, one or more on each plan, each with people and portraits, a logo, ecosystem maps, strategic plans, dashboards, podcasts, public sites and a document library (lorem ipsum PDFs, Word, OpenDocument, Excel and CSV files, Dashi docs, references and annotated bibliographies). Then open these:
 
 | Address | What it is |
 | --- | --- |
-| http://localhost:5173 | The platform's own site. Sign in as the platform admin to add and manage organisations. |
-| http://example.localhost:5173 | The Example STEM Outreach Network. Visitors see its public site; members who sign in get its dashboard. |
-| http://riverbend.localhost:5173 | Riverbend Community Food Hub |
+| http://localhost:5173 | The platform's own site: the sales pages, sign-up, and (signed in as the platform admin) the organisations, plans and requests. |
+| http://example.localhost:5173 | Example STEM Outreach Network (Custom, 55 people) |
+| http://northshore.localhost:5173 | Northshore Housing Coalition (Custom, 40 people, a custom domain waiting for DNS) |
+| http://coastal.localhost:5173 | Coastal Climate Research Alliance (Custom, 28 people, three bibliographies) |
+| http://riverbend.localhost:5173 | Riverbend Community Food Hub (Standard, 18 people) |
+| http://prairie.localhost:5173 | Prairie Youth Arts Collective (Basic, 12 people) |
+| http://lakeside.localhost:5173 | Lakeside Seniors Network (Free, 5 people) |
+
+Visitors to an org's address see its public site; members who sign in get its dashboard.
 
 Browsers send any `*.localhost` address to your own computer, so subdomains work with no setup. Chrome, Edge and Firefox do this; Safari may not, so use one of the others for testing.
 
@@ -34,6 +40,9 @@ Copy `.env.example` to `.env` and change what you need. The ones that matter on 
 - `GOOGLE_CLIENT_ID`, `FACEBOOK_APP_ID` and the like: sign-in with other accounts (see below).
 - `TRUST_PROXY=true`: when a host's proxy or Caddy sits in front (set for you in the Docker image).
 - `DATA_DIR`: where the database, backups and uploads live. Put it on a disk that is backed up.
+- `OPEN_SIGNUP`: whether anyone can sign up for a Free org on the platform's site (on unless set to `false`).
+- `DNS_TARGET`: the name orgs on the Custom plan point their own domain at with a CNAME, such as `sites.dashi.ca`. Without it, they point at `BASE_DOMAIN`.
+- `FLY_API_TOKEN` and `FLY_APP_NAME`: on Fly.io, the platform asks for a certificate for each custom domain as soon as its DNS checks out.
 
 ## Going live
 
@@ -136,8 +145,21 @@ These are a starting point; check current prices and terms before you choose:
 - [Fly.io](https://fly.io/docs/reference/regions/): runs the app for you, with a Toronto region (`yyz`). Give it a volume for `data/`.
 - In the EU, [Greenhost](https://greenhost.net) (Amsterdam) focuses on civil society.
 
+### Custom domains
+
+Orgs on the Custom plan can use their own address, such as `www.northshorehousing.org`, and manage its DNS themselves:
+
+1. An org admin adds the domain under **Organisation → Domain**. Dashi shows two records to add at their DNS provider: a TXT record (`_dashi.<domain>`) that proves they own it, and a CNAME to `DNS_TARGET`. A bare domain with no `www` uses an A record instead, and the page says so.
+2. They press **Check now**. Dashi looks the records up itself and says which one is missing or wrong. Once both are right, the domain is live and can be made the main address; the subdomain keeps working.
+3. The certificate: on Fly.io with `FLY_API_TOKEN` set, Dashi asks for it. With Caddy (Option B), the Caddyfile's on-demand TLS asks `/tls-ask` first, and only verified domains get one.
+
+The platform admin sees each org's domains and their state on the admin page, and can switch one on without the DNS check.
+
+### Document library
+
+Uploaded documents are checked by their first bytes as well as their name, so a web page renamed `.pdf` is refused. PDFs, images, audio and plain text open in the browser; everything else downloads. The doc editor is [Toast UI Editor](https://ui.toast.com/tui-editor) 3.2.2 (MIT), kept in `vendor/toastui/` so the site loads no scripts from elsewhere. Exports to PDF, Word, OpenDocument, HTML and Markdown are made in the browser by `src/core/`.
+
 ## Later
 
-- **Custom domains** (`riverbend.org`): the server already looks up any host name in its `domains` table before trying subdomains. Adding one means a row in that table plus a certificate for that name; nothing else in the code changes.
 - **Billing**: each org has a `plan` (free, basic, standard, custom), set on the platform admin page. Payments, for example through Stripe, can hook in there.
 - **More than one server**: SQLite suits one server, which covers many small orgs. If the platform outgrows it, the database layer in `server/db.js` and `server/app.js` is the part to move to Postgres.

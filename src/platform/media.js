@@ -41,8 +41,8 @@ export const maxUploadMb = () => hostedLimits()?.uploadMb ?? 1024;
  * each retried a few times, and a dropped connection resumes where it
  * stopped. onProgress(fraction) reports as it goes.
  */
-export async function putMedia(file, { onProgress = () => {} } = {}) {
-  if (isHosted()) return uploadInChunks(file, onProgress);
+export async function putMedia(file, { onProgress = () => {}, kind = 'audio' } = {}) {
+  if (isHosted()) return uploadInChunks(file, onProgress, kind);
   const id = `media_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
   await tx('readwrite', (s) => s.put({ blob: file, name: file.name, type: file.type, size: file.size }, keyOf(id)));
   onProgress(1);
@@ -58,8 +58,8 @@ async function api(method, url, body, headers = {}) {
 }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function uploadInChunks(file, onProgress) {
-  const start = await api('POST', '/api/uploads', JSON.stringify({ filename: file.name, size: file.size, type: file.type }), { 'content-type': 'application/json' });
+async function uploadInChunks(file, onProgress, kind) {
+  const start = await api('POST', '/api/uploads', JSON.stringify({ filename: file.name, size: file.size, type: file.type, kind }), { 'content-type': 'application/json' });
   const { id, chunkSize } = start;
   let received = start.received;
   onProgress(0);

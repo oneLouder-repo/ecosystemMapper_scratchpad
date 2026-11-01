@@ -18,6 +18,7 @@ import { loadPages as loadPagesFor } from './pages.js';
 import { loadMapIndex, loadAllMaps } from './maps.js';
 import { SEEDS } from './seeds.js';
 import { blankStudio, migrateStudio, seedStudio } from './studio.js';
+import { blankLibrary, migrateLibrary } from './library.js';
 
 const seedFor = (doc) => SEEDS[activeOrg()]?.[doc];
 
@@ -36,6 +37,7 @@ export const loadPodcasts = () => migratePodcasts(loadOrSeed('podcasts', seedFor
 export const loadPages = () => loadPagesFor(activeOrg());
 export const loadStudio = () => migrateStudio(loadOrSeed('studio', () => (seedFor('strategy') ? seedStudio(loadStrategy(), { staff: Object.keys(loadOrg().staff) }) : blankStudio())));
 export const loadMaps = () => loadMapIndex(seedFor('maps'));
+export const loadLibrary = () => migrateLibrary(loadOrSeed('library', seedFor('library') ?? blankLibrary));
 
 export function loadAll() {
   const maps = loadMaps();
@@ -49,6 +51,7 @@ export function loadAll() {
     podcasts: loadPodcasts(),
     pages: loadPages(),
     studio: loadStudio(),
+    library: loadLibrary(),
   };
 }
 

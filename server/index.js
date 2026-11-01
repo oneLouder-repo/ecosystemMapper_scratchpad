@@ -9,6 +9,9 @@ import { config, urlFor, orgHost } from './config.js';
 import { openDb } from './db.js';
 import { createApp, hashPassword } from './app.js';
 import { exampleDocs } from '../src/platform/seeds.js';
+import { MOCK_ORGS, mockDocs, mockFiles } from '../src/platform/mockOrgs.js';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { scheduleBackups } from './backup.js';
 
 export async function start({ port = config.port, quiet = false, resolver } = {}) {
@@ -27,11 +30,10 @@ export async function start({ port = config.port, quiet = false, resolver } = {}
     log(`\nPlatform admin: ${config.superAdmin.email}\nPassword (shown once, change it with SUPER_ADMIN_PASSWORD): ${pw}\n`);
   }
 
-  // A fresh database gets the two example orgs, to try everything out.
+  // A fresh database gets the test platform, to try everything out.
   if (config.seedExamples && !db.prepare('SELECT 1 FROM orgs LIMIT 1').get()) {
-    app.createOrg({ id: 'org-example', slug: 'example', name: 'Example STEM Outreach Network', plan: 'custom', docs: exampleDocs('org-example') });
-    app.createOrg({ id: 'org-riverbend', slug: 'riverbend', name: 'Riverbend Community Food Hub', plan: 'standard', docs: exampleDocs('org-riverbend') });
-    log('Added the example organisations.');
+    await seedTestPlatform(db, app);
+    log(`Added the test platform: ${MOCK_ORGS.length} example organisations.`);
   }
 
   // A database snapshot now if there's none from today, then daily.
@@ -69,4 +71,32 @@ export async function start({ port = config.port, quiet = false, resolver } = {}
     log(config.devLogin ? '\nDev sign-in is on: the sign-in page lets you be anyone.' : '');
   }
   return { server, db, app, port: actual };
+}
+
+/**
+ * A fresh database gets the test platform (src/platform/mockOrgs.js): six
+ * example orgs on all four plans, with their documents, library files and,
+ * for one, a custom domain waiting for its DNS records.
+ */
+async function seedTestPlatform(db, app) {
+  const stamp = new Date().toISOString();
+  for (const spec of MOCK_ORGS) {
+    const { docs, files, domain } = mockDocs(spec, spec.existing ? exampleDocs(spec.id) : null);
+    const made = await mockFiles(files, spec.name);
+    const sizes = Object.fromEntries(made.map((f) => [f.mediaId, f]));
+    for (const it of Object.values(docs.library.items)) {
+      const f = it.file && sizes[it.file.mediaId];
+      if (f) Object.assign(it.file, { size: f.bytes.length, type: f.mimetype.split(';')[0] });
+    }
+    app.createOrg({ id: spec.id, slug: spec.slug, name: spec.name, plan: spec.plan, docs });
+    const dir = join(config.dataDir, 'media', spec.id);
+    mkdirSync(dir, { recursive: true });
+    for (const f of made) {
+      writeFileSync(join(dir, f.mediaId), f.bytes);
+      db.prepare('INSERT INTO media (id, org_id, filename, mimetype, size, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)').run(f.mediaId, spec.id, f.name, f.mimetype, f.bytes.length, stamp, null);
+    }
+    if (domain) {
+      db.prepare('INSERT INTO domains (host, org_id, status, token, is_primary, created_at) VALUES (?, ?, ?, ?, 1, ?)').run(domain, spec.id, 'pending', randomBytes(12).toString('hex'), Date.now());
+    }
+  }
 }

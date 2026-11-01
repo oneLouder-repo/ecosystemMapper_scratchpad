@@ -738,7 +738,8 @@ export function createApp(db, options = {}) {
       if (!a.member && !mediaIsPublic(readDocs(a.org.id), row.id, today())) return send(res, 404, 'Not found');
       return sendFile(req, res, join(config.dataDir, 'media', a.org.id, row.id), {
         type: row.mimetype, cache: a.member ? 'private, max-age=3600' : 'public, max-age=3600',
-        headers: { 'content-disposition': `inline; filename="${row.filename.replace(/"/g, '')}"` },
+        // Audio, PDFs, images and plain text open in the browser; anything else downloads.
+        headers: { 'content-disposition': `${/^(audio|image)\/|^application\/pdf|^text\/plain/.test(row.mimetype) && !new URL(req.url, 'http://x').searchParams.has('download') ? 'inline' : 'attachment'}; filename="${row.filename.replace(/"/g, '')}"` },
       });
     }
     if ((m = path.match(/^\/podcasts\/([\w-]+)\.zip$/))) return showZip(req, res, a, m[1]);

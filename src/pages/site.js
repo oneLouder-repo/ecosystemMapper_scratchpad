@@ -50,7 +50,7 @@ const asOf = {};
 const params = () => Object.fromEntries(new URLSearchParams(location.search));
 // Without ?site=, the org's first public site.
 const firstSite = () => Object.values(docs.org.sites).find((s) => s.visibility === 'public')?.id ?? Object.keys(docs.org.sites)[0];
-const siteId = () => params().site ?? firstSite();
+const siteId = () => params().site || firstSite();
 const staffView = !isHosted() || !!session()?.member;
 const link = (p) => `?${new URLSearchParams({ site: siteId(), ...p })}`;
 player.setLink(link);

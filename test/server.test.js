@@ -185,7 +185,10 @@ test('the platform admin switches plugins on for an org, or pauses them', async 
   const amara = await signIn('amara@example.org');
   const plugins = (id, body, cookie = admin) => call('localhost', 'POST', `/api/admin/orgs/${id}/plugins`, { body, cookie });
   assert.equal((await plugins('org-riverbend', { plugin: 'podcasts', on: true }, amara)).status, 403);
-  // Riverbend had switched podcasts off; switching it on from the console turns it on in their settings too.
+  // Riverbend switches podcasts off; switching it on from the console turns it on in their settings too.
+  const maya = await signIn('maya@riverbend.example', RB);
+  const rbOrg = (await call(RB, 'GET', '/api/docs/org', { cookie: maya })).json;
+  assert.equal((await call(RB, 'PUT', '/api/docs/org', { cookie: maya, body: { ...rbOrg, plugins: { ...rbOrg.plugins, podcasts: false } } })).status, 200);
   await plugins('org-riverbend', { plugin: 'podcasts', on: true });
   const orgs = (await call('localhost', 'GET', '/api/admin/orgs', { cookie: admin })).json;
   assert.equal(orgs.find((o) => o.id === 'org-riverbend').chosen.podcasts, true);
@@ -379,16 +382,16 @@ test('anyone can sign up for a free org on the platform site, and asks for a big
   assert.ok(info.site.hero.title);
   assert.equal((await call('example.localhost', 'POST', '/api/signup', { body: { orgName: 'X' } })).status, 404, 'only on the platform site');
   assert.equal((await call('localhost', 'POST', '/api/signup', { body: { orgName: 'Bots', slug: 'bots', email: 'b@b.example', password: 'longenough1', website: 'spam' } })).status, 400);
-  const res = await call('localhost', 'POST', '/api/signup', { body: { orgName: 'Lakeside Arts Collective', slug: 'lakeside', name: 'Rosa', email: 'rosa@lakeside.example', password: 'a good long one', plan: 'standard' } });
+  const res = await call('localhost', 'POST', '/api/signup', { body: { orgName: 'Lakeside Arts Collective', slug: 'lakesidearts', name: 'Rosa', email: 'rosa@lakesidearts.example', password: 'a good long one', plan: 'standard' } });
   assert.equal(res.status, 201);
   assert.ok(res.headers['set-cookie'], 'signed in');
   assert.match(res.json.open, /auth\/switch/);
   const cookie = res.headers['set-cookie'][0].split(';')[0];
-  assert.equal((await call('localhost', 'GET', '/api/session', { cookie })).json.user.email, 'rosa@lakeside.example');
-  assert.equal((await call('localhost', 'POST', '/api/signup', { body: { orgName: 'Again', slug: 'again', email: 'rosa@lakeside.example', password: 'a good long one' } })).status, 409);
+  assert.equal((await call('localhost', 'GET', '/api/session', { cookie })).json.user.email, 'rosa@lakesidearts.example');
+  assert.equal((await call('localhost', 'POST', '/api/signup', { body: { orgName: 'Again', slug: 'again', email: 'rosa@lakesidearts.example', password: 'a good long one' } })).status, 409);
   const admin = await signIn('admin@localhost', 'localhost');
   const reqs = (await call('localhost', 'GET', '/api/admin/requests', { cookie: admin })).json;
-  const r = reqs.find((x) => x.email === 'rosa@lakeside.example');
+  const r = reqs.find((x) => x.email === 'rosa@lakesidearts.example');
   assert.equal(r.kind, 'signup');
   assert.equal(r.data.plan, 'standard');
   assert.equal(r.org_plan, 'free', 'starts on Free until the admin moves it');
@@ -426,4 +429,62 @@ test('a Custom org adds its own domain, proves it with DNS, and is then served t
   assert.equal((await call(EX, 'POST', '/api/domains', { cookie: exAdmin, body: { host: 'www.example-stem.org' } })).status, 409);
   await call(EX, 'DELETE', '/api/domains/www.example-stem.org', { cookie: exAdmin });
   assert.equal((await call('www.example-stem.org', 'GET', '/api/session')).status, 404);
+});
+
+test('library documents: real PDFs and Word files are kept, fakes are refused, and Word downloads', async () => {
+  const amara = await signIn('amara@example.org');
+  async function upload(filename, bytes, cookie = amara) {
+    const start = await call(EX, 'POST', '/api/uploads', { body: { filename, size: bytes.length, kind: 'document' }, cookie });
+    if (start.status !== 201) return start;
+    await call(EX, 'PUT', `/api/uploads/${start.json.id}?offset=0`, { body: bytes, cookie, headers: { 'content-type': 'application/octet-stream' } });
+    return call(EX, 'POST', `/api/uploads/${start.json.id}/complete`, { cookie });
+  }
+  assert.equal((await call(EX, 'POST', '/api/uploads', { body: { filename: 'a.pdf', size: 10, kind: 'document' } })).status, 403, 'members only');
+  const pdf = await upload('report.pdf', Buffer.from('%PDF-1.4\n%âãÏÓ\n1 0 obj<<>>endobj\n%%EOF\n'));
+  assert.equal(pdf.status, 201);
+  assert.equal(pdf.json.mimetype, 'application/pdf');
+  const shown = await call(EX, 'GET', `/media/${pdf.json.id}`, { cookie: amara });
+  assert.match(shown.headers['content-disposition'] ?? 'inline', /^inline/, 'PDFs open in the browser');
+  assert.match((await call(EX, 'GET', `/media/${pdf.json.id}?download`, { cookie: amara })).headers['content-disposition'], /^attachment/);
+
+  assert.equal((await upload('fake.pdf', Buffer.from('<html><script>x</script></html>'))).status, 415, 'a web page called .pdf is refused');
+  assert.equal((await upload('fake.docx', Buffer.from('%PDF-1.4 not a zip'))).status, 415);
+
+  const { docx } = await import('../src/core/office.js');
+  const { parseMarkdown } = await import('../src/core/markdown.js');
+  const word = Buffer.from(await docx(parseMarkdown('# Hi\n\nThere.'), { title: 'Hi' }));
+  const doc = await upload('notes.docx', word);
+  assert.equal(doc.status, 201);
+  assert.match(doc.json.mimetype, /wordprocessingml/);
+  assert.match((await call(EX, 'GET', `/media/${doc.json.id}`, { cookie: amara })).headers['content-disposition'], /^attachment/, 'Word files download rather than open');
+});
+
+test('the test platform: six orgs on four plans, with libraries, files and a pending custom domain', async () => {
+  const admin = await signIn('admin@localhost', 'localhost');
+  const orgs = (await call('localhost', 'GET', '/api/admin/orgs', { cookie: admin })).json;
+  const list = Array.isArray(orgs) ? orgs : orgs.orgs;
+  for (const slug of ['example', 'riverbend', 'northshore', 'coastal', 'prairie', 'lakeside']) {
+    assert.ok(list.some((o) => o.slug === slug), `${slug} exists`);
+  }
+  assert.deepEqual(new Set(list.filter((o) => ['northshore', 'prairie', 'lakeside', 'riverbend'].includes(o.slug)).map((o) => o.plan)), new Set(['custom', 'basic', 'free', 'standard']));
+
+  const NS = 'northshore.localhost';
+  const opts = (await call(NS, 'GET', '/api/auth/options')).json;
+  const members = opts.dev.filter((u) => u.orgs.some((o) => o.startsWith('Northshore Housing Coalition')));
+  assert.equal(members.length, 40, 'Northshore has its 40 people');
+  const nsAdmin = members.find((u) => u.orgs.includes('Northshore Housing Coalition (admin)'));
+  const cookie = (await call(NS, 'POST', '/api/auth/dev', { body: { userId: nsAdmin.id } })).headers['set-cookie'][0].split(';')[0];
+  const lib = (await call(NS, 'GET', '/api/docs/library', { cookie })).json;
+  const items = Object.values(lib.items);
+  assert.ok(items.some((i) => i.kind === 'file') && items.some((i) => i.kind === 'doc') && items.some((i) => i.kind === 'ref'));
+  assert.equal(Object.keys(lib.bibs).length, 2);
+  const file = items.find((i) => i.kind === 'file' && i.file?.type === 'application/pdf');
+  const got = await call(NS, 'GET', `/media/${file.file.mediaId}`, { cookie });
+  assert.equal(got.status, 200);
+  assert.equal(got.raw.subarray(0, 5).toString(), '%PDF-', 'the mock PDF is a real PDF');
+
+  const domains = await call(NS, 'GET', '/api/domains', { cookie });
+  assert.equal(domains.status, 200);
+  const d = (domains.json.domains ?? domains.json).find((x) => x.host === 'www.northshorehousing.example');
+  assert.equal(d?.status, 'pending');
 });

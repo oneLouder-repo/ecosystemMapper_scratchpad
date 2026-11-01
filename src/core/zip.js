@@ -11,6 +11,10 @@
  *   const entries = [{ name: 'index.html', size, data: Uint8Array | AsyncIterable<Uint8Array> }, …];
  *   zipSize(entries)                       → bytes
  *   for await (const part of zipStream(entries)) …   → Uint8Array pieces
+ *
+ * An entry with `plain: true` (its data a Uint8Array) has its checksum and
+ * size in its header instead of after it, which some formats need for
+ * their first file (OpenDocument's "mimetype").
  */
 const U32 = 0xffffffff;
 const enc = new TextEncoder();
@@ -40,7 +44,7 @@ export function zipSize(entries, { zip64At = U32 } = {}) {
   for (const e of entries) {
     const name = enc.encode(e.name).length;
     central += 46 + name + (needs64(offset) ? 12 : 0);
-    offset += 30 + name + e.size + 16;
+    offset += 30 + name + e.size + (e.plain ? 0 : 16);
   }
   const big = needs64(offset) || needs64(central) || entries.length >= 0xffff;
   return offset + central + (big ? 56 + 20 : 0) + 22;
@@ -73,7 +77,9 @@ export async function* zipStream(entries, { crc = crc32, date = new Date(), zip6
   for (const e of entries) {
     const name = enc.encode(e.name);
     // Bit 3: sizes and checksum follow the data. Bit 11: the name is UTF-8.
-    const flags = 0x0808;
+    const plain = e.plain && e.data instanceof Uint8Array;
+    const flags = plain ? 0x0800 : 0x0808;
+    const known = plain ? crc(e.data, 0) >>> 0 : 0;
     yield bytes(30, (v) => {
       v.setUint32(0, 0x04034b50, true);
       v.setUint16(4, 20, true);
@@ -81,7 +87,8 @@ export async function* zipStream(entries, { crc = crc32, date = new Date(), zip6
       v.setUint16(8, 0, true);
       v.setUint16(10, time, true);
       v.setUint16(12, day, true);
-      // crc and sizes left at 0: they come in the descriptor.
+      // crc and sizes left at 0 unless plain: they come in the descriptor.
+      if (plain) { v.setUint32(14, known, true); v.setUint32(18, e.size, true); v.setUint32(22, e.size, true); }
       v.setUint16(26, name.length, true);
     });
     yield name;
@@ -95,14 +102,16 @@ export async function* zipStream(entries, { crc = crc32, date = new Date(), zip6
       yield p;
     }
     if (written !== e.size) throw new Error(`${e.name} was ${written} bytes, not the ${e.size} expected`);
-    yield bytes(16, (v) => {
-      v.setUint32(0, 0x08074b50, true);
-      v.setUint32(4, sum, true);
-      v.setUint32(8, written, true);
-      v.setUint32(12, written, true);
-    });
-    records.push({ name, crc: sum, size: written, offset });
-    offset += 30 + name.length + written + 16;
+    if (!plain) {
+      yield bytes(16, (v) => {
+        v.setUint32(0, 0x08074b50, true);
+        v.setUint32(4, sum, true);
+        v.setUint32(8, written, true);
+        v.setUint32(12, written, true);
+      });
+    }
+    records.push({ name, crc: sum, size: written, offset, flags });
+    offset += 30 + name.length + written + (plain ? 0 : 16);
   }
 
   const cdStart = offset;
@@ -114,7 +123,7 @@ export async function* zipStream(entries, { crc = crc32, date = new Date(), zip6
       v.setUint32(0, 0x02014b50, true);
       v.setUint16(4, z64 ? 45 : 20, true); // made by
       v.setUint16(6, z64 ? 45 : 20, true); // needed
-      v.setUint16(8, 0x0808, true);
+      v.setUint16(8, r.flags, true);
       v.setUint16(10, 0, true);
       v.setUint16(12, time, true);
       v.setUint16(14, day, true);
@@ -156,4 +165,19 @@ export async function* zipStream(entries, { crc = crc32, date = new Date(), zip6
     v.setUint32(12, big ? U32 : cdSize, true);
     v.setUint32(16, big ? U32 : cdStart, true);
   });
+}
+
+/** A whole archive in memory, from small files: [{ name, data: string | Uint8Array, plain? }]. */
+export async function zipBytes(files, options) {
+  const entries = files.map((f) => {
+    const data = typeof f.data === 'string' ? enc.encode(f.data) : f.data;
+    // Sizes up front: LibreOffice and Java refuse stored files followed by a descriptor.
+    return { name: f.name, size: data.length, data, plain: f.plain ?? true };
+  });
+  const parts = [];
+  for await (const p of zipStream(entries, options)) parts.push(p);
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let at = 0;
+  for (const p of parts) { out.set(p, at); at += p.length; }
+  return out;
 }

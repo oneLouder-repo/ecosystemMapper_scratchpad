@@ -31,6 +31,60 @@ export function sniffAudio(buf) {
 }
 
 /**
+ * Documents for the library: what each extension is served as, and what its
+ * first bytes must look like. No HTML or SVG (they could run scripts).
+ */
+export const DOC_TYPES = {
+  pdf: ['application/pdf', 'pdf'],
+  docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'zip'],
+  xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'zip'],
+  pptx: ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'zip'],
+  odt: ['application/vnd.oasis.opendocument.text', 'zip'],
+  ods: ['application/vnd.oasis.opendocument.spreadsheet', 'zip'],
+  odp: ['application/vnd.oasis.opendocument.presentation', 'zip'],
+  epub: ['application/epub+zip', 'zip'],
+  zip: ['application/zip', 'zip'],
+  doc: ['application/msword', 'ole'],
+  xls: ['application/vnd.ms-excel', 'ole'],
+  ppt: ['application/vnd.ms-powerpoint', 'ole'],
+  rtf: ['application/rtf', 'rtf'],
+  png: ['image/png', 'png'],
+  jpg: ['image/jpeg', 'jpeg'],
+  jpeg: ['image/jpeg', 'jpeg'],
+  gif: ['image/gif', 'gif'],
+  webp: ['image/webp', 'webp'],
+  txt: ['text/plain; charset=utf-8', 'text'],
+  md: ['text/markdown; charset=utf-8', 'text'],
+  csv: ['text/csv; charset=utf-8', 'text'],
+  json: ['application/json', 'text'],
+  bib: ['text/plain; charset=utf-8', 'text'],
+  ris: ['text/plain; charset=utf-8', 'text'],
+};
+const extOf = (name) => (String(name).match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase();
+export const isDocumentName = (name) => extOf(name) in DOC_TYPES;
+const isAudioName = (name) => /\.(mp3|wav)$/i.test(name);
+
+/** A document's type if its first bytes match its extension, or null. */
+export function sniffDocument(buf, filename) {
+  const t = DOC_TYPES[extOf(filename)];
+  if (!t) return null;
+  const s = (a, b) => buf.toString('latin1', a, b);
+  const ok = {
+    pdf: () => s(0, 5) === '%PDF-',
+    zip: () => buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 3 && buf[3] === 4,
+    ole: () => buf.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])),
+    rtf: () => s(0, 5) === '{\\rtf',
+    png: () => buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+    jpeg: () => buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff,
+    gif: () => s(0, 4) === 'GIF8',
+    webp: () => s(0, 4) === 'RIFF' && s(8, 12) === 'WEBP',
+    // Text: no NUL bytes and not a web page in disguise.
+    text: () => !buf.includes(0) && !/^\s*<(!doctype|html|script|svg)/i.test(s(0, 200)),
+  }[t[1]];
+  return ok() ? t[0] : null;
+}
+
+/**
  * `limitsOf(org)` gives the org's plan limits ({ uploadMb, storageMb }), each
  * capped by the server's own settings.
  */
@@ -79,7 +133,10 @@ export function uploadRoutes({ q, newId, limitsOf = () => ({}) }) {
       if (!Number.isSafeInteger(size) || size <= 0) throw new HttpError(400, 'How big is the file?');
       const cap = caps(a.org);
       if (size > cap.uploadMb * 1048576) throw new HttpError(413, `Files can be up to ${cap.uploadMb} MB on your plan.`);
-      if (!/\.(mp3|wav)$/i.test(filename) && !/^audio\/(mpeg|mp3|wav|x-wav|wave|vnd\.wave)$/.test(String(body?.type ?? ''))) throw new HttpError(415, 'Upload an .mp3 or .wav file');
+      const audioOk = isAudioName(filename) || /^audio\/(mpeg|mp3|wav|x-wav|wave|vnd\.wave)$/.test(String(body?.type ?? ''));
+      if (body?.kind === 'document' ? !isDocumentName(filename) : !audioOk) {
+        throw new HttpError(415, body?.kind === 'document' ? 'That kind of file can’t go in the library. PDF, Word, Excel, PowerPoint, OpenDocument, images, text and CSV files can.' : 'Upload an .mp3 or .wav file');
+      }
       if (used(a.org.id) + size > cap.storageMb * 1048576) throw new HttpError(507, `Your organisation’s storage (${cap.storageMb >= 1024 ? `${+(cap.storageMb / 1024).toFixed(1)} GB` : `${cap.storageMb} MB`}) is full. Remove old files or ask about a larger plan.`);
       const id = newId('up');
       mkdirSync(dirOf(a.org.id), { recursive: true });
@@ -121,15 +178,16 @@ export function uploadRoutes({ q, newId, limitsOf = () => ({}) }) {
       const part = partOf(u);
       const size = statSync(part).size;
       if (size !== u.size || u.received !== u.size) return json(res, 409, { error: 'The file isn’t all here yet', received: u.received });
-      const head = Buffer.alloc(16);
+      const head = Buffer.alloc(Math.min(512, size));
       const fd = openSync(part, 'r');
-      readSync(fd, head, 0, 16, 0);
+      readSync(fd, head, 0, head.length, 0);
       closeSync(fd);
-      const mimetype = sniffAudio(head);
+      const doc = isDocumentName(u.filename) && !isAudioName(u.filename);
+      const mimetype = doc ? sniffDocument(head, u.filename) : sniffAudio(head);
       if (!mimetype) {
         rmSync(part, { force: true });
         q('DELETE FROM uploads WHERE id = ?').run(u.id);
-        throw new HttpError(415, 'That doesn’t look like an .mp3 or .wav file.');
+        throw new HttpError(415, doc ? `That doesn’t look like a real .${u.filename.split('.').pop()} file.` : 'That doesn’t look like an .mp3 or .wav file.');
       }
       const id = newId('media');
       const dir = join(config.dataDir, 'media', a.org.id);
