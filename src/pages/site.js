@@ -251,5 +251,7 @@ onDocChange('org', (doc) => { docs.org = doc; render(); });
 onDocChange('podcasts', (doc) => { docs.podcasts = migratePodcasts(doc); render(); });
 onDocChange('pages', (doc) => { docs.pages = migratePages(doc); render(); });
 render();
+// ?plan=…&pdf=1 opens a plan ready to save as PDF.
+if (params().plan && params().pdf) setTimeout(() => document.querySelector('.site-plan-bar .btn')?.click(), 600);
 if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
 window.site = { docs, player, render };

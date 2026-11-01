@@ -188,3 +188,31 @@ i.lvl { width: 14px; height: 14px; cursor: default; }
 .group-card a, .check-list a, .week-note a, .plain-list a, .pick-row a { color: var(--color-primary); }
 .plain-list li .input { flex: 1; min-width: 0; }
 .lex-columns .plain-list li { flex-wrap: nowrap; }
+
+/* The doc editor's Dashi tools. */
+.toastui-editor-toolbar .dashi-tool { width: auto !important; height: 32px !important; margin: 7px 2px !important; line-height: 1; vertical-align: top; display: inline-flex !important; align-items: center; gap: 4px; padding: 0 8px !important; background-image: none !important; font-size: 12.5px; font-weight: 700; color: #555; border-radius: 6px; }
+.toastui-editor-toolbar .dashi-tool:hover { background-color: color-mix(in oklab, var(--accent) 10%, white) !important; color: var(--accent); }
+.dashi-chooser .modal-box { max-width: 640px; }
+.dashi-chooser .modal-box.dashi-wide { max-width: 980px; }
+.dashi-chooser h3 { font-size: 19px; font-weight: 800; margin: 0 0 4px; }
+.dashi-filters { display: flex; gap: 8px; margin: 12px 0 8px; }
+.dashi-list { display: flex; flex-direction: column; gap: 2px; max-height: 52vh; overflow-y: auto; }
+.dashi-row { display: flex; align-items: center; gap: 12px; text-align: left; padding: 9px 10px; border-radius: 10px; }
+.dashi-row:not(.static):hover:not(:disabled) { background: color-mix(in oklab, var(--accent) 8%, transparent); }
+.dashi-row .icon { color: var(--muted); flex: none; }
+.dashi-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.dashi-row-text small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dashi-row-go { font-size: 12px; font-weight: 700; color: var(--accent); opacity: 0; }
+.dashi-row:hover .dashi-row-go { opacity: 1; }
+.dashi-row-actions { display: flex; gap: 6px; }
+.dashi-object { display: grid; grid-template-columns: 250px 1fr; gap: 18px; margin-top: 12px; }
+.dashi-kinds { display: flex; flex-direction: column; gap: 6px; }
+.dashi-kinds button { display: grid; grid-template-columns: 26px 1fr; column-gap: 8px; text-align: left; padding: 10px; border-radius: 10px; border: 1px solid var(--line-soft) !important; }
+.dashi-kinds button small { grid-column: 2; color: var(--muted); font-size: 12px; line-height: 1.35; }
+.dashi-kinds button.on { border-color: var(--accent) !important; background: color-mix(in oklab, var(--accent) 8%, transparent) !important; }
+.dashi-kinds .icon { grid-row: span 2; color: var(--accent); }
+.dashi-object-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.dashi-controls { display: flex; gap: 12px; flex-wrap: wrap; }
+.dashi-preview { min-height: 260px; max-height: 48vh; overflow: auto; border-radius: 10px; background: var(--color-base-200); display: flex; align-items: flex-start; justify-content: center; padding: 10px; gap: 6px; }
+.dashi-preview img { max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 10px rgb(0 0 0 / 0.08); }
+.dashi-insert { display: flex; justify-content: flex-end; }
