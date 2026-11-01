@@ -24,6 +24,8 @@ The first start creates `data/` and adds a test platform of six made-up organisa
 
 Visitors to an org's address see its public site; members who sign in get its dashboard.
 
+If your `data/` folder is from an earlier version, the next start adds the test orgs it is missing and fills empty test libraries with documents; nothing already there changes. For the full, fresh set, stop the server and delete `data/`.
+
 Browsers send any `*.localhost` address to your own computer, so subdomains work with no setup. Chrome, Edge and Firefox do this; Safari may not, so use one of the others for testing.
 
 **Test sign-in.** Locally, the sign-in page lists everyone, so you can be the platform admin or any staff member with one click. Once you're signed in as the platform admin, the menu under your picture has **View as**, which shows the platform exactly as that person sees it.
@@ -158,6 +160,16 @@ The platform admin sees each org's domains and their state on the admin page, an
 ### Document library
 
 Uploaded documents are checked by their first bytes as well as their name, so a web page renamed `.pdf` is refused. PDFs, images, audio and plain text open in the browser; everything else downloads. The doc editor is [Toast UI Editor](https://ui.toast.com/tui-editor) 3.2.2 (MIT), kept in `vendor/toastui/` so the site loads no scripts from elsewhere. Exports to PDF, Word, OpenDocument, HTML and Markdown are made in the browser by `src/core/`.
+
+A file uploaded in the library is attached to its reference when one matches (a DOI inside the PDF or in its name, an ISBN in its name, or a title equal to its name), so importing a Zotero export first and then uploading the PDFs fills the references in.
+
+To bring in a whole reading list at once, from the command line:
+
+```
+npm run import -- --org riverbend Readings.json ~/Papers
+```
+
+That takes a Zotero export (CSL JSON, BibTeX or RIS) and any files or folders of documents, matches each file to its reference, and puts everything in a folder and a bibliography (both called Readings unless you pass `--folder` and `--bib`). With `pdftotext` installed (from poppler) it also reads the first pages of each PDF and matches more. Running it twice adds nothing new. Your files stay in `data/`, outside git.
 
 ## Later
 

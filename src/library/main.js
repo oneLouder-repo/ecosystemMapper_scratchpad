@@ -14,7 +14,7 @@ import {
   TYPES, FIELDS, ROLES, typeOf, blankMeta, blankBib, migrateBib, extOf, FILE_KINDS, ACCEPT, formatLabel, titleFromName,
   apaReference, apaCitation, runsToHtml, runsToText, runsToMarkdown, dublinCore, parseReferences, wordCount, annotationLength,
   weekKey, weekLabel, shiftWeek, tagMap, allowedTags, parseRule, groupItems, weekAnnotations, draftBrief, newsletter,
-  searchItems, fullName, yearOf, sortKey, apaList,
+  searchItems, fullName, yearOf, sortKey, apaList, fileHints, matchReference,
 } from '../platform/library.js';
 import { FORMATS, download, fileName, renderMarkdown, exportDoc, printHtml, exportDublinCore, exportCsl, referenceBlocks, byline } from './exports.js';
 import { parseMarkdown, toHtml } from '../core/markdown.js';
@@ -170,6 +170,12 @@ function Row(item) {
 }
 const size = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
+/** The start and end of a file as text: where a PDF keeps its metadata and DOI. */
+async function readHead(file) {
+  const dec = new TextDecoder('latin1');
+  const head = dec.decode(await file.slice(0, 300000).arrayBuffer());
+  return file.size > 300000 ? `${head}\n${dec.decode(await file.slice(-200000).arrayBuffer())}` : head;
+}
 const typeForFile = (name) => ({ pdf: 'report', xlsx: 'dataset', xls: 'dataset', csv: 'dataset', ods: 'dataset', pptx: 'paper-conference', ppt: 'paper-conference', odp: 'paper-conference' }[extOf(name)] ?? 'document');
 
 function UploadButton(folderId, status) {
@@ -177,21 +183,31 @@ function UploadButton(folderId, status) {
     const files = [...e.target.files];
     e.target.value = '';
     let done = 0;
+    const attached = [];
     for (const file of files) {
       if (file.size > maxUploadMb() * 1048576) { say(status, `${file.name} is over ${maxUploadMb()} MB, the largest file your plan takes.`); continue; }
       say(status, `Uploading ${file.name}…`);
       try {
         const mediaId = await putMedia(file, { kind: 'document', onProgress: (p) => { say(status, `Uploading ${file.name}… ${Math.round(p * 100)}%`); } });
+        const fileInfo = { mediaId, name: file.name, size: file.size, type: file.type || 'application/octet-stream' };
+        // A file for a reference that's already here (from Zotero, say) is attached to it.
+        const ref = matchReference(lib().items, fileHints(file.name, await readHead(file)));
+        if (ref) {
+          apply(col.update('items', ref.id, { kind: 'file', file: fileInfo, updatedAt: now() }));
+          attached.push(ref.meta.title);
+          done++;
+          continue;
+        }
         apply(col.add('items', {
           id: uid('doc'), kind: 'file', folderId: folderId ?? null, tags: [],
           meta: blankMeta({ type: typeForFile(file.name), title: titleFromName(file.name), creators: me ? [] : [] }),
-          file: { mediaId, name: file.name, size: file.size, type: file.type || 'application/octet-stream' },
+          file: fileInfo,
           createdAt: now(), updatedAt: now(), createdBy: me?.id ?? null,
         }));
         done++;
       } catch (err) { say(status, `${file.name}: ${err.message}`); return; }
     }
-    if (done) say(status, `Added ${n(done, 'file')}. Open one to fill in its details.`);
+    if (done) say(status, `Added ${n(done, 'file')}.${attached.length ? ` ${attached.length === 1 ? `Attached to its reference: “${attached[0]}”.` : `${attached.length} were attached to their references.`}` : ''} Open one to fill in its details.`);
     render();
   } });
   return h('label', { class: 'btn btn-sm' }, icon('upload', 15), 'Upload files', input);

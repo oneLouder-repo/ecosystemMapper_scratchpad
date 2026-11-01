@@ -770,3 +770,75 @@ export function searchItems(lib, text) {
   if (!t) return all;
   return all.filter((it) => `${it.meta.title} ${(it.meta.creators ?? []).map(fullName).join(' ')} ${it.meta.abstract ?? ''} ${(it.tags ?? []).join(' ')} ${it.meta.containerTitle ?? ''} ${yearOf(it.meta.issued)}`.toLowerCase().includes(t));
 }
+
+/* ---------- Matching uploaded files to references ---------- */
+
+/** Every DOI written in some text (PDF metadata, a cover page, a text file), in order. */
+export function doisIn(text) {
+  const out = [];
+  for (const m of String(text ?? '').matchAll(/\b10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+/g)) {
+    let d = m[0];
+    // Stop at a bracket that closes nothing: PDF strings end with ")".
+    let depth = 0;
+    for (let i = 0; i < d.length; i++) { if (d[i] === '(') depth++; else if (d[i] === ')' && --depth < 0) { d = d.slice(0, i); break; } }
+    d = d.replace(/[.;,:/]+$/, '').toLowerCase();
+    if (!out.includes(d)) out.push(d);
+  }
+  return out;
+}
+const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '');
+const words = (s) => new Set(String(s ?? '').toLowerCase().normalize('NFKD').split(/[^a-z0-9]+/).filter((w) => w.length > 2));
+/**
+ * What a file says about itself: DOIs inside it or in its name, an ISBN in
+ * its name, its name, and the start of its text (`text` is whatever could be
+ * read: the raw bytes of a PDF hold its metadata; extracted text is better).
+ */
+export function fileHints(name, text = '') {
+  const stem = String(name).replace(/\.[a-z0-9]+(\.txt)?$/i, '').replace(/\s*\(\d+\)$/, '').replace(/[ _]1$/, '');
+  const fromName = stem.match(/^(10\.\d{4,9})_(.+)$/);
+  const dois = [...(fromName ? [`${fromName[1]}/${fromName[2]}`.toLowerCase()] : []), ...doisIn(text)];
+  const isbn = stem.match(/97[89][-\d]{10,16}\d/)?.[0] ?? '';
+  return { dois, isbn, stem, head: norm(String(text).slice(0, 6000)) };
+}
+/**
+ * The library item a file belongs to, among items with no file yet: one with
+ * a DOI found in the file; a DOI or ISBN holding the ISBN in the file's name;
+ * a title equal to the file's name (Zotero keeps a file's name as the title
+ * when it finds nothing better); a title most of whose words are in the
+ * name; or a title the file's text starts with.
+ */
+export function matchReference(items, { dois = [], isbn = '', stem = '', head = '' }, { withFiles = false } = {}) {
+  const open = Object.values(items).filter((i) => (withFiles || !i.file) && ['ref', 'link', 'file'].includes(i.kind));
+  for (const d of dois) { const hit = open.find((i) => i.meta.DOI?.toLowerCase() === d); if (hit) return hit; }
+  if (isbn) {
+    const n = isbn.replace(/-/g, '');
+    const hit = open.find((i) => (i.meta.DOI ?? '').includes(isbn) || (i.meta.ISBN ?? '').replace(/-/g, '').split(/\s+/).includes(n));
+    if (hit) return hit;
+  }
+  const s = norm(stem);
+  if (s.length >= 6) {
+    const hit = open.find((i) => norm(i.meta.title) === s);
+    if (hit) return hit;
+  }
+  const w = words(stem);
+  if (w.size >= 3) {
+    let best = null; let score = 0;
+    for (const i of open) {
+      const t = words(i.meta.title);
+      if (t.size < 3) continue;
+      const shared = [...t].filter((x) => w.has(x)).length / Math.min(t.size, w.size);
+      if (shared > score) { score = shared; best = i; }
+    }
+    if (score >= 0.75) return best;
+  }
+  if (head) {
+    // The longest title found near the start of the text, ignoring a subtitle.
+    let best = null;
+    for (const i of open) {
+      const t = norm(String(i.meta.title ?? '').split(/[:?]/)[0]);
+      if (t.length >= 18 && head.includes(t) && (!best || t.length > best.t.length)) best = { i, t };
+    }
+    if (best) return best.i;
+  }
+  return null;
+}

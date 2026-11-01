@@ -98,3 +98,25 @@ test('Word, OpenDocument, Excel and PDF exports are well formed', async () => {
     assert.match(text, /\/Title \(Title\)/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('uploaded files find their references: DOI inside, DOI or ISBN in the name, the name, or the opening text', () => {
+  assert.deepEqual(L.doisIn('/URI (https://doi.org/10.1126/science.aau0427)/S/URI ... doi=10.1016/j.chb.2018.12.027.'), ['10.1126/science.aau0427', '10.1016/j.chb.2018.12.027']);
+  assert.deepEqual(L.doisIn('10.1016/S0747-5632(18)30613-7)'), ['10.1016/s0747-5632(18)30613-7'], 'brackets inside a DOI stay');
+  const ref = (id, meta) => [id, { id, kind: 'ref', meta: { creators: [], ...meta } }];
+  const items = Object.fromEntries([
+    ref('gaia', { title: 'Gaia 2.0', DOI: '10.1126/science.aau0427' }),
+    ref('hiphop', { title: 'Race, Class, Gender, and Rhymes', DOI: '10.1177/0027432118788138' }),
+    ref('book', { title: 'Introduction to Anticipation Studies', DOI: '10.1007/978-3-319-63023-6' }),
+    ref('zotero', { title: '35-MIXING-H-ET-NH-GBpdf_0' }),
+    ref('kincheloe', { title: 'Knowledge and critical pedagogy: an introduction' }),
+  ]);
+  const match = (name, text) => L.matchReference(items, L.fileHints(name, text))?.id ?? null;
+  assert.equal(match('158-SCIENCE_LENTON.pdf', 'refs 10.9999/other ... https://doi.org/10.1126/science.aau0427)'), 'gaia', 'any DOI in the file that is in the library');
+  assert.equal(match('10.1177_0027432118788138.pdf'), 'hiphop', 'a DOI as the file name');
+  assert.equal(match('978-3-319-63023-6 (1).pdf'), 'book', 'an ISBN in the name, inside the DOI');
+  assert.equal(match('35-MIXING-H-ET-NH-GBpdf_0.pdf'), 'zotero', 'Zotero kept the file name as the title');
+  assert.equal(match('89.Joe_L._Kincheloe.pdf.txt', 'Joe L. Kincheloe\nKnowledge and Critical Pedagogy\nAn Introduction'), 'kincheloe', 'the title the text opens with');
+  assert.equal(match('holiday-photos.pdf', 'nothing here'), null);
+  items.gaia.file = { mediaId: 'm' };
+  assert.equal(match('gaia-again.pdf', '10.1126/science.aau0427'), null, 'only references with no file yet');
+});

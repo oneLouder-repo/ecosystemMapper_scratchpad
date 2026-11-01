@@ -30,10 +30,11 @@ export async function start({ port = config.port, quiet = false, resolver } = {}
     log(`\nPlatform admin: ${config.superAdmin.email}\nPassword (shown once, change it with SUPER_ADMIN_PASSWORD): ${pw}\n`);
   }
 
-  // A fresh database gets the test platform, to try everything out.
-  if (config.seedExamples && !db.prepare('SELECT 1 FROM orgs LIMIT 1').get()) {
-    await seedTestPlatform(db, app);
-    log(`Added the test platform: ${MOCK_ORGS.length} example organisations.`);
+  // The test platform, to try everything out. A database from an earlier
+  // version gets the test orgs it doesn't have yet; nothing already there changes.
+  if (config.seedExamples) {
+    const added = await seedTestPlatform(db, app);
+    if (added.length) log(`Added test organisations: ${added.join(', ')}.`);
   }
 
   // A database snapshot now if there's none from today, then daily.
@@ -80,23 +81,45 @@ export async function start({ port = config.port, quiet = false, resolver } = {}
  */
 async function seedTestPlatform(db, app) {
   const stamp = new Date().toISOString();
-  for (const spec of MOCK_ORGS) {
-    const { docs, files, domain } = mockDocs(spec, spec.existing ? exampleDocs(spec.id) : null);
-    const made = await mockFiles(files, spec.name);
-    const sizes = Object.fromEntries(made.map((f) => [f.mediaId, f]));
-    for (const it of Object.values(docs.library.items)) {
-      const f = it.file && sizes[it.file.mediaId];
-      if (f) Object.assign(it.file, { size: f.bytes.length, type: f.mimetype.split(';')[0] });
-    }
-    app.createOrg({ id: spec.id, slug: spec.slug, name: spec.name, plan: spec.plan, docs });
-    const dir = join(config.dataDir, 'media', spec.id);
+  const added = [];
+  const writeFiles = (orgId, made) => {
+    const dir = join(config.dataDir, 'media', orgId);
     mkdirSync(dir, { recursive: true });
     for (const f of made) {
       writeFileSync(join(dir, f.mediaId), f.bytes);
-      db.prepare('INSERT INTO media (id, org_id, filename, mimetype, size, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)').run(f.mediaId, spec.id, f.name, f.mimetype, f.bytes.length, stamp, null);
+      db.prepare('INSERT OR IGNORE INTO media (id, org_id, filename, mimetype, size, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)').run(f.mediaId, orgId, f.name, f.mimetype, f.bytes.length, stamp, null);
     }
+  };
+  const fitSizes = (library, made) => {
+    const sizes = Object.fromEntries(made.map((f) => [f.mediaId, f]));
+    for (const it of Object.values(library.items)) {
+      const f = it.file && sizes[it.file.mediaId];
+      if (f) Object.assign(it.file, { size: f.bytes.length, type: f.mimetype.split(';')[0] });
+    }
+  };
+  for (const spec of MOCK_ORGS) {
+    const existing = db.prepare('SELECT id FROM orgs WHERE id = ? OR slug = ?').get(spec.id, spec.slug);
+    if (existing) {
+      // A test org from before the library: give it the test documents.
+      const lib = db.prepare("SELECT json FROM docs WHERE org_id = ? AND name = 'library'").get(spec.id);
+      if (existing.id !== spec.id || Object.keys(JSON.parse(lib?.json ?? '{}').items ?? {}).length) continue;
+      const { docs, files } = mockDocs(spec, spec.existing ? exampleDocs(spec.id) : null);
+      const made = await mockFiles(files, spec.name);
+      fitSizes(docs.library, made);
+      app.writeDoc(spec.id, 'library', docs.library);
+      writeFiles(spec.id, made);
+      added.push(`${spec.name} (documents)`);
+      continue;
+    }
+    added.push(spec.name);
+    const { docs, files, domain } = mockDocs(spec, spec.existing ? exampleDocs(spec.id) : null);
+    const made = await mockFiles(files, spec.name);
+    fitSizes(docs.library, made);
+    app.createOrg({ id: spec.id, slug: spec.slug, name: spec.name, plan: spec.plan, docs });
+    writeFiles(spec.id, made);
     if (domain) {
-      db.prepare('INSERT INTO domains (host, org_id, status, token, is_primary, created_at) VALUES (?, ?, ?, ?, 1, ?)').run(domain, spec.id, 'pending', randomBytes(12).toString('hex'), Date.now());
+      db.prepare('INSERT OR IGNORE INTO domains (host, org_id, status, token, is_primary, created_at) VALUES (?, ?, ?, ?, 1, ?)').run(domain, spec.id, 'pending', randomBytes(12).toString('hex'), Date.now());
     }
   }
+  return added;
 }
