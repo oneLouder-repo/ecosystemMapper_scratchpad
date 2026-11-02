@@ -109,6 +109,29 @@ export function createApp(db, options = {}) {
     q(`INSERT INTO docs (org_id, name, json, version, updated_at, updated_by) VALUES (?, ?, ?, 1, ?, ?)
        ON CONFLICT (org_id, name) DO UPDATE SET json = excluded.json, version = version + 1, updated_at = excluded.updated_at, updated_by = excluded.updated_by`)
       .run(orgId, name, JSON.stringify(doc), now(), userId);
+    return docVersion(orgId, name);
+  }
+  /** Each document's version: it goes up by one with every save. A save names the version it started from. */
+  const docVersion = (orgId, name) => q('SELECT version FROM docs WHERE org_id = ? AND name = ?').get(orgId, name)?.version ?? 0;
+  const docVersions = (orgId) => Object.fromEntries(q('SELECT name, version FROM docs WHERE org_id = ?').all(orgId).map((r) => [r.name, r.version]));
+
+  /**
+   * Fields a staff member may change on their own staff record (My page),
+   * without being the org's admin. Everything else in the org document is
+   * the admin's.
+   */
+  const OWN_PROFILE_FIELDS = ['name', 'title', 'avatar', 'interests', 'bio', 'pronouns', 'phone'];
+  function ownProfileOnly(current, doc, staffId) {
+    if (!staffId || !current?.staff?.[staffId] || !doc?.staff?.[staffId]) return null;
+    const strip = (d) => { const c = { ...d, staff: { ...d.staff } }; delete c.platform; delete c.staff[staffId]; return JSON.stringify(c); };
+    if (strip(current) !== strip(doc)) return null;
+    const mine = { ...current.staff[staffId] };
+    for (const k of OWN_PROFILE_FIELDS) if (k in doc.staff[staffId]) mine[k] = doc.staff[staffId][k];
+    if (typeof mine.name === 'string') mine.name = mine.name.slice(0, 200);
+    if (typeof mine.title === 'string') mine.title = mine.title.slice(0, 200);
+    const next = { ...current, staff: { ...current.staff, [staffId]: mine } };
+    delete next.platform;
+    return next;
   }
 
   function ensureUser({ email, name = '', isSuper = false }) {
@@ -301,6 +324,7 @@ export function createApp(db, options = {}) {
         orgs: orgsFor(a.user),
         platformUrl: a.isSuper ? '/auth/root' : null,
         sessionTag: a.tag,
+        versions: a.org && a.member ? docVersions(a.org.id) : {},
         limits: { uploadMb: a.org ? Math.min(config.maxUploadMb, orgPlan(a.org).limits.uploadMb ?? config.maxUploadMb) : config.maxUploadMb },
         docs,
       });
@@ -313,12 +337,24 @@ export function createApp(db, options = {}) {
       if (!DOC_NAME.test(name)) throw new HttpError(400, 'Bad document name');
       if (method === 'GET') {
         const doc = a.member ? readDoc(a.org.id, name) : publicDocs(readDocs(a.org.id), today())[name];
+        if (doc && a.member) res.setHeader('x-doc-version', String(docVersion(a.org.id, name)));
         return doc ? json(res, 200, doc) : json(res, 404, { error: 'No such document' });
       }
       if (method === 'PUT') {
-        if (!a.canEdit || (name === 'org' && !a.canAdmin)) throw new HttpError(403, 'You can’t change this');
-        const doc = await readJson(req, config.maxJsonMb * 1048576);
+        if (!a.canEdit) throw new HttpError(403, 'You can’t change this');
+        let doc = await readJson(req, config.maxJsonMb * 1048576);
         if (!doc || typeof doc !== 'object') throw new HttpError(400, 'Not a document');
+        // Someone else saved since this page loaded it: say so rather than overwrite their work.
+        const base = req.headers['x-doc-version'];
+        const current = docVersion(a.org.id, name);
+        if (base != null && base !== '' && Number(base) !== current) {
+          return json(res, 409, { error: 'Someone else saved changes here while you were working. Reload to see them; your last change wasn’t saved.', conflict: true, version: current });
+        }
+        // Staff who aren't the admin can still change their own profile (My page), and nothing else in the org document.
+        if (name === 'org' && !a.canAdmin) {
+          doc = ownProfileOnly(readDoc(a.org.id, 'org'), doc, a.staffId);
+          if (!doc) throw new HttpError(403, 'You can’t change this');
+        }
         // The plan: nothing new past its limits (what's already there can stay).
         const why = overLimit(orgPlan(a.org), name, readDoc(a.org.id, name), doc);
         if (why) throw new HttpError(403, why);
@@ -328,9 +364,9 @@ export function createApp(db, options = {}) {
           syncStaff(a.org.id, doc);
           if (doc.name && doc.name !== a.org.name) q('UPDATE orgs SET name = ? WHERE id = ?').run(String(doc.name).slice(0, 200), a.org.id);
         }
-        writeDoc(a.org.id, name, doc, a.user.id);
+        const version = writeDoc(a.org.id, name, doc, a.user.id);
         announce(a.org.id, name, a.tag);
-        return json(res, 200, { ok: true });
+        return json(res, 200, { ok: true, version });
       }
     }
 
@@ -503,12 +539,13 @@ export function createApp(db, options = {}) {
         ? q('SELECT id, email, name, is_super FROM users ORDER BY is_super DESC, name').all().map((u) => ({
             ...userJson(u),
             orgs: q('SELECT o.name, m.role FROM memberships m JOIN orgs o ON o.id = m.org_id WHERE m.user_id = ? ORDER BY o.name').all(u.id).map((r) => `${r.name} (${r.role})`),
+            memberships: q('SELECT o.id AS orgId, o.name AS org, m.role FROM memberships m JOIN orgs o ON o.id = m.org_id WHERE m.user_id = ? ORDER BY o.name').all(u.id),
           }))
         : null;
       // Sign-in with other accounts comes with Basic and up; the platform's own site always has it.
       const social = !a.org || orgPlan(a.org).features.socialLogin;
       const providers = social ? Object.values(config.providers).map((x) => ({ id: x.id, label: x.label })) : [];
-      return json(res, 200, { providers, google: social && !!config.providers.google, password: true, dev, org: a.org && { name: a.org.name } });
+      return json(res, 200, { providers, google: social && !!config.providers.google, password: true, dev, org: a.org && { id: a.org.id, name: a.org.name } });
     }
     if (path === '/api/auth/password' && method === 'POST') {
       const { email, password } = await readJson(req, 10_000);

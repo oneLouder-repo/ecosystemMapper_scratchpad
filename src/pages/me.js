@@ -4,7 +4,7 @@ import { Shell, Avatar } from '../ui/Shell.js';
 import { readImage } from '../ui/images.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp, col } from '../core/collections.js';
-import { autosaveDoc } from '../platform/storage.js';
+import { autosaveDoc, session } from '../platform/storage.js';
 import { loadAll } from '../platform/docs.js';
 import { ROLES } from '../platform/org.js';
 import { currentUser } from '../platform/session.js';
@@ -30,12 +30,12 @@ function render() {
   if (!me) return app.replaceChildren(h('div', { class: 'page' }, h('p', { class: 'empty' }, 'This org has no staff yet.')));
   const update = (patch) => store.apply(col.update('staff', me.id, patch));
   const nodes = Object.values(docs.strategy.nodes);
-  const myTasks = nodes.filter((n) => n.type === 'task' && n.assigneeIds.includes(me.id)).sort((a, b) => (a.end ?? '').localeCompare(b.end ?? ''));
-  const myWorkplans = nodes.filter((n) => n.type === 'workplan' && (n.staffIds.includes(me.id) || n.teamIds.some((t) => me.teamIds.includes(t))));
+  const myTasks = nodes.filter((n) => n.type === 'task' && (n.assigneeIds ?? []).includes(me.id)).sort((a, b) => (a.end ?? '').localeCompare(b.end ?? ''));
+  const myWorkplans = nodes.filter((n) => n.type === 'workplan' && ((n.staffIds ?? []).includes(me.id) || (n.teamIds ?? []).some((t) => (me.teamIds ?? []).includes(t))));
   const areas = nodes.filter((n) => n.type === 'objective' || n.type === 'goal');
   const myDashboards = Object.values(docs.dashboards.dashboards).filter((d) => d.createdBy === me.id);
   const myMaps = mapsFor(docs.maps, me.id);
-  const myShows = Object.values(docs.podcasts.podcasts).filter((p) => p.hostIds.includes(me.id));
+  const myShows = Object.values(docs.podcasts.podcasts).filter((p) => (p.hostIds ?? []).includes(me.id));
   const open = myTasks.filter((t) => t.status !== 'done');
 
   const section = (title, count, body) => h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('h2', {}, title), count != null && h('span', { class: 'badge badge-ghost' }, String(count))), body);
@@ -52,10 +52,10 @@ function render() {
       h('div', { class: 'profile-fields' },
         h('input', { class: 'title-input profile-name', name: 'name', value: me.name, 'aria-label': 'Your name', onchange: (e) => e.target.value.trim() && update({ name: e.target.value.trim() }) }),
         h('input', { class: 'title-input', name: 'title', value: me.title, placeholder: 'Your title', 'aria-label': 'Your title', onchange: (e) => update({ title: e.target.value.trim() }) }),
-        h('input', { class: 'title-input muted', name: 'email', value: me.email, placeholder: 'Email', 'aria-label': 'Your email', type: 'email', onchange: (e) => update({ email: e.target.value.trim() }) }),
+        h('input', { class: 'title-input muted', name: 'email', value: me.email, placeholder: 'Email', 'aria-label': 'Your email', type: 'email', readonly: !!session() && !session().canAdmin, title: session() && !session().canAdmin ? 'Your sign-in email. Your organisation’s admin can change it.' : null, onchange: (e) => update({ email: e.target.value.trim() }) }),
         h('div', { class: 'chips' },
           h('span', { class: 'badge badge-primary' }, ROLES.find((r) => r.id === me.roleId)?.label ?? me.roleId),
-          me.teamIds.map((id) => org.teams[id] && h('span', { class: 'chip' }, h('span', { class: 'swatch', style: `background:${org.teams[id].color}` }), org.teams[id].name)),
+          (me.teamIds ?? []).map((id) => org.teams[id] && h('span', { class: 'chip' }, h('span', { class: 'swatch', style: `background:${org.teams[id].color}` }), org.teams[id].name)),
           me.avatar && h('button', { class: 'btn btn-xs btn-ghost', onclick: () => update({ avatar: null }) }, 'Remove picture'))),
       h('div', { class: 'profile-stats' },
         stat(open.length, 'open tasks'),
@@ -73,14 +73,14 @@ function render() {
               h('span', { class: 'muted' }, docs.strategy.nodes[t.parentId]?.title ?? ''))))
         : empty('No tasks assigned to you.')),
 
-      section('My strategic areas', me.interests.length, h('div', {},
+      section('My strategic areas', (me.interests ?? []).length, h('div', {},
         h('p', { class: 'muted' }, 'Follow the objectives and goals you care about. They show here with their progress.'),
         h('ul', { class: 'interest-list' }, areas.map((n) => {
           const s = taskSummary(docs.strategy, n.id);
-          const on = me.interests.includes(n.id);
+          const on = (me.interests ?? []).includes(n.id);
           return h('li', { class: on ? 'on' : '' },
             h('input', { type: 'checkbox', class: 'checkbox checkbox-sm checkbox-primary', checked: on, 'aria-label': `Follow ${n.title}`,
-              onchange: (e) => update({ interests: e.target.checked ? [...me.interests, n.id] : me.interests.filter((id) => id !== n.id) }) }),
+              onchange: (e) => update({ interests: e.target.checked ? [...(me.interests ?? []), n.id] : (me.interests ?? []).filter((id) => id !== n.id) }) }),
             h('span', { class: 'glyph' }, NODE_TYPES[n.type].glyph),
             h('a', { href: `strategy.html#${n.id}` }, n.title),
             on && h('span', { class: 'interest-progress' },
@@ -117,7 +117,7 @@ function render() {
         h('ul', { class: 'asset-list' }, myShows.map((p) =>
           h('li', { class: 'asset' }, icon('mic', 18), h('div', { class: 'asset-text' }, h('a', { href: `podcasts.html#${p.id}` }, p.title), h('small', {}, p.category)))))),
     ),
-    h('p', { class: 'note' }, 'Accounts are mocked for now: use the menu under your picture (top right) to see the platform as anyone in the org.'),
+    h('p', { class: 'note' }, session() ? 'Your name, title, picture and the areas you follow are yours to change. Your role, teams and email are set by your organisation’s admin.' : 'Accounts are mocked for now: use the menu under your picture (top right) to see the platform as anyone in the org.'),
   ));
 }
 

@@ -224,3 +224,10 @@ body.mapper-page > main { overflow: hidden; }
   #topbar { overflow-x: auto !important; }
   .dock-panel:not(.compact) { width: 180px; }
 }
+
+/* Someone else saved the same document: a banner until the page reloads. */
+.conflict-banner {
+  position: fixed; left: 50%; top: 12px; transform: translateX(-50%); z-index: 1000;
+  width: min(640px, calc(100vw - 32px)); display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}

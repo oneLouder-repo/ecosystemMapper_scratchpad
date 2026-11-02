@@ -88,7 +88,18 @@ test('saving needs a signed-in member, the x-toolbox header, and the right role'
 
   const ben = await signIn('ben@example.org');
   const org = (await call(EX, 'GET', '/api/docs/org', { cookie: ben })).json;
-  assert.equal((await call(EX, 'PUT', '/api/docs/org', { body: org, cookie: ben })).status, 403, 'only admins change the org’s settings');
+  const others = structuredClone(org);
+  others.name = 'Ben’s org now';
+  assert.equal((await call(EX, 'PUT', '/api/docs/org', { body: others, cookie: ben })).status, 403, 'only admins change the org’s settings');
+  const someoneElse = structuredClone(org);
+  someoneElse.staff['s-ed'].title = 'Intern';
+  assert.equal((await call(EX, 'PUT', '/api/docs/org', { body: someoneElse, cookie: ben })).status, 403, 'nor anyone else’s profile');
+  const mine = structuredClone(org);
+  Object.assign(mine.staff['s-part'], { title: 'Partnerships Lead', roleId: 'admin' });
+  assert.equal((await call(EX, 'PUT', '/api/docs/org', { body: mine, cookie: ben })).status, 200, 'staff change their own profile (My page)');
+  const after = (await call(EX, 'GET', '/api/docs/org', { cookie: ben })).json.staff['s-part'];
+  assert.equal(after.title, 'Partnerships Lead');
+  assert.equal(after.roleId, 'staff', 'but not their own role');
   assert.equal((await call(EX, 'PUT', '/api/docs/../x', { body: {}, cookie: ben })).status, 404);
 });
 
@@ -487,4 +498,20 @@ test('the test platform: six orgs on four plans, with libraries, files and a pen
   assert.equal(domains.status, 200);
   const d = (domains.json.domains ?? domains.json).find((x) => x.host === 'www.northshorehousing.example');
   assert.equal(d?.status, 'pending');
+});
+
+test('a save that started from an older version is refused, not written over someone else’s', async () => {
+  const amara = await signIn('amara@example.org');
+  const ben = await signIn('ben@example.org');
+  const start = await call(EX, 'GET', '/api/docs/strategy', { cookie: amara });
+  const v = start.headers['x-doc-version'];
+  assert.ok(v, 'members get the version with the document');
+  assert.equal((await call(EX, 'GET', '/api/session', { cookie: amara })).json.versions.strategy, Number(v));
+  const first = await call(EX, 'PUT', '/api/docs/strategy', { body: start.json, cookie: ben, headers: { 'x-doc-version': v } });
+  assert.equal(first.status, 200);
+  assert.equal(first.json.version, Number(v) + 1);
+  const stale = await call(EX, 'PUT', '/api/docs/strategy', { body: start.json, cookie: amara, headers: { 'x-doc-version': v } });
+  assert.equal(stale.status, 409);
+  assert.equal(stale.json.version, Number(v) + 1);
+  assert.equal((await call(EX, 'PUT', '/api/docs/strategy', { body: start.json, cookie: amara, headers: { 'x-doc-version': String(first.json.version) } })).status, 200);
 });

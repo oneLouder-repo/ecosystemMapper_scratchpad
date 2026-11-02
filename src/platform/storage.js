@@ -43,6 +43,38 @@ if (hosted && inBrowser) {
     location.replace(target);
     await new Promise(() => {}); // Stop this page here while the browser moves on.
   }
+  // Signed in, but not on this org's staff: staff pages aren't theirs. Point them at their own orgs.
+  const staffOnly = !publicPage && !['/', '/login.html', '/platform.html', '/help.html'].includes(location.pathname);
+  if (hosted.org && hosted.user && !hosted.member && staffOnly) {
+    notAMember(hosted);
+    await new Promise(() => {});
+  }
+}
+
+function notAMember({ org, user, orgs }) {
+  const box = document.createElement('main');
+  box.className = 'not-member';
+  box.style.cssText = 'max-width:520px;margin:12vh auto;padding:24px;font-family:system-ui,sans-serif;line-height:1.5';
+  const title = document.createElement('h1');
+  title.textContent = `You’re not on ${org.name}’s staff`;
+  const p = document.createElement('p');
+  p.textContent = `You’re signed in as ${user.email}. Ask ${org.name}’s admin to add you under Organisation → People, or open one of your own organisations.`;
+  const list = document.createElement('ul');
+  for (const o of orgs ?? []) {
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = `/auth/switch?org=${encodeURIComponent(o.id)}&next=/`;
+    a.textContent = o.name;
+    li.append(a);
+    list.append(li);
+  }
+  const site = document.createElement('p');
+  const back = document.createElement('a');
+  back.href = '/';
+  back.textContent = `See ${org.name}’s public site`;
+  site.append(back);
+  box.append(title, p, ...(orgs?.length ? [list] : []), site);
+  document.body.replaceChildren(box);
 }
 
 export function readKey(key) {
@@ -74,6 +106,13 @@ export const docKey = (name, orgId = activeOrgId) => `${ROOT}${orgId}/${name}`;
 /* Hosted: documents come with the session; saves are sent, one at a time per document. */
 const cache = hosted?.docs ?? {};
 const sending = {};
+/**
+ * The version of each document this page last loaded or saved. Saves send
+ * it, and the server refuses one that started from an older version than
+ * it holds (someone else saved in between), instead of overwriting.
+ */
+const versions = { ...(hosted?.versions ?? {}) };
+const conflicted = new Set();
 async function send(name) {
   const job = sending[name];
   if (!job || job.busy) return;
@@ -85,8 +124,20 @@ async function send(name) {
       // No keepalive here: browsers cap keepalive requests at 64 KB in total, so
       // a big document (a map) or a few saves in a row would fail outright.
       const res = await fetch(`/api/docs/${encodeURIComponent(name)}`, {
-        method: 'PUT', headers: { 'content-type': 'application/json', 'x-toolbox': '1' }, body: JSON.stringify(doc),
+        method: 'PUT', headers: versionHeaders(name), body: JSON.stringify(doc),
       });
+      if (res.status === 409) {
+        conflicted.add(name);
+        job.next = null;
+        const why = (await res.json().catch(() => ({}))).error;
+        window.dispatchEvent(new CustomEvent('toolbox:save-conflict', { detail: { name, why } }));
+        saveProblem(name, why ?? 'Someone else saved changes here. Reload to see them.');
+        break;
+      }
+      if (res.ok) {
+        const answer = await res.clone().json().catch(() => ({}));
+        if (answer.version != null) versions[name] = answer.version;
+      }
       if (!res.ok) {
         const why = (await res.json().catch(() => ({}))).error;
         saveProblem(name, why ?? (res.status === 403 ? 'You can’t change this here.' : `The server said ${res.status}.`));
@@ -112,9 +163,14 @@ if (hosted) window.addEventListener('pagehide', () => {
     if (!job.next) continue;
     const body = JSON.stringify(job.next);
     if (new Blob([body]).size > 60000) continue;
-    fetch(`/api/docs/${encodeURIComponent(name)}`, { method: 'PUT', keepalive: true, headers: { 'content-type': 'application/json', 'x-toolbox': '1' }, body }).catch(() => {});
+    fetch(`/api/docs/${encodeURIComponent(name)}`, { method: 'PUT', keepalive: true, headers: versionHeaders(name), body }).catch(() => {});
   }
 });
+function versionHeaders(name) {
+  const headers = { 'content-type': 'application/json', 'x-toolbox': '1' };
+  if (versions[name] != null) headers['x-doc-version'] = String(versions[name]);
+  return headers;
+}
 /** Tell the page a change was saved (the header shows a short note). */
 function saved(name) {
   window.dispatchEvent(new CustomEvent('toolbox:saved', { detail: { name } }));
@@ -139,6 +195,7 @@ export function saveDoc(name, doc, orgId, { quiet = false } = {}) {
     if (orgId && orgId !== activeOrgId) return false;
     cache[name] = structuredClone(doc);
     if (!hosted.canEdit) return false;
+    if (conflicted.has(name)) { saveProblem(name, 'Someone else saved changes here. Reload the page to see them before you go on.'); return false; }
     const job = (sending[name] ??= {});
     job.next = cache[name];
     if (!quiet) job.loud = true;
@@ -217,6 +274,9 @@ function listen() {
       const res = await fetch(`/api/docs/${encodeURIComponent(name)}`, { headers: { accept: 'application/json' } });
       if (!res.ok) return;
       const doc = await res.json();
+      const v = res.headers.get('x-doc-version');
+      if (v != null) versions[name] = Number(v);
+      conflicted.delete(name);
       cache[name] = doc;
       for (const fn of listeners[name]) fn(structuredClone(doc));
     } catch {

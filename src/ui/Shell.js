@@ -56,13 +56,26 @@ export function Shell(el, { current, org }) {
               try { await signInAs(org.id, s.id); location.reload(); } catch (err) { alert(err.message); }
             } }, Avatar(s, 20), s.name)))])),
   );
+  // Pages draw the header again on every change; the listeners below go on once.
+  if (wired) return;
+  wired = true;
   // A small note in the bottom-left corner when a change is saved, or when it couldn't be.
   window.addEventListener('toolbox:saved', () => toast('Saved', 'ok'));
   window.addEventListener('toolbox:save-failed', (e) => toast(`Not saved: ${e.detail.why}`, 'error'));
+  window.addEventListener('toolbox:save-conflict', (e) => conflictBanner(e.detail));
   // Close a menu when clicking elsewhere.
   document.addEventListener('click', (e) => {
-    for (const d of el.querySelectorAll('details[open]')) if (!d.contains(e.target)) d.open = false;
+    for (const d of document.querySelectorAll('.shell details[open]')) if (!d.contains(e.target)) d.open = false;
   });
+}
+let wired = false;
+
+/** Someone else saved the same document: say so until the page is reloaded. */
+function conflictBanner({ why }) {
+  if (document.querySelector('.conflict-banner')) return;
+  document.body.append(h('div', { class: 'alert alert-warning conflict-banner', role: 'alert' },
+    h('span', {}, why ?? 'Someone else saved changes here while you were working.'),
+    h('button', { class: 'btn btn-sm', onclick: () => location.reload() }, 'Reload')));
 }
 
 /** A person's picture, or their initials. */

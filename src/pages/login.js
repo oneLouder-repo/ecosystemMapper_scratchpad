@@ -50,16 +50,55 @@ app.replaceChildren(h('div', { class: 'login-wrap' },
       message,
       h('button', { class: 'btn btn-primary w-full', type: 'submit' }, 'Sign in')),
     h('p', { class: 'muted small' }, 'No account? Your organisation’s admin adds you to its staff list in Organisation settings.')),
-  options.dev && h('section', { class: 'login-box card dev-login' },
-    h('h2', {}, 'Test sign-in'),
-    h('p', { class: 'muted small' }, 'Dev sign-in is on, so you can be anyone. Turn it off on a live server (DEV_LOGIN=false).'),
-    h('ul', { class: 'dev-users' }, options.dev.map((u) =>
-      h('li', {}, h('button', { class: 'dev-user', onclick: async () => {
-        const res = await post('/api/auth/dev', { userId: u.id });
-        if (res.ok) location.assign(safeNext);
-      } },
-        h('span', { class: 'avatar-initials', style: 'width:30px;height:30px;font-size:12px' }, initials(u.name)),
-        h('span', {}, h('strong', {}, u.name, u.isSuper && h('span', { class: 'badge badge-sm badge-primary', style: 'margin-left:6px' }, 'platform admin')),
-          h('small', {}, [u.email, ...u.orgs].join(' · ')))))))),
+  options.dev && DevLogin(options, safeNext),
 ));
 email.focus();
+
+/**
+ * Test sign-in (dev and staging servers): everyone, grouped so a tester can
+ * pick a role quickly. The platform admin first, then this org's people by
+ * role, then each other org, folded. A search box narrows all of it.
+ */
+function DevLogin(options, next) {
+  const ORDER = ['admin', 'lead', 'staff', 'viewer'];
+  const ROLE_LABEL = { admin: 'Admins', lead: 'Leads', staff: 'Staff', viewer: 'Viewers' };
+  const here = options.org?.id;
+  const person = (u, role) => h('li', { 'data-search': `${u.name} ${u.email} ${(u.orgs ?? []).join(' ')}`.toLowerCase() },
+    h('button', { class: 'dev-user', onclick: async () => {
+      const res = await post('/api/auth/dev', { userId: u.id });
+      if (res.ok) location.assign(next);
+    } },
+      h('span', { class: 'avatar-initials', style: 'width:30px;height:30px;font-size:12px' }, initials(u.name)),
+      h('span', {}, h('strong', {}, u.name, u.isSuper && h('span', { class: 'badge badge-sm badge-primary', style: 'margin-left:6px' }, 'platform admin'),
+        role && h('span', { class: 'badge badge-sm badge-ghost', style: 'margin-left:6px' }, role)),
+        h('small', {}, [u.email, ...((u.orgs ?? []).length > 1 ? u.orgs : [])].join(' · ')))));
+  const supers = options.dev.filter((u) => u.isSuper);
+  const orgs = new Map();
+  for (const u of options.dev) for (const m of u.memberships ?? []) {
+    if (!orgs.has(m.orgId)) orgs.set(m.orgId, { name: m.org, people: [] });
+    orgs.get(m.orgId).people.push({ u, role: m.role });
+  }
+  const byRole = (people) => ORDER.map((r) => {
+    const group = people.filter((p) => p.role === r).sort((a, b) => a.u.name.localeCompare(b.u.name));
+    return group.length && [h('li', { class: 'dev-role' }, `${ROLE_LABEL[r]} (${group.length})`), group.map((p) => person(p.u, r))];
+  });
+  const sections = [
+    supers.length && h('ul', { class: 'dev-users' }, supers.map((u) => person(u))),
+    here && orgs.has(here) && h('details', { class: 'dev-org', open: true },
+      h('summary', {}, `${orgs.get(here).name}, here`), h('ul', { class: 'dev-users' }, byRole(orgs.get(here).people))),
+    [...orgs].filter(([id]) => id !== here).sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([, o]) =>
+      h('details', { class: 'dev-org', open: !here },
+        h('summary', {}, `${o.name} (${o.people.length})`), h('ul', { class: 'dev-users' }, byRole(o.people)))),
+  ];
+  const list = h('div', { class: 'dev-groups' }, sections);
+  const search = h('input', { class: 'input input-sm w-full', type: 'search', placeholder: 'Find a person, email or org', 'aria-label': 'Find a test person',
+    oninput: () => {
+      const t = search.value.trim().toLowerCase();
+      for (const li of list.querySelectorAll('li[data-search]')) li.hidden = !!t && !li.dataset.search.includes(t);
+      for (const d of list.querySelectorAll('details')) { if (t) d.open = !!d.querySelector('li[data-search]:not([hidden])'); }
+    } });
+  return h('section', { class: 'login-box card dev-login' },
+    h('h2', {}, 'Test sign-in'),
+    h('p', { class: 'muted small' }, 'This is a test server, so you can be anyone. Pick a role to see what that person sees. A live server has this turned off.'),
+    search, list);
+}
