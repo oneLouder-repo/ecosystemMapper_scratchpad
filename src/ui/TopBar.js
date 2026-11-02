@@ -3,6 +3,7 @@ import { exportMap, importMap } from '../persistence/file.js';
 import { icon } from './icons.js';
 import { MapDetails } from './MapDetails.js';
 import { MapHelp } from './MapHelp.js';
+import { toast } from './Shell.js';
 
 /**
  * The mapper's top bar: the map's name (click to rename), map help, the
@@ -92,6 +93,12 @@ export function TopBar(el, ctx) {
       h('button', { type: 'button', class: 'btn btn-sm btn-ghost', tabindex: 0, title: 'Show, hide, dock and tidy the tool panels', onclick: drawPanelsMenu, onfocus: drawPanelsMenu }, 'Panels ▾'),
       panelsMenu),
     h('button', { class: 'btn btn-sm', title: 'Open a Dashi map file (.dashi-map.json)', onclick: () => fileInput.click() }, icon('upload', 16), 'Open'),
+    ctx.actions.hasLibrary() && h('button', { class: 'btn btn-sm', title: 'Keep a copy of this map as a file in the library, where it can be tagged, put in a bibliography or attached to work as an asset. Saving again updates it.', onclick: async (e) => {
+      e.currentTarget.disabled = true;
+      try { toast((await ctx.actions.saveToLibrary()) === 'added' ? 'Saved to the library as a map file' : 'Updated the map file in the library'); }
+      catch (err) { toast(`Couldn’t save to the library: ${err.message}`, 'error'); }
+      finally { e.target.closest('button').disabled = false; }
+    } }, icon('book', 16), 'To library'),
     h('button', { class: 'btn btn-sm btn-primary', title: 'Save this map as a Dashi map file, to keep offline or archive', onclick: () => exportMap(store.map, { entry: ctx.index.maps[ctx.mapId], org: ctx.org }) }, icon('download', 16), 'Save file'),
     fileInput,
   );
@@ -108,7 +115,7 @@ export function TopBar(el, ctx) {
 }
 
 /** After picking a file: open it as a new map, or replace this one. */
-function OpenChoice(ctx, map, entry) {
+export function OpenChoice(ctx, map, entry) {
   const counts = `${Object.keys(map.actors).length} actors, ${Object.keys(map.connectors).length} connectors`;
   const dialog = h('dialog', { class: 'modal' },
     h('div', { class: 'modal-box' },

@@ -16,6 +16,7 @@ import { typeOf } from '../platform/library.js';
  * and a line about it to ABOUT.
  */
 const ABOUT = {
+  map: 'A whole ecosystem map, live in the Mapper, or a map file kept in the library.',
   actor: 'Actors and agents from your ecosystem maps. Renaming one on its map renames it here.',
   staff: 'People on your staff who work on this or know it well.',
   person: 'Someone outside your staff: a partner, Elder, volunteer, funder or expert.',
@@ -137,6 +138,24 @@ function libraryItems(docs, kind) {
 }
 
 const PICKERS = {
+  map: ({ docs, used, pick }) => {
+    const live = Object.values(docs.maps?.maps ?? {}).sort((a, b) => a.title.localeCompare(b.title)).map((entry) => ({
+      group: 'Maps in the Mapper',
+      label: entry.title,
+      sub: `${Object.keys(docs.mapContents?.[entry.id]?.actors ?? {}).length} actors${entry.description ? ` · ${entry.description}` : ''}`,
+      asset: { kind: 'map', ref: entry.id, label: entry.title },
+    }));
+    const files = Object.values(docs.library?.items ?? {}).filter((it) => it.kind === 'file' && /\.dashi-map\.json$/i.test(it.file?.name ?? '')).map((it) => ({
+      group: 'Map files in the library',
+      label: it.meta.title || it.file.name,
+      sub: it.file.name,
+      asset: { kind: 'map', libraryId: it.id, label: it.meta.title || it.file.name },
+    }));
+    const items = [...live, ...files];
+    if (!items.length) return h('p', { class: 'pick-empty' }, 'No ecosystem maps yet. ', h('a', { href: 'mapper.html' }, 'Open the mapper'), '.');
+    return pickList({ name: 'q-map', used, pick, placeholder: 'Search maps', items });
+  },
+
   actor: ({ docs, used, pick }) => {
     // Every map's actors, grouped by map.
     const items = Object.values(docs.maps?.maps ?? {}).flatMap((entry) =>

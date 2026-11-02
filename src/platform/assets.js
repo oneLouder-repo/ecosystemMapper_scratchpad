@@ -13,6 +13,7 @@
  * and a picker in ui/AssetChooser.js.
  */
 export const ASSET_KINDS = [
+  { id: 'map', label: 'Ecosystem map', icon: 'mapper' },
   { id: 'actor', label: 'Ecosystem actor', icon: 'mapper' },
   { id: 'staff', label: 'Staff', icon: 'org' },
   { id: 'person', label: 'Person', icon: 'person' },
@@ -44,6 +45,16 @@ export function resolveAsset(asset, docs) {
       const { actor: a, mapId } = found;
       const mapTitle = docs.maps?.maps[mapId]?.title ?? 'the ecosystem map';
       return { label: a.label, sub: `${a.kind === 'agent' ? 'Agent' : 'Actor'} on ${mapTitle}`, href: `mapper.html#${mapId}` };
+    }
+    case 'map': {
+      if (asset.libraryId) {
+        const it = docs.library?.items?.[asset.libraryId];
+        return it ? { label: it.meta.title || asset.label, sub: 'Ecosystem map file in the library', href: `library.html#item/${asset.libraryId}` } : { label: asset.label, sub: 'Removed from the library', missing: true };
+      }
+      const entry = docs.maps?.maps?.[asset.ref];
+      if (!entry) return { label: asset.label, sub: 'Map removed', missing: true };
+      const actors = Object.keys(docs.mapContents?.[asset.ref]?.actors ?? {}).length;
+      return { label: entry.title, sub: `Ecosystem map · ${actors} actor${actors === 1 ? '' : 's'}`, href: `mapper.html#${asset.ref}` };
     }
     case 'staff': {
       const s = docs.org?.staff[asset.ref];

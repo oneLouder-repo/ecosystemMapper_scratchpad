@@ -21,7 +21,12 @@ import { migrateMap } from './seed.js';
 import { Shell } from './ui/Shell.js';
 import { h } from './ui/dom.js';
 import { autosaveDoc, saveDoc } from './platform/storage.js';
-import { loadOrg, loadMaps } from './platform/docs.js';
+import { loadOrg, loadMaps, loadLibrary } from './platform/docs.js';
+import { putMedia, mediaUrl } from './platform/media.js';
+import { mapFile, fileName, parseMapFile } from './persistence/file.js';
+import { OpenChoice } from './ui/TopBar.js';
+import { toast } from './ui/Shell.js';
+import { enabledPlugins } from './plugins.js';
 import { loadMapContent, mapDocName, createMapIn } from './platform/maps.js';
 import { currentUser } from './platform/session.js';
 
@@ -31,6 +36,8 @@ Shell(document.querySelector('#shell'), { current: 'mapper', org });
 // Which map: mapper.html#<mapId>, else the first map this org has (making one if none).
 const index = loadMaps();
 let mapId = decodeURIComponent(location.hash.slice(1));
+// mapper.html#open=<library item>: open a map file kept in the library.
+const openFromLibrary = mapId.startsWith('open=') ? mapId.slice(5) : null;
 if (!index.maps[mapId]) {
   mapId = Object.keys(index.maps)[0] ?? createMapIn(index, { title: 'Our ecosystem', ownerId: currentUser(org)?.id }).id;
   history.replaceState(null, '', `#${mapId}`);
@@ -208,6 +215,33 @@ const ctx = {
       saveDoc(mapDocName(mapId), store.map);
       location.hash = id;
     },
+    /** Is the library on for this org (so maps can be kept there as files)? */
+    hasLibrary: () => enabledPlugins(org).some((p) => p.id === 'library'),
+    /**
+     * Keep this map as a file in the library: a Dashi map file, tagged
+     * "ecosystem map". Saving again replaces the file on the same item.
+     */
+    async saveToLibrary() {
+      const entry = index.maps[mapId];
+      const data = mapFile(store.map, { entry, org });
+      const file = new File([JSON.stringify(data, null, 2)], fileName(entry.title), { type: 'application/json' });
+      const mediaId = await putMedia(file, { kind: 'document' });
+      const lib = loadLibrary();
+      const existing = Object.values(lib.items).find((it) => it.mapId === mapId && it.kind === 'file');
+      const stamp = Date.now();
+      const info = { mediaId, name: file.name, size: file.size, type: 'application/json' };
+      if (existing) Object.assign(existing, { file: info, updatedAt: stamp, meta: { ...existing.meta, title: entry.title, abstract: entry.description ?? existing.meta.abstract } });
+      else {
+        const id = uid('doc');
+        lib.items[id] = {
+          id, kind: 'file', mapId, folderId: null, tags: ['ecosystem map'], file: info,
+          meta: { type: 'dataset', title: entry.title, creators: [], issued: new Date().toISOString().slice(0, 10), keywords: [], language: 'en', abstract: entry.description ?? '', publisher: org.name },
+          createdAt: stamp, updatedAt: stamp, createdBy: currentUser(org)?.id ?? null,
+        };
+      }
+      saveDoc('library', lib);
+      return existing ? 'replaced' : 'added';
+    },
     /** Change the map's title, description, owner or members. */
     updateEntry(patch) {
       Object.assign(index.maps[mapId], patch, { updatedAt: new Date().toISOString().slice(0, 10) });
@@ -307,6 +341,23 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
   }
 });
+
+// Opened from the library: read the map file, then open it as a new map or in place of this one.
+if (openFromLibrary) {
+  history.replaceState(null, '', `#${mapId}`);
+  (async () => {
+    try {
+      const item = loadLibrary().items[openFromLibrary];
+      if (!item?.file) throw new Error('that map file isn’t in the library any more');
+      const url = await mediaUrl(item.file.mediaId);
+      if (!url) throw new Error('the file is no longer stored');
+      const { map, entry } = parseMapFile(await (await fetch(url)).text());
+      OpenChoice(ctx, ctx.actions.migrate(map), { ...entry, title: entry.title || item.meta.title });
+    } catch (err) {
+      toast(`Couldn’t open that map file: ${err.message}`, 'error');
+    }
+  })();
+}
 
 // Handy for poking at things from the browser console.
 window.mapper = ctx;
