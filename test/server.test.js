@@ -580,4 +580,5 @@ test('the session says which version is running', async () => {
   const pkg = JSON.parse((await import('node:fs')).readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(VERSION, pkg.version, 'src/version.js matches package.json');
   assert.equal((await call(EX, 'GET', '/api/session')).json.version, pkg.version);
+  assert.equal((await call('anything', 'GET', '/version')).json.version, pkg.version);
 });

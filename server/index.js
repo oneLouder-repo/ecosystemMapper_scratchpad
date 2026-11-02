@@ -41,10 +41,15 @@ export async function start({ port = config.port, quiet = false, resolver } = {}
   // A database snapshot now if there's none from today, then daily.
   const backups = scheduleBackups(db, log);
 
-  // /healthz answers the host's health checks without touching sessions.
+  // /healthz answers the host's health checks without touching sessions (and before a test server's access code).
   const server = createServer((req, res) => {
     if (req.url === '/healthz') {
       try { db.prepare('SELECT 1').get(); res.writeHead(200, { 'content-type': 'text/plain' }).end('ok'); } catch { res.writeHead(503).end('database unavailable'); }
+      return;
+    }
+    // /version: which build is running, for testers' reports and deploy checks.
+    if (req.url === '/version') {
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify({ version: config.version, staging: config.staging }));
       return;
     }
     // Caddy (deploy/Caddyfile) asks before getting a certificate for an address: is it ours?

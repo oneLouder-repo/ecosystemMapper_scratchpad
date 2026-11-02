@@ -1,5 +1,7 @@
 # Dashi (scratchpad)
 
+**Version 0.1.0-alpha.1**: the first tester release. See [CHANGELOG.md](CHANGELOG.md) for what's in it, [TESTING.md](TESTING.md) for testing it, and [DEPLOY.md](DEPLOY.md) for running it.
+
 A small, cohesive platform for nonprofits' planning, knowledge and learning work. It holds many organisations; each picks the **plugins** it uses. Open `index.html` (via `npm start`) for the dashboard, then choose a plugin:
 
 | Plugin | Page | What it does |

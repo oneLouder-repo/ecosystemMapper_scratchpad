@@ -45,6 +45,9 @@ Copy `.env.example` to `.env` and change what you need. The ones that matter on 
 - `OPEN_SIGNUP`: whether anyone can sign up for a Free org on the platform's site (on unless set to `false`).
 - `DNS_TARGET`: the name orgs on the Custom plan point their own domain at with a CNAME, such as `sites.dashi.ca`. Without it, they point at `BASE_DOMAIN`.
 - `FLY_API_TOKEN` and `FLY_APP_NAME`: on Fly.io, the platform asks for a certificate for each custom domain as soon as its DNS checks out.
+- `MAIL_PROVIDER`, `MAIL_API_KEY` and `MAIL_FROM`: email for password resets, invitations and support replies (see below).
+- `SUPPORT_EMAIL`: where new support tickets are announced. The platform admin's email if not set.
+- `STAGING` and `STAGING_ACCESS_CODE`: a test server for testers (see below).
 
 ## Going live
 
@@ -87,6 +90,29 @@ Without Docker, the steps are the same as on your own computer:
 - run `npm start` with the settings in `.env`;
 - keep it running with systemd or pm2;
 - put Caddy or nginx in front for HTTPS, and set `TRUST_PROXY=true`.
+
+### Email
+
+Dashi sends a few emails: password reset links, invitations to new staff, and notices about support tickets. Without email it still works: each link is written to the server's log instead, and Organisation → People says so.
+
+1. Make an account with [Postmark](https://postmarkapp.com) (the default) or [Resend](https://resend.com). Both have free tiers that cover a small platform.
+2. Add your domain there. It shows three DNS records (SPF, DKIM, and a return path or DMARC); add them at your registrar. Without them, mail lands in spam.
+3. Set the secrets, for example on Fly:
+   ```
+   fly secrets set MAIL_API_KEY=... MAIL_FROM='Dashi <hello@dashi.ca>' SUPPORT_EMAIL=you@dashi.ca
+   ```
+   For Resend, also set `MAIL_PROVIDER=resend`.
+4. Test it: sign out and use **Forgot your password?** on the sign-in page.
+
+Reset links last an hour and invitation links seven days. Each works once, and only a hash of it is stored.
+
+### A staging server for testers
+
+A second copy of Dashi for people testing it: the test sign-in and the six example orgs, a "test server" banner on every page, and an access code in front of everything, so the public and search engines can't wander in. Keep it separate from the live server; nothing real should go in it.
+
+On Fly, `fly.staging.toml` sets it up (its first lines have the commands). Give it its own domain, such as `staging.dashi.ca` with `*.staging.dashi.ca` for the example orgs, and set `STAGING_ACCESS_CODE` to something you can read out to testers. `/healthz` and `/version` stay open so health checks work.
+
+To start it fresh, delete `toolbox.db` from its volume (`fly ssh console --config fly.staging.toml`, then `rm /data/toolbox.db*`) and restart it; the example orgs come back. [TESTING.md](TESTING.md) has the tester brief.
 
 ### Backups
 
@@ -173,5 +199,6 @@ That takes a Zotero export (CSL JSON, BibTeX or RIS) and any files or folders of
 
 ## Later
 
+- **Off-site database copies**: Fly's snapshots stay in the same region. [Litestream](https://litestream.io) can stream every change to an object store.
 - **Billing**: each org has a `plan` (free, basic, standard, custom), set on the platform admin page. Payments, for example through Stripe, can hook in there.
 - **More than one server**: SQLite suits one server, which covers many small orgs. If the platform outgrows it, the database layer in `server/db.js` and `server/app.js` is the part to move to Postgres.

@@ -228,7 +228,7 @@ body.mapper-page > main { overflow: hidden; }
 .map-help dd { margin: 0; color: var(--muted); }
 
 @media (max-width: 760px) {
-  body.mapper-page { grid-template: 'shell' 44px 'top' 52px 'board' 1fr / 1fr !important; padding: 0; }
+  body.mapper-page { grid-template: 'shell' 44px 'top' 52px 'board' 1fr / minmax(0, 1fr) !important; padding: 0; }
   #topbar { overflow-x: auto !important; }
   .dock-panel:not(.compact) { width: 180px; }
 }
