@@ -1489,3 +1489,12 @@ table.sheet { border-collapse: separate; border-spacing: 0; font-size: 13.5px; f
 .dev-groups .dev-users { max-height: none; }
 .dev-org > summary { cursor: pointer; font-weight: 700; padding: 8px 4px; border-top: 1px solid var(--line, #e5e5e5); }
 .dev-role { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 8px 8px 2px; }
+
+/* The library's tag cloud on the dashboard */
+.tag-cloud-card { margin: 18px 0; }
+.tag-cloud-card .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.tag-cloud-card h2 { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px; }
+.tag-cloud-card .tag-cloud { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.tag-cloud-card .cloud-tag { font-weight: 700; text-decoration: none; color: color-mix(in oklab, var(--color-primary) calc(var(--w) * 100%), var(--muted)); }
+.tag-cloud-card .cloud-tag:hover { text-decoration: underline; }
+.tag-cloud-card .cloud-tag small { font-size: 11px; color: var(--muted); margin-left: 2px; font-weight: 600; }

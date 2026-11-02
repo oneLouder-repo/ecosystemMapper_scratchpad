@@ -6,13 +6,29 @@ import { loadAll } from '../platform/docs.js';
 import { currentUser } from '../platform/session.js';
 import { statusById } from '../platform/strategy.js';
 import { addDays, short, today } from '../strategy/dates.js';
+import { libraryTags } from '../platform/library.js';
 
 const docs = loadAll();
 const { org, strategy, dashboards } = docs;
+const hasLibrary = enabledPlugins(org).some((p) => p.id === 'library');
+const tags = hasLibrary ? libraryTags(docs.library).slice(0, 36) : [];
+
+/** The library's tags as a cloud: what the organisation is reading and thinking about. */
+function TagCloudCard() {
+  if (!hasLibrary) return null;
+  const top = tags[0]?.n ?? 1;
+  return h('section', { class: 'card tag-cloud-card' },
+    h('div', { class: 'section-head' }, h('h2', {}, icon('tag', 20), ' What we’re reading about'), h('a', { href: 'library.html#tags' }, 'All tags →')),
+    tags.length
+      ? h('div', { class: 'tag-cloud' }, [...tags].sort((a, b) => a.tag.localeCompare(b.tag)).map((t) =>
+          h('a', { class: 'cloud-tag', href: `library.html#tag/${encodeURIComponent(t.tag)}`, title: `${t.tag}: ${t.n} item${t.n === 1 ? '' : 's'}`,
+            style: `font-size:${(0.85 + (t.n / top) * 1.0).toFixed(2)}rem; --w:${(0.35 + (t.n / top) * 0.65).toFixed(2)}` }, t.tag, h('small', {}, t.n))))
+      : h('p', { class: 'muted' }, 'Tag readings in the ', h('a', { href: 'library.html' }, 'library'), ' and the themes show up here.'));
+}
 
 Shell(document.querySelector('#shell'), { current: 'home', org });
 const me = currentUser(org);
-const myOpen = Object.values(strategy.nodes).filter((n) => n.type === 'task' && n.status !== 'done' && n.assigneeIds.includes(me?.id)).length;
+const myOpen = Object.values(strategy.nodes).filter((n) => n.type === 'task' && n.status !== 'done' && (n.assigneeIds ?? []).includes(me?.id)).length;
 
 // Tasks that are open and due in the next 30 days, or overdue.
 const now = today();
@@ -37,6 +53,7 @@ document.querySelector('#app').replaceChildren(
         ),
       ),
     ),
+    TagCloudCard(),
     h('h2', {}, 'Due in the next 30 days'),
     upcoming.length
       ? h('ul', { class: 'upcoming' },
@@ -45,7 +62,7 @@ document.querySelector('#app').replaceChildren(
               h('span', { class: 'when' }, t.end < now ? `Overdue · ${short(t.end)}` : short(t.end)),
               h('span', { class: 'dot', style: `background:${statusById[t.status].color}`, title: statusById[t.status].label }),
               h('a', { href: `strategy.html#${t.id}` }, t.title),
-              h('span', { class: 'muted' }, t.assigneeIds.map((id) => org.staff[id]?.name).filter(Boolean).join(', ')),
+              h('span', { class: 'muted' }, (t.assigneeIds ?? []).map((id) => org.staff[id]?.name).filter(Boolean).join(', ')),
             ),
           ),
         )
@@ -61,6 +78,6 @@ document.querySelector('#app').replaceChildren(
             shown.length ? `${shown.length} live dashboard${shown.length > 1 ? 's' : ''}` : 'No dashboards yet'));
       })),
     h('p', { class: 'note' },
-      'Coming next: real accounts and roles with the server, sandboxes, feedback forms on public dashboards, and program data fed straight from your systems.'),
+      'Dashi is in alpha. Something odd, or an idea? Use Help & feedback at the bottom right of any page.'),
   ),
 );

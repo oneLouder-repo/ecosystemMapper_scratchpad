@@ -15,6 +15,7 @@ import {
   apaReference, apaCitation, runsToHtml, runsToText, runsToMarkdown, dublinCore, parseReferences, wordCount, annotationLength,
   weekKey, weekLabel, shiftWeek, tagMap, allowedTags, parseRule, groupItems, weekAnnotations, draftBrief, newsletter,
   searchItems, fullName, yearOf, sortKey, apaList, fileHints, matchReference,
+  libraryTags, itemsTagged, suggestTags, renameTag, frameworksFor, weekResources, isMapFile,
 } from '../platform/library.js';
 import { FORMATS, download, fileName, renderMarkdown, exportDoc, printHtml, exportDublinCore, exportCsl, referenceBlocks, byline } from './exports.js';
 import { parseMarkdown, toHtml } from '../core/markdown.js';
@@ -28,6 +29,11 @@ import { dashiToolbarItems } from './DashiTools.js';
  *                          (a Dashi doc opens in the editor)
  *   #bibs                  annotated bibliographies
  *   #bib/<id>/<tab>        one bibliography: annotations, lexicon, groups, references, weekly
+ *   #tags, #tag/<tag>      every tag in the library as a cloud; the items under one tag
+ *
+ * The library's home has "Add a reading": upload a file, paste a link or
+ * pick a Dashi doc, annotate it, tag it (with tags suggested from the
+ * lexicon) and put it in a bibliography, in one go.
  *
  * Dashi docs are Markdown, edited with Toast UI Editor (WYSIWYG or Markdown),
  * and export to PDF, Word, OpenDocument, HTML and Markdown with their
@@ -66,6 +72,8 @@ function render() {
   if (view === 'item' && lib().items[a]) page = lib().items[a].kind === 'doc' ? DocPage(lib().items[a]) : ItemPage(lib().items[a]);
   else if (view === 'bibs') page = BibList();
   else if (view === 'bib' && lib().bibs[a]) page = bibsAllowed ? BibPage(lib().bibs[a], b || 'annotations') : Upsell();
+  else if (view === 'tags') page = TagsPage();
+  else if (view === 'tag' && a) page = TagPage(a);
   else page = Files(a || 'all');
   main.replaceChildren(page);
   main.scrollTop = scroll;
@@ -81,6 +89,8 @@ function drawSide(view, a) {
       { label: 'Dashi docs', sub: n(count((i) => i.kind === 'doc'), 'doc'), icon: 'doc', href: '#files/docs', on: view === 'files' && a === 'docs' },
       { label: 'Files', sub: n(count((i) => i.kind === 'file'), 'file'), icon: 'upload', href: '#files/uploads', on: view === 'files' && a === 'uploads' },
       { label: 'Links and references', sub: n(count((i) => ['link', 'gdoc', 'ref'].includes(i.kind)), 'item'), icon: 'link', href: '#files/links', on: view === 'files' && a === 'links' },
+      { label: 'Ecosystem maps', sub: n(count(isMapFile), 'map file'), icon: 'mapper', href: '#files/maps', on: view === 'files' && a === 'maps' },
+      { label: 'Tags', sub: n(libraryTags(lib()).length, 'tag'), icon: 'tag', href: '#tags', on: view === 'tags' || view === 'tag' },
     ] },
     { title: 'Folders', action: { label: 'New folder', onclick: newFolder }, items: [
       ...folders.map((f) => ({ label: f.name, sub: n(count((i) => i.folderId === f.id), 'item'), icon: 'doc', href: `#files/${f.id}`, on: view === 'files' && a === f.id })),
@@ -107,6 +117,7 @@ function Files(scope) {
     docs: (i) => i.kind === 'doc',
     uploads: (i) => i.kind === 'file',
     links: (i) => ['link', 'gdoc', 'ref'].includes(i.kind),
+    maps: isMapFile,
     unfiled: (i) => !i.folderId || !lib().folders[i.folderId],
   };
   const inScope = folder ? (i) => i.folderId === folder.id : scopes[scope] ?? scopes.all;
@@ -117,7 +128,7 @@ function Files(scope) {
     year: (x, y) => (yearOf(y.meta.issued) || '0').localeCompare(yearOf(x.meta.issued) || '0'),
   };
   const items = searchItems(lib(), search).filter(inScope).sort(sorters[sort]);
-  const title = folder ? folder.name : { all: 'All documents', docs: 'Dashi docs', uploads: 'Files', links: 'Links and references', unfiled: 'Not in a folder' }[scope] ?? 'All documents';
+  const title = folder ? folder.name : { all: 'All documents', docs: 'Dashi docs', uploads: 'Files', links: 'Links and references', maps: 'Ecosystem map files', unfiled: 'Not in a folder' }[scope] ?? 'All documents';
   const status = h('p', { class: 'upload-status', role: 'status' }, lastNote);
   lastNote = '';
   const used = Object.values(lib().items).length;
@@ -151,6 +162,8 @@ function Files(scope) {
       h('input', { class: 'input input-sm lib-search', type: 'search', placeholder: 'Search titles, authors, tags, abstracts', value: search, 'aria-label': 'Search the library', oninput: (e) => { search = e.target.value; draw(); } }),
       h('select', { class: 'select select-sm', 'aria-label': 'Sort by', onchange: (e) => { sort = e.target.value; draw(); } },
         options([{ id: 'updated', label: 'Newest changes' }, { id: 'title', label: 'Title' }, { id: 'author', label: 'Author' }, { id: 'year', label: 'Year' }], sort))),
+    !folder && scope === 'all' && QuickAdd(),
+    !folder && scope === 'all' && MiniCloud(),
     limit != null && h('p', { class: 'muted small' }, `${used} of ${limit} documents on your plan · files up to ${maxUploadMb()} MB`),
     status,
     list);
@@ -158,7 +171,7 @@ function Files(scope) {
 
 function Row(item) {
   const fk = FILE_KINDS[extOf(item.file?.name)];
-  const kindIcon = item.kind === 'doc' ? 'doc' : item.kind === 'gdoc' ? 'doc' : item.kind === 'link' ? 'link' : item.kind === 'ref' ? 'book' : fk?.icon ?? 'doc';
+  const kindIcon = isMapFile(item) ? 'mapper' : item.kind === 'doc' ? 'doc' : item.kind === 'gdoc' ? 'doc' : item.kind === 'link' ? 'link' : item.kind === 'ref' ? 'book' : fk?.icon ?? 'doc';
   const tone = item.kind === 'doc' ? 'var(--color-primary)' : item.kind === 'gdoc' ? '#1a73e8' : fk?.tone ?? '#666';
   const authors = (item.meta.creators ?? []).filter((c) => ['author', 'host'].includes(c.role ?? 'author'));
   return h('tr', {},
@@ -166,7 +179,7 @@ function Row(item) {
     h('td', { class: 'muted' }, authors.slice(0, 2).map((c) => c.literal ?? c.family).join(', ') + (authors.length > 2 ? ' et al.' : '')),
     h('td', { class: 'muted' }, yearOf(item.meta.issued) || '—'),
     h('td', {}, h('span', { class: 'badge badge-sm badge-ghost' }, formatLabel(item))),
-    h('td', {}, h('div', { class: 'tag-row' }, (item.tags ?? []).slice(0, 3).map((t) => h('span', { class: 'tag' }, t)))),
+    h('td', {}, h('div', { class: 'tag-row' }, (item.tags ?? []).slice(0, 3).map((t) => h('a', { class: 'tag', href: `#tag/${encodeURIComponent(t)}` }, t)))),
     h('td', { class: 'num muted' }, item.file ? size(item.file.size) : item.kind === 'doc' ? `${wordCount(item.body)} words` : ''));
 }
 const size = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
@@ -312,7 +325,8 @@ function ItemPage(item) {
     h('div', { class: 'item-head' },
       h('input', { class: 'title-input', value: item.meta.title, placeholder: 'Title', 'aria-label': 'Title', onchange: (e) => { setMeta(item, { title: e.target.value }); render(); } }),
       h('div', { class: 'item-actions' },
-        item.file && h('button', { class: 'btn btn-sm btn-primary', onclick: async () => openMedia(item, false) }, icon('globe', 14), 'Open'),
+        isMapFile(item) && h('a', { class: 'btn btn-sm btn-primary', href: `mapper.html#open=${encodeURIComponent(item.id)}`, title: 'Open this map file in the Ecosystem Mapper, as a new map or in place of one' }, icon('mapper', 14), 'Open in the Mapper'),
+        item.file && !isMapFile(item) && h('button', { class: 'btn btn-sm btn-primary', onclick: async () => openMedia(item, false) }, icon('globe', 14), 'Open'),
         item.file && h('button', { class: 'btn btn-sm', onclick: async () => openMedia(item, true) }, icon('download', 14), 'Download'),
         item.url && h('a', { class: 'btn btn-sm btn-primary', href: item.url, target: '_blank', rel: 'noopener noreferrer' }, icon('globe', 14), item.kind === 'gdoc' ? `Open in ${formatLabel(item).replace('Google ', 'Google ')}` : 'Open page'),
         h('button', { class: 'btn btn-sm btn-ghost text-error', onclick: () => removeItem(item) }, icon('trash', 14), 'Delete'))),
@@ -428,7 +442,8 @@ function MetaForm(item) {
     h('label', { class: 'field' }, h('span', {}, 'Folder'),
       h('select', { class: 'select select-sm', onchange: (e) => { touch(item, { folderId: e.target.value || null }); render(); } },
         h('option', { value: '' }, 'Not in a folder'), options(Object.values(lib().folders).map((f) => ({ id: f.id, label: f.name })), item.folderId))),
-    TagInput(item.tags ?? [], (tags) => { touch(item, { tags }); render(); }, { label: 'Library tags' }),
+    TagInput(item.tags ?? [], (tags) => { touch(item, { tags }); render(); }, { label: 'Library tags', suggestions: libraryTags(lib()).map((t) => t.tag) }),
+    SuggestChips(bibOf(item), { title: m.title, abstract: m.abstract, text: m.note }, item.tags ?? [], (tag) => { touch(item, { tags: [...(item.tags ?? []), tag] }); render(); }),
     field('note', { area: true }));
 }
 
@@ -689,7 +704,8 @@ function AnnotationCard(bib, item) {
       oninput: (e) => show(e.target.value), onchange: (e) => save({ text: e.target.value }) }, a.text ?? ''),
     h('div', { class: 'annotation-foot' },
       h('div', { class: 'word-box' }, meter, count),
-      TagInput(a.tags ?? [], (tags) => { save({ tags }); render(); }, { label: 'Tags', allowed: allowedTags(bib), suggestions: allTags(bib) }),
+      TagInput(a.tags ?? [], (tags) => { save({ tags }); render(); }, { label: 'Tags', allowed: allowedTags(bib), suggestions: [...new Set([...allTags(bib), ...libraryTags(lib()).map((t) => t.tag)])] }),
+      SuggestChips(bib, { title: item.meta.title, abstract: item.meta.abstract, text: a.text }, a.tags ?? [], (tag) => { save({ tags: [...(a.tags ?? []), tag] }); render(); }),
       a.updatedAt && h('span', { class: 'muted small' }, author ? Avatar(author, 18) : null, ` ${author ? author.name.split(' ')[0] : ''} · ${new Date(a.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · week ${weekKey(new Date(a.updatedAt)).split('-W')[1]}`)));
 }
 
@@ -848,8 +864,17 @@ function Weekly(bib) {
     });
   });
 
-  const sop = h('textarea', { class: 'textarea w-full', rows: 4, placeholder: 'One paragraph: where things stand this week.', 'aria-label': 'State of play', oninput: (e) => { sopCount.textContent = `${wordCount(e.target.value)} words`; }, onchange: (e) => { saveWeek({ stateOfPlay: e.target.value }); drawPreview(); } }, w.stateOfPlay ?? '');
-  const sopCount = h('span', { class: 'muted small' }, `${wordCount(w.stateOfPlay)} words`);
+  const sopWords = (text) => { const c = wordCount(text); return `${c} of about 500 words${c > 550 ? ' · a little long' : ''}`; };
+  const sop = h('textarea', { class: 'textarea w-full', rows: 8, placeholder: 'Where things stand this week, in about 500 words: what changed, what the evidence says, what it means.', 'aria-label': 'State of play', oninput: (e) => { sopCount.textContent = sopWords(e.target.value); }, onchange: (e) => { saveWeek({ stateOfPlay: e.target.value }); drawPreview(); } }, w.stateOfPlay ?? '');
+  const sopCount = h('span', { class: 'muted small' }, sopWords(w.stateOfPlay));
+  const recs = h('textarea', { class: 'textarea w-full', rows: 5, placeholder: '1. What to do, by whom, by when.', 'aria-label': 'Recommendations', onchange: (e) => { saveWeek({ recommendations: e.target.value }); drawPreview(); } }, w.recommendations ?? '');
+  // The data model the brief is laid out by: remembered per bibliography.
+  const models = frameworksFor(bib);
+  const framework = w.framework ?? bib.framework ?? 'themes';
+  const frameworkSelect = h('select', { class: 'select select-sm', 'aria-label': 'Lay the brief out by', title: 'The data model the draft brief is laid out by. Tag sources with its categories (or use a lexicon facet) to place them.',
+    onchange: (e) => { updateBib(bib, { framework: e.target.value }); saveWeek({ framework: e.target.value }); } },
+    options(models.map((m) => ({ id: m.id, label: m.label })), framework));
+  const resources = weekResources(lib(), bib, week);
 
   return h('div', { class: 'weekly' },
     h('div', { class: 'week-bar' },
@@ -859,15 +884,22 @@ function Weekly(bib) {
       week !== weekKey() && h('button', { class: 'btn btn-sm btn-ghost', onclick: () => go(weekKey()) }, 'This week'),
       h('span', { class: 'spacer' }),
       h('span', { class: 'muted small' }, `${n(notes.length, 'annotation')} this week · ${Object.keys(bib.weeks).length ? `briefs for ${n(Object.keys(bib.weeks).length, 'week')}` : 'no briefs yet'}`),
-      h('button', { class: 'btn btn-sm', disabled: !notes.length, title: 'A first draft from this week’s annotations, to rewrite', onclick: () => {
-        if ((w.policy?.trim() || w.stateOfPlay?.trim()) && !confirm('Replace this week’s brief and state of play with a fresh draft?')) return;
-        saveWeek(draftBrief(lib(), lib().bibs[bib.id], week));
+      h('label', { class: 'muted small week-model' }, 'Lay the brief out by ', frameworkSelect),
+      h('button', { class: 'btn btn-sm', disabled: !notes.length, title: 'A first draft from this week’s annotations, laid out by the model you chose, to rewrite', onclick: () => {
+        if ((w.policy?.trim() || w.stateOfPlay?.trim() || w.recommendations?.trim()) && !confirm('Replace this week’s brief, state of play and recommendations with a fresh draft?')) return;
+        saveWeek(draftBrief(lib(), lib().bibs[bib.id], week, { framework: frameworkSelect.value }));
         render();
       } }, 'Draft from this week’s annotations')),
     h('div', { class: 'weekly-grid' },
       h('div', {},
         h('section', { class: 'card' }, h('div', { class: 'section-head' }, h('h3', {}, 'State of play'), sopCount), sop),
         h('section', { class: 'card' }, h('h3', {}, 'Policy brief'), policyHost),
+        h('section', { class: 'card' }, h('h3', {}, 'Recommendations'), recs),
+        h('section', { class: 'card' },
+          h('div', { class: 'section-head' }, h('h3', {}, `Resources (${resources.length})`), h('span', { class: 'muted small' }, 'this week’s sources, with links')),
+          resources.length ? h('ul', { class: 'plain-list' }, resources.map((r) => h('li', {},
+            h('a', { href: `#item/${r.id}` }, r.title), h('span', { class: 'muted small' }, ` ${r.cite} · ${r.kind}`),
+            r.url && [' ', h('a', { class: 'small', href: r.url, target: '_blank', rel: 'noopener noreferrer' }, 'link ↗')]))) : h('p', { class: 'muted small' }, 'Sources you annotate this week show here.')),
         h('section', { class: 'card' },
           h('h3', {}, `This week’s annotations (${notes.length})`),
           notes.length ? h('ul', { class: 'plain-list' }, notes.map(({ item, annotation }) => h('li', { class: 'week-note' },
@@ -876,7 +908,7 @@ function Weekly(bib) {
       h('div', {},
         h('section', { class: 'card' }, h('h3', {}, 'Tag map'), TagMapView(map)),
         h('section', { class: 'card newsletter-card' },
-          h('div', { class: 'section-head' }, h('h3', {}, 'Newsletter'), h('span', { class: 'muted small' }, 'state of play, brief, annotations, tag map, references')),
+          h('div', { class: 'section-head' }, h('h3', {}, 'Newsletter'), h('span', { class: 'muted small' }, 'state of play, brief, recommendations, resources, annotations, tag map, references')),
           h('div', { class: 'row-actions' },
             FORMATS.map((f) => h('button', { class: 'btn btn-xs', onclick: async () => {
               const text = md();
@@ -903,6 +935,202 @@ function TagMapView(map) {
     map.pairs.length > 0 && h('div', {},
       h('h4', {}, 'Often together'),
       h('ul', { class: 'pair-list' }, map.pairs.slice(0, 8).map((p) => h('li', {}, h('span', { class: 'tag' }, p.a), h('span', { class: 'pair-line', style: `--n:${p.n}` }), h('span', { class: 'tag' }, p.b), h('span', { class: 'muted small' }, ` ${p.n}×`))))));
+}
+
+/* ---------- Tags ---------- */
+
+/** The bibliography an item is in (the first), for lexicon suggestions. */
+const bibOf = (item) => Object.values(lib().bibs).find((b) => b.itemIds.includes(item.id)) ?? null;
+
+/** Tags suggested from what a source says: the lexicon's terms first, then tags the library already uses. */
+function SuggestChips(bib, source, has, onAdd) {
+  const list = suggestTags(lib(), bib, { ...source, has }).slice(0, 8);
+  if (!list.length) return null;
+  return h('div', { class: 'suggest-row' },
+    h('span', { class: 'muted small' }, 'Suggested:'),
+    list.map((x) => h('button', { type: 'button', class: `tag suggest ${x.from}`, title: x.from === 'lexicon' ? `From the lexicon${x.facet ? ` (${x.facet})` : ''}` : 'A tag already used in your library', onclick: () => onAdd(x.tag) }, `+ ${x.tag}`)));
+}
+
+/** A cloud of tags, sized by how many items carry each; each links to its items. */
+function Cloud(tags, { max = Infinity } = {}) {
+  const shown = tags.slice(0, max);
+  const top = shown[0]?.n ?? 1;
+  return h('div', { class: 'tag-cloud' }, shown.sort((a, b) => a.tag.localeCompare(b.tag)).map((t) =>
+    h('a', { class: 'cloud-tag', href: `#tag/${encodeURIComponent(t.tag)}`, style: `font-size:${(0.85 + (t.n / top) * 0.9).toFixed(2)}rem; --w:${(0.35 + (t.n / top) * 0.65).toFixed(2)}`, title: `${t.tag}: ${n(t.n, 'item')}` }, t.tag, h('small', {}, t.n))));
+}
+
+function MiniCloud() {
+  const tags = libraryTags(lib());
+  if (!tags.length) return null;
+  return h('section', { class: 'card lib-cloud' },
+    h('div', { class: 'section-head' }, h('h3', {}, icon('tag', 15), ' Tags'), h('a', { class: 'small', href: '#tags' }, `All ${tags.length} tags →`)),
+    Cloud(tags, { max: 30 }));
+}
+
+function TagsPage() {
+  const tags = libraryTags(lib());
+  return h('div', {},
+    PluginHeader('library', { title: 'Tags', blurb: 'Every tag in the library: on items, in annotations, and keywords. Bigger means more items. Pick one to see its items; rename or merge tags to keep your vocabulary tidy.' }),
+    tags.length ? [
+      h('section', { class: 'card' }, Cloud(tags)),
+      h('table', { class: 'lib-table' }, h('thead', {}, h('tr', {}, h('th', {}, 'Tag'), h('th', { class: 'num' }, 'Items'), h('th', {}, ''))),
+        h('tbody', {}, tags.map((t) => h('tr', {},
+          h('td', {}, h('a', { class: 'tag', href: `#tag/${encodeURIComponent(t.tag)}` }, t.tag)),
+          h('td', { class: 'num' }, String(t.n)),
+          h('td', {}, h('button', { class: 'btn btn-xs btn-ghost', onclick: () => renameTagEverywhere(t.tag) }, 'Rename or merge'))))))]
+      : h('p', { class: 'empty' }, 'No tags yet. Tag items, annotations or keywords and they gather here.'));
+}
+
+function TagPage(tag) {
+  const items = itemsTagged(lib(), tag).sort((a, b) => sortKey(a.meta).localeCompare(sortKey(b.meta)));
+  const notes = (it) => Object.values(lib().bibs).map((b) => ({ b, a: b.annotations[it.id] })).filter((x) => x.a?.text?.trim() && (x.a.tags ?? []).includes(tag));
+  return h('div', {},
+    h('nav', { class: 'crumbs' }, h('a', { href: '#tags' }, 'Tags'), ' / ', h('span', {}, tag)),
+    PluginHeader('library', { title: `#${tag}`, blurb: `${n(items.length, 'item')} tagged “${tag}”.`, actions: h('button', { class: 'btn btn-sm btn-ghost', onclick: () => renameTagEverywhere(tag) }, 'Rename or merge') }),
+    items.length ? h('div', { class: 'tag-items' }, items.map((it) => h('article', { class: 'card tag-item' },
+      h('p', { class: 'reference', innerHTML: runsToHtml(apaReference(it.meta)) }),
+      h('div', { class: 'row-actions' }, h('a', { class: 'btn btn-xs', href: `#item/${it.id}` }, 'Open'), h('span', { class: 'badge badge-sm badge-ghost' }, formatLabel(it))),
+      notes(it).map(({ b, a }) => h('blockquote', { class: 'tag-note' }, h('span', {}, a.text.length > 320 ? `${a.text.slice(0, 320)}…` : a.text), h('a', { class: 'muted small', href: `#bib/${b.id}/annotations` }, ` · ${b.title}`))))))
+      : h('p', { class: 'empty' }, 'Nothing carries this tag any more.'));
+}
+
+function renameTagEverywhere(from) {
+  const to = prompt(`Rename “${from}” to (an existing tag merges them)`, from);
+  if (!to?.trim() || to.trim().toLowerCase() === from) return;
+  const { items, bibs } = renameTag(lib(), from, to);
+  const ops = [
+    ...Object.entries(items).map(([id, patch]) => col.update('items', id, { ...patch, updatedAt: now() })),
+    ...Object.entries(bibs).map(([id, patch]) => col.update('bibs', id, patch)),
+  ];
+  if (ops.length) apply(col.batch(ops));
+  toast(`Renamed “${from}” to “${to.trim().toLowerCase()}” across ${n(Object.keys(items).length, 'item')} and ${n(Object.keys(bibs).length, 'bibliography', 'bibliographies')}`);
+  location.hash = `tag/${encodeURIComponent(to.trim().toLowerCase())}`;
+  render();
+}
+
+/* ---------- Add a reading: one form from the library's home ---------- */
+
+/** The form's state, kept across redraws (each save redraws the page). */
+const qa = { mode: 'file', title: '', url: '', pickId: '', text: '', tags: [], keywords: '', bibId: null, file: null, open: null };
+try { qa.bibId = localStorage.getItem('dashi.library.quickBib'); } catch { /* private window */ }
+
+function QuickAdd() {
+  const bibs = bibsAllowed ? Object.values(lib().bibs).sort((a, b) => a.title.localeCompare(b.title)) : [];
+  if (!bibs.find((b) => b.id === qa.bibId)) qa.bibId = bibs[0]?.id ?? '';
+  const bib = () => lib().bibs[qa.bibId] ?? null;
+  const thisWeek = () => (bib() ? weekAnnotations(lib(), bib(), weekKey()).length : 0);
+  const status = h('p', { class: 'muted small', role: 'status' });
+
+  const modes = [['file', 'upload', 'Upload a file'], ['link', 'link', 'Paste a link'], ['dashi', 'doc', 'From Dashi']];
+  const source = h('div', { class: 'qa-source' });
+  const drawSource = () => {
+    if (qa.mode === 'file') {
+      source.replaceChildren(h('label', { class: 'qa-drop' },
+        h('input', { type: 'file', accept: ACCEPT, class: 'sr-only', 'aria-label': 'Choose a file', onchange: (e) => {
+          qa.file = e.target.files[0] ?? null;
+          if (qa.file && !qa.title) { qa.title = titleFromName(qa.file.name); titleInput.value = qa.title; refreshSuggest(); }
+          drawSource();
+        } }),
+        icon('upload', 18), h('span', {}, qa.file ? `${qa.file.name} · ${size(qa.file.size)}` : 'Choose a PDF, Word file, slide deck, map file…')));
+    } else if (qa.mode === 'link') {
+      source.replaceChildren(h('input', { class: 'input input-sm w-full', type: 'url', placeholder: 'https://…', value: qa.url, 'aria-label': 'Web address', oninput: (e) => { qa.url = e.target.value.trim(); } }));
+    } else {
+      const items = Object.values(lib().items).sort((a, b) => (b.kind === 'doc') - (a.kind === 'doc') || (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+      source.replaceChildren(h('select', { class: 'select select-sm w-full', 'aria-label': 'A Dashi doc or something already in the library', onchange: (e) => {
+        qa.pickId = e.target.value;
+        const it = lib().items[qa.pickId];
+        if (it) { qa.title = it.meta.title; titleInput.value = qa.title; refreshSuggest(); }
+      } }, h('option', { value: '' }, 'Pick a Dashi doc or a library item…'),
+        items.map((it) => h('option', { value: it.id, selected: it.id === qa.pickId }, `${it.kind === 'doc' ? 'Dashi doc · ' : `${formatLabel(it)} · `}${it.meta.title || 'Untitled'}`))));
+    }
+    tabs.querySelectorAll('button').forEach((b) => b.classList.toggle('btn-active', b.dataset.mode === qa.mode));
+  };
+  const tabs = h('div', { class: 'join' }, modes.map(([id, ic, label]) => h('button', { type: 'button', class: 'btn btn-sm join-item', 'data-mode': id, onclick: () => { qa.mode = id; drawSource(); } }, icon(ic, 14), label)));
+
+  const titleInput = h('input', { class: 'input input-sm w-full', placeholder: 'Title', value: qa.title, 'aria-label': 'Title', oninput: (e) => { qa.title = e.target.value; }, onchange: refreshSuggestLater });
+  const count = h('span', { class: 'word-count' });
+  const showCount = () => { const w = wordCount(qa.text); const len = annotationLength(w); count.textContent = `${w} words${len === 'short' ? ` · ${200 - w} to go` : len === 'long' ? ` · ${w - 600} over` : len === 'ok' ? ' · good length' : ''}`; count.dataset.len = len; };
+  const textArea = h('textarea', { class: 'textarea w-full', rows: 5, 'aria-label': 'Annotation', placeholder: 'Your annotation: what it says, how good the evidence is, and why it matters here. 200–600 words.',
+    oninput: (e) => { qa.text = e.target.value; showCount(); }, onchange: refreshSuggestLater }, qa.text);
+  showCount();
+  const tagHost = h('div');
+  const suggestHost = h('div');
+  const drawTags = () => tagHost.replaceChildren(TagInput(qa.tags, (tags) => { qa.tags = tags; drawTags(); refreshSuggest(); }, { label: 'Tags', allowed: bib() ? allowedTags(bib()) : null, suggestions: libraryTags(lib()).map((t) => t.tag) }));
+  function refreshSuggest() { suggestHost.replaceChildren(SuggestChips(bib(), { title: qa.title, text: qa.text }, qa.tags, (tag) => { qa.tags = [...qa.tags, tag]; drawTags(); refreshSuggest(); }) ?? ''); }
+  function refreshSuggestLater() { setTimeout(refreshSuggest, 0); }
+  drawTags();
+  refreshSuggest();
+  const keywords = h('input', { class: 'input input-sm w-full', placeholder: 'Keywords, separated by commas', value: qa.keywords, 'aria-label': 'Keywords', oninput: (e) => { qa.keywords = e.target.value; } });
+  const bibSelect = bibs.length
+    ? h('select', { class: 'select select-sm', 'aria-label': 'Bibliography', onchange: (e) => { qa.bibId = e.target.value; try { localStorage.setItem('dashi.library.quickBib', qa.bibId); } catch { /* fine */ } drawTags(); refreshSuggest(); weekNote.textContent = weekText(); } },
+        options(bibs.map((b) => ({ id: b.id, label: b.title })), qa.bibId), h('option', { value: '' }, 'No bibliography (keep the note on the item)'))
+    : null;
+  const weekText = () => (bib() ? `${n(thisWeek(), 'source')} annotated in ${bib().title} this week` : '');
+  const weekNote = h('span', { class: 'muted small' }, weekText());
+
+  const save = async (e) => {
+    e.preventDefault();
+    let item = null;
+    const kws = qa.keywords.split(',').map((x) => x.trim()).filter(Boolean);
+    try {
+      if (qa.mode === 'file') {
+        if (!qa.file) { status.textContent = 'Choose a file first.'; return; }
+        if (qa.file.size > maxUploadMb() * 1048576) { status.textContent = `That file is over ${maxUploadMb()} MB, the largest your plan takes.`; return; }
+        status.textContent = `Uploading ${qa.file.name}…`;
+        const mediaId = await putMedia(qa.file, { kind: 'document', onProgress: (p) => { status.textContent = `Uploading ${qa.file.name}… ${Math.round(p * 100)}%`; } });
+        item = { id: uid('doc'), kind: 'file', folderId: null, tags: [], meta: blankMeta({ type: /\.dashi-map\.json$/i.test(qa.file.name) ? 'dataset' : typeForFile(qa.file.name), title: qa.title.trim() || titleFromName(qa.file.name) }),
+          file: { mediaId, name: qa.file.name, size: qa.file.size, type: qa.file.type || 'application/octet-stream' }, createdAt: now(), updatedAt: now(), createdBy: me?.id ?? null };
+      } else if (qa.mode === 'link') {
+        if (!/^https?:\/\//i.test(qa.url)) { status.textContent = 'Paste a web address that starts with https://'; return; }
+        const gdoc = /^https:\/\/(docs|drive)\.google\.com\//.test(qa.url);
+        item = { id: uid('doc'), kind: gdoc ? 'gdoc' : 'link', url: qa.url, folderId: null, tags: [], meta: blankMeta({ type: gdoc ? 'manuscript' : 'webpage', title: qa.title.trim() || qa.url, URL: qa.url, accessed: new Date().toISOString().slice(0, 10) }), createdAt: now(), updatedAt: now(), createdBy: me?.id ?? null };
+      } else {
+        if (!lib().items[qa.pickId]) { status.textContent = 'Pick a Dashi doc or library item.'; return; }
+      }
+    } catch (err) { status.textContent = err.message; return; }
+    const id = item?.id ?? qa.pickId;
+    const ops = [];
+    if (item) ops.push(col.add('items', { ...item, meta: { ...item.meta, keywords: kws } }));
+    else if (kws.length) { const ex = lib().items[id]; ops.push(col.update('items', id, { meta: { ...ex.meta, keywords: [...new Set([...(ex.meta.keywords ?? []), ...kws])] }, updatedAt: now() })); }
+    const b = bib();
+    if (b) {
+      const prev = b.annotations[id] ?? {};
+      const annotation = { ...prev, text: qa.text.trim() || prev.text || '', tags: [...new Set([...(prev.tags ?? []), ...qa.tags])], updatedAt: now(), by: me?.id ?? null, addedAt: prev.addedAt ?? now() };
+      ops.push(col.update('bibs', b.id, { itemIds: [...new Set([...b.itemIds, id])], annotations: { ...b.annotations, [id]: annotation } }));
+    } else {
+      const base = item ?? lib().items[id];
+      const patch = { tags: [...new Set([...(base.tags ?? []), ...qa.tags])] };
+      if (qa.text.trim()) patch.meta = { ...base.meta, ...(item ? { keywords: kws } : {}), note: [base.meta.note, qa.text.trim()].filter(Boolean).join('\n\n') };
+      if (item) ops[0] = col.add('items', { ...item, ...patch, meta: patch.meta ?? { ...item.meta, keywords: kws } });
+      else ops.push(col.update('items', id, { ...patch, updatedAt: now() }));
+    }
+    apply(col.batch(ops));
+    const title = lib().items[id]?.meta.title ?? 'it';
+    Object.assign(qa, { title: '', url: '', pickId: '', text: '', tags: [], keywords: '', file: null, open: true });
+    lastNote = b ? `Added “${title}” to ${b.title}. ${n(weekAnnotations(lib(), lib().bibs[b.id], weekKey()).length, 'source')} annotated this week.` : `Added “${title}” to the library.`;
+    toast(lastNote);
+    render();
+    requestAnimationFrame(() => document.querySelector('.quick-add input[aria-label="Title"]')?.focus());
+  };
+
+  drawSource();
+  const open = qa.open ?? true;
+  return h('details', { class: 'card quick-add', open, ontoggle: (e) => { qa.open = e.target.open; } },
+    h('summary', {}, h('strong', {}, icon('plus', 15), ' Add a reading'), h('span', { class: 'muted small' }, ' Upload, link or pick it, annotate, tag, and file it in a bibliography in one go.'), weekNote),
+    h('form', { class: 'qa-form', onsubmit: save },
+      h('div', { class: 'qa-row' }, tabs),
+      source,
+      titleInput,
+      textArea,
+      h('div', { class: 'qa-row' }, h('div', { class: 'word-box' }, count)),
+      tagHost,
+      suggestHost,
+      keywords,
+      h('div', { class: 'qa-row' },
+        bibSelect ?? h('span', { class: 'muted small' }, bibsAllowed ? h('span', {}, 'No bibliographies yet. ', h('a', { href: '#bibs' }, 'Make one'), ' to collect annotations by week.') : 'Annotated bibliographies come with the Standard and Custom plans; the note is kept on the item.'),
+        h('span', { class: 'spacer' }),
+        h('button', { class: 'btn btn-sm btn-primary', type: 'submit' }, 'Add and annotate')),
+      status));
 }
 
 render();

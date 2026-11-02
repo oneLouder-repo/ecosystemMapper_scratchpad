@@ -111,8 +111,12 @@ export const FILE_KINDS = {
 };
 export const ACCEPT = Object.keys(FILE_KINDS).map((e) => `.${e}`).join(',');
 
+/** A Dashi ecosystem map file (saved from the Mapper), kept in the library. */
+export const isMapFile = (item) => item?.kind === 'file' && /\.dashi-map\.json$/i.test(item.file?.name ?? '');
+
 /** What to call an item's format, for lists. */
 export function formatLabel(item) {
+  if (isMapFile(item)) return 'Ecosystem map';
   if (item.kind === 'doc') return 'Dashi doc';
   if (item.kind === 'gdoc') return /spreadsheets/.test(item.url) ? 'Google Sheet' : /presentation/.test(item.url) ? 'Google Slides' : 'Google Doc';
   if (item.kind === 'link') return 'Web link';
@@ -553,6 +557,131 @@ export function tagMap(bib, { week } = {}) {
   };
 }
 
+/**
+ * Every tag in the library: on items, on annotations in any bibliography,
+ * and items' keywords. → [{ tag, n, itemIds }] most used first. A tag
+ * counts once per item however many places it appears.
+ */
+export function libraryTags(lib, { keywords = true } = {}) {
+  const byTag = new Map();
+  const add = (tag, itemId) => {
+    const t = String(tag ?? '').trim().toLowerCase();
+    if (!t || !lib.items?.[itemId]) return;
+    if (!byTag.has(t)) byTag.set(t, new Set());
+    byTag.get(t).add(itemId);
+  };
+  for (const it of Object.values(lib.items ?? {})) {
+    for (const t of it.tags ?? []) add(t, it.id);
+    if (keywords) for (const k of it.meta?.keywords ?? []) add(k, it.id);
+  }
+  for (const b of Object.values(lib.bibs ?? {})) for (const [id, a] of Object.entries(b.annotations ?? {})) for (const t of a.tags ?? []) add(t, id);
+  return [...byTag].map(([tag, ids]) => ({ tag, n: ids.size, itemIds: [...ids] })).sort((a, b) => b.n - a.n || a.tag.localeCompare(b.tag));
+}
+
+/**
+ * Rename (or merge) a tag everywhere: items' tags and keywords, and every
+ * annotation. → { items, bibs } holding only what changed, for updates.
+ */
+export function renameTag(lib, from, to) {
+  const f = String(from).trim().toLowerCase();
+  const t = String(to).trim().toLowerCase();
+  const swap = (list = [], lower = true) => {
+    if (!list.some((x) => x.toLowerCase() === f)) return null;
+    return [...new Set(list.map((x) => (x.toLowerCase() === f ? t : lower ? x.toLowerCase() : x)).filter(Boolean))];
+  };
+  const items = {};
+  for (const it of Object.values(lib.items ?? {})) {
+    const tags = swap(it.tags);
+    const keywords = swap(it.meta?.keywords, false);
+    if (tags || keywords) items[it.id] = { ...(tags && { tags }), ...(keywords && { meta: { ...it.meta, keywords } }) };
+  }
+  const bibs = {};
+  for (const b of Object.values(lib.bibs ?? {})) {
+    let changed = false;
+    const annotations = Object.fromEntries(Object.entries(b.annotations ?? {}).map(([id, a]) => {
+      const tags = swap(a.tags);
+      if (tags) changed = true;
+      return [id, tags ? { ...a, tags } : a];
+    }));
+    if (changed) bibs[b.id] = { annotations };
+  }
+  return { items, bibs };
+}
+
+/** Items with a tag (on the item, in an annotation, or as a keyword). */
+export const itemsTagged = (lib, tag) => libraryTags(lib).find((t) => t.tag === String(tag).toLowerCase())?.itemIds.map((id) => lib.items[id]) ?? [];
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Does a term (a word or phrase) appear in some text, allowing a plural or -al/-ic ending? */
+export function mentions(text, term) {
+  const t = String(term ?? '').trim().toLowerCase();
+  if (t.length < 3) return false;
+  const words = t.split(/\s+/).map(escapeRe);
+  const last = words.pop();
+  const tail = /y$/.test(last) ? `${last.slice(0, -1)}(y|ies)` : `${last}(s|es|al|ic|ly)?`;
+  const re = new RegExp(`(^|[^\\p{L}])${[...words, tail].join('[\\s-]+')}($|[^\\p{L}])`, 'iu');
+  return re.test(String(text ?? ''));
+}
+
+/**
+ * Tags to suggest for a source, from what it says (title, abstract,
+ * annotation): first the bibliography's lexicon terms it mentions, then
+ * tags already used in the library that it mentions. Tags it already has
+ * are left out. → [{ tag, from: 'lexicon' | 'library', facet? }]
+ */
+export function suggestTags(lib, bib, { title = '', abstract = '', text = '', has = [] } = {}) {
+  const body = `${title}\n${abstract}\n${text}`;
+  const have = new Set(has.map((t) => t.toLowerCase()));
+  const out = [];
+  const push = (tag, from, facet) => { const t = tag.toLowerCase(); if (!have.has(t)) { have.add(t); out.push({ tag: t, from, ...(facet && { facet }) }); } };
+  for (const term of Object.values(bib?.lexicon?.terms ?? {})) if (mentions(body, term.label)) push(term.label, 'lexicon', bib.lexicon.facets[term.facetId]?.name);
+  if (!bib?.lexicon?.constrainTags) for (const { tag } of libraryTags(lib)) if (mentions(body, tag)) push(tag, 'library');
+  return out;
+}
+
+/* ---------- Frameworks for the weekly brief ---------- */
+
+/**
+ * The data models a weekly brief can be laid out by. Each category is
+ * matched against an annotation's tags, its item's tags and keywords, and
+ * the lexicon: a tag that names the category, or a lexicon term in a facet
+ * of that name (or scored in the matrix), puts the source under it.
+ */
+export const FRAMEWORKS = [
+  { id: 'themes', label: 'Top themes (tags)', categories: null },
+  { id: 'steeple', label: 'STEEPLE', categories: ['Social', 'Technological', 'Economic', 'Environmental', 'Political', 'Legal', 'Ethical'] },
+  { id: 'micro-meso-macro', label: 'Micro / Meso / Macro', categories: ['Micro', 'Meso', 'Macro'] },
+  { id: 'water', label: 'Water of Systems Change', categories: ['Policies', 'Practices', 'Resource flows', 'Relationships', 'Power dynamics', 'Mental models'] },
+];
+/** Facets of the bibliography's lexicon can be a framework too: `facet:<id>`. */
+export function frameworksFor(bib) {
+  const facets = Object.values(bib?.lexicon?.facets ?? {}).map((f) => ({
+    id: `facet:${f.id}`, label: `Lexicon facet: ${f.name}`,
+    categories: Object.values(bib.lexicon.terms).filter((t) => t.facetId === f.id).map((t) => t.label),
+  })).filter((f) => f.categories.length);
+  return [...FRAMEWORKS, ...facets];
+}
+const stem = (w) => w.toLowerCase().replace(/[^\p{L}\s]/gu, '').slice(0, Math.max(4, Math.min(6, w.length - 2)));
+/** Which of a framework's categories a source falls under. */
+export function categoriesOf(lib, bib, itemId, categories) {
+  const a = bib.annotations?.[itemId];
+  const item = lib.items[itemId];
+  const tags = [...(a?.tags ?? []), ...(item?.tags ?? []), ...(item?.meta?.keywords ?? [])].map((t) => t.toLowerCase());
+  const lx = bib.lexicon ?? { facets: {}, terms: {}, cells: {} };
+  const scored = Object.entries(lx.cells?.[itemId] ?? {}).filter(([, v]) => v > 0).map(([id]) => lx.terms[id]).filter(Boolean);
+  return categories.filter((cat) => {
+    const c = cat.toLowerCase();
+    const s = stem(cat);
+    if (tags.some((t) => t === c || (s.length >= 4 && t.startsWith(s)))) return true;
+    const facet = Object.values(lx.facets ?? {}).find((f) => f.name.toLowerCase() === c);
+    if (facet) {
+      const terms = Object.values(lx.terms).filter((t) => t.facetId === facet.id).map((t) => t.label.toLowerCase());
+      if (tags.some((t) => terms.includes(t)) || scored.some((t) => t.facetId === facet.id)) return true;
+    }
+    return scored.some((t) => t.label.toLowerCase() === c);
+  });
+}
+
 /** The tags allowed in a bibliography: anything, or only its lexicon's terms. */
 export const allowedTags = (bib) => (bib.lexicon?.constrainTags ? Object.values(bib.lexicon.terms).map((t) => t.label) : null);
 
@@ -717,25 +846,51 @@ export const weekAnnotations = (lib, bib, week) => Object.entries(bib.annotation
  * its annotations: which themes came up, and which sources said so. A
  * scaffold for a person to rewrite, not a finished brief.
  */
-export function draftBrief(lib, bib, week) {
+export function draftBrief(lib, bib, week, { framework = 'themes' } = {}) {
   const notes = weekAnnotations(lib, bib, week);
   const map = tagMap(bib, { week });
-  const top = map.tags.slice(0, 4);
   const cite = (it) => apaCitation(it.meta);
-  if (!notes.length) return { policy: '', stateOfPlay: '' };
-  const theme = (t) => notes.filter((n) => (n.annotation.tags ?? []).includes(t.tag));
+  if (!notes.length) return { policy: '', stateOfPlay: '', recommendations: '' };
+  const model = frameworksFor(bib).find((f) => f.id === framework) ?? FRAMEWORKS[0];
+  const finding = (n) => `${firstSentence(n.annotation.text)} ${cite(n.item)}`;
+  let sections;
+  if (model.categories) {
+    const under = (cat) => notes.filter((n) => categoriesOf(lib, bib, n.item.id, [cat]).length);
+    const placed = new Set();
+    sections = model.categories.map((cat) => {
+      const list = under(cat);
+      list.forEach((n) => placed.add(n.item.id));
+      return `### ${cat}\n\n${list.length ? list.map((n) => `- ${finding(n)}`).join('\n') : '- *Nothing this week. Is that a gap?*'}`;
+    });
+    const rest = notes.filter((n) => !placed.has(n.item.id));
+    if (rest.length) sections.push(`### Not yet placed\n\n${rest.map((n) => `- ${finding(n)}`).join('\n')}\n\n*Tag these with a ${model.label} category to place them.*`);
+  } else {
+    const theme = (t) => notes.filter((n) => (n.annotation.tags ?? []).includes(t.tag));
+    sections = map.tags.slice(0, 4).map((t) => `- **${t.tag}**: ${theme(t).map(finding).join(' ')}`);
+  }
   const policy = [
-    `## Purpose\n\nThis brief draws on ${notes.length} source${notes.length === 1 ? '' : 's'} annotated in the week of ${weekLabel(week)} for *${bib.title}*.`,
-    '## Key findings',
-    ...top.map((t) => `- **${t.tag}**: ${theme(t).map((n) => `${firstSentence(n.annotation.text)} ${cite(n.item)}`).join(' ')}`),
+    `## Purpose\n\nThis brief draws on ${notes.length} source${notes.length === 1 ? '' : 's'} annotated in the week of ${weekLabel(week)} for *${bib.title}*${model.categories ? `, laid out by ${model.label}` : ''}.`,
+    model.categories ? `## Findings by ${model.label}` : '## Key findings',
+    ...sections,
     '## Implications for policy\n\n- *What should change, and who can change it?*\n- *What is still uncertain?*',
-    '## Recommendations\n\n1. *The first thing to do.*\n2. *The next.*',
   ].join('\n\n');
+  const top = map.tags.slice(0, 4);
   const stateOfPlay = `This week ${notes.length} new source${notes.length === 1 ? ' was' : 's were'} added to ${bib.title}. `
     + (top.length ? `The conversation centred on ${listWords(top.map((t) => t.tag))}${map.pairs[0] ? `, with ${map.pairs[0].a} and ${map.pairs[0].b} most often discussed together` : ''}. ` : '')
     + `The newest evidence includes ${listWords(notes.slice(0, 3).map((n) => `${n.item.meta.title} ${cite(n.item)}`))}.`;
-  return { policy, stateOfPlay };
+  const recommendations = '1. *The first thing to do, by whom, by when.*\n2. *The next.*\n3. *What to watch for next week.*';
+  return { policy, stateOfPlay, recommendations, framework: model.id };
 }
+
+/** The week's sources as a list of resources: links, files and Dashi docs, with where to find each. */
+export function weekResources(lib, bib, week) {
+  return weekAnnotations(lib, bib, week).map(({ item }) => ({
+    id: item.id, title: item.meta.title || 'Untitled', cite: apaCitation(item.meta),
+    kind: isMapFile(item) ? 'Ecosystem map' : item.kind === 'doc' ? 'Dashi doc' : item.kind === 'file' ? formatLabel(item) : item.kind === 'gdoc' ? 'Google file' : item.kind === 'link' ? 'Web page' : 'Reference',
+    url: item.url || item.meta.URL || (item.meta.DOI ? `https://doi.org/${item.meta.DOI}` : ''),
+  }));
+}
+
 /** The sentence of an annotation most likely to carry its finding. */
 const firstSentence = (s) => {
   const sentences = String(s ?? '').replace(/\s+/g, ' ').match(/[^.!?]+[.!?]+/g) ?? [String(s ?? '').slice(0, 160)];
@@ -758,6 +913,10 @@ export function newsletter(lib, bib, week, { orgName = '' } = {}) {
     w.stateOfPlay?.trim() || '_No state-of-play paragraph this week._',
     '## Policy brief',
     w.policy?.trim() || '_No policy brief this week._',
+    w.recommendations?.trim() && '## Recommendations',
+    w.recommendations?.trim(),
+    '## Resources',
+    weekResources(lib, bib, week).map((r) => `- ${r.url ? `[${r.title}](${r.url})` : r.title} ${r.cite} · ${r.kind}`).join('\n') || '_None this week._',
     `## This week’s annotations (${notes.length})`,
     ...notes.map(({ item, annotation }) => `### ${item.meta.title || 'Untitled'}\n\n${runsToMarkdown(apaReference(item.meta))}\n\n${annotation.text?.trim() ?? ''}${annotation.tags?.length ? `\n\n*Tags: ${annotation.tags.join(', ')}*` : ''}`),
     '## Tag map',
