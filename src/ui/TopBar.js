@@ -43,12 +43,38 @@ export function TopBar(el, ctx) {
   const undo = h('button', { class: 'btn btn-sm btn-ghost btn-square', title: 'Undo (Ctrl+Z)', 'aria-label': 'Undo', onclick: () => store.undo() }, '↶');
   const redo = h('button', { class: 'btn btn-sm btn-ghost btn-square', title: 'Redo (Ctrl+Shift+Z)', 'aria-label': 'Redo', onclick: () => store.redo() }, '↷');
 
-  const panelsMenu = h('ul', { class: 'dropdown-content menu panels-menu', tabindex: 0 });
-  const drawPanelsMenu = () => panelsMenu.replaceChildren(
-    ...ctx.dock.panels.map((p) => h('li', {}, h('label', { class: 'panels-item' },
-      h('input', { type: 'checkbox', class: 'checkbox checkbox-xs', checked: !ctx.dock.state[p.id].hidden, onchange: (e) => ctx.dock.toggle(p.id, e.target.checked) }),
-      p.title))),
-    h('li', {}, h('button', { type: 'button', onclick: () => { ctx.dock.reset(); drawPanelsMenu(); } }, 'Reset the layout')));
+  // Panels: show or hide each one, choose where it sits (left, right or floating) and its place in
+  // the column, and tidy the lot.
+  const panelsMenu = h('div', { class: 'dropdown-content panels-menu', tabindex: 0 });
+  const where = [['left', 'dockLeft', 'Dock at the left'], ['float', 'float', 'Float over the board'], ['right', 'dockRight', 'Dock at the right']];
+  const drawPanelsMenu = () => {
+    // Redrawing removes the button that had focus, which would close the dropdown: keep focus in it.
+    if (panelsMenu.contains(document.activeElement)) panelsMenu.focus({ preventScroll: true });
+    drawPanelsBody();
+  };
+  const drawPanelsBody = () => panelsMenu.replaceChildren(
+    h('p', { class: 'panels-title' }, 'Panels'),
+    h('ul', { class: 'panels-list' }, ctx.dock.panels.map((p) => {
+      const s = ctx.dock.state[p.id];
+      const redraw = (fn) => () => { fn(); drawPanelsMenu(); };
+      return h('li', { class: `panels-row${s.hidden ? ' off' : ''}` },
+        h('label', { class: 'panels-item', title: s.hidden ? `Show ${p.title}` : `Hide ${p.title}` },
+          h('input', { type: 'checkbox', class: 'checkbox checkbox-xs', checked: !s.hidden, disabled: p.closable === false, onchange: (e) => { ctx.dock.toggle(p.id, e.target.checked); drawPanelsMenu(); } }),
+          p.title),
+        h('span', { class: 'panels-where join' }, where.map(([id, glyph, label]) =>
+          h('button', { type: 'button', class: `btn btn-xs join-item${s.dock === id ? ' btn-active' : ''}`, title: label, 'aria-label': `${p.title}: ${label}`, 'aria-pressed': String(s.dock === id),
+            onclick: redraw(() => ctx.dock.place(p.id, id)) }, icon(glyph, 14)))),
+        h('span', { class: 'panels-order' },
+          h('button', { type: 'button', class: 'btn btn-xs btn-ghost btn-square', title: 'Move up in its column', 'aria-label': `Move ${p.title} up`, disabled: s.dock === 'float' || s.hidden, onclick: redraw(() => ctx.dock.move(p.id, -1)) }, '↑'),
+          h('button', { type: 'button', class: 'btn btn-xs btn-ghost btn-square', title: 'Move down in its column', 'aria-label': `Move ${p.title} down`, disabled: s.dock === 'float' || s.hidden, onclick: redraw(() => ctx.dock.move(p.id, 1)) }, '↓')));
+    })),
+    h('div', { class: 'panels-actions' },
+      h('button', { type: 'button', class: 'btn btn-xs', title: 'Dock every floating panel back at its edge', onclick: () => { ctx.dock.gather(); drawPanelsMenu(); } }, 'Gather'),
+      h('button', { type: 'button', class: 'btn btn-xs', title: 'Fold every panel to its title bar', onclick: () => { ctx.dock.foldAll(true); drawPanelsMenu(); } }, 'Fold all'),
+      h('button', { type: 'button', class: 'btn btn-xs', title: 'Unfold every panel', onclick: () => { ctx.dock.foldAll(false); drawPanelsMenu(); } }, 'Unfold all'),
+      h('button', { type: 'button', class: 'btn btn-xs', title: 'Each panel back where it started, in order and unfolded (hidden ones stay hidden)', onclick: () => { ctx.dock.tidy(); drawPanelsMenu(); } }, 'Tidy'),
+      h('button', { type: 'button', class: 'btn btn-xs btn-ghost', title: 'Start over: every panel shown, docked and unfolded', onclick: () => { ctx.dock.reset(); drawPanelsMenu(); } }, 'Reset')),
+    h('p', { class: 'panels-tip' }, 'Tip: drag a panel by its title bar; drop it at an edge to dock it. Double-click a title bar to fold it.'));
 
   el.append(
     name,
@@ -63,7 +89,7 @@ export function TopBar(el, ctx) {
     redo,
     h('div', { class: 'spacer' }),
     h('div', { class: 'dropdown dropdown-end' },
-      h('button', { type: 'button', class: 'btn btn-sm btn-ghost', tabindex: 0, onclick: drawPanelsMenu }, 'Panels ▾'),
+      h('button', { type: 'button', class: 'btn btn-sm btn-ghost', tabindex: 0, title: 'Show, hide, dock and tidy the tool panels', onclick: drawPanelsMenu, onfocus: drawPanelsMenu }, 'Panels ▾'),
       panelsMenu),
     h('button', { class: 'btn btn-sm', title: 'Open a Dashi map file (.dashi-map.json)', onclick: () => fileInput.click() }, icon('upload', 16), 'Open'),
     h('button', { class: 'btn btn-sm btn-primary', title: 'Save this map as a Dashi map file, to keep offline or archive', onclick: () => exportMap(store.map, { entry: ctx.index.maps[ctx.mapId], org: ctx.org }) }, icon('download', 16), 'Save file'),

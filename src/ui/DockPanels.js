@@ -13,6 +13,10 @@ import { icon } from './icons.js';
  *     { id: 'layers', title: 'Layers', body, dock: 'right', action: { label, icon, onclick } },
  *   ], { key: 'dashi.mapper.panels' });
  *   dock.toggle('layers'); dock.reset(); dock.state  // { id: { dock, x, y, folded, hidden, order } }
+ *   dock.place('maps', 'right'); dock.move('maps', -1); dock.gather(); dock.tidy(); dock.foldAll(true)
+ *
+ * A floating panel comes to the front when you touch it. Double-click a
+ * title bar to fold or unfold it.
  */
 export function DockPanels(host, panels, { key = 'dashi.panels', onchange } = {}) {
   const defaults = () => Object.fromEntries(panels.map((p, i) => [p.id, { dock: p.dock ?? 'left', x: 80, y: 80, folded: false, hidden: !!p.hidden, order: i }]));
@@ -24,7 +28,7 @@ export function DockPanels(host, panels, { key = 'dashi.panels', onchange } = {}
 
   for (const p of panels) {
     const foldBtn = h('button', { class: 'dock-btn', type: 'button', title: 'Fold', 'aria-label': `Fold ${p.title}`, onclick: () => set(p.id, { folded: !state[p.id].folded }) }, icon('chevronDown', 14));
-    const head = h('header', { class: 'dock-head' },
+    const head = h('header', { class: 'dock-head', title: 'Drag to move. Drop at the left or right edge to dock it. Double-click to fold.' },
       h('span', { class: 'dock-grip', 'aria-hidden': 'true' }, '⋮⋮'),
       h('span', { class: 'dock-title' }, p.title),
       p.action && h('button', { class: 'dock-btn', type: 'button', title: p.action.label, 'aria-label': p.action.label, onclick: p.action.onclick }, icon(p.action.icon ?? 'plus', 14)),
@@ -33,6 +37,8 @@ export function DockPanels(host, panels, { key = 'dashi.panels', onchange } = {}
     const el = h('section', { class: `dock-panel${p.compact ? ' compact' : ''}`, 'data-panel': p.id, style: p.width ? `--dock-w:${p.width}px` : null, 'aria-label': p.title },
       head, h('div', { class: 'dock-body' }, p.body));
     head.addEventListener('pointerdown', (e) => startDrag(e, p.id, el));
+    head.addEventListener('dblclick', (e) => { if (!e.target.closest('.dock-btn')) set(p.id, { folded: !state[p.id].folded }); });
+    el.addEventListener('pointerdown', () => raise(el), { capture: true });
     els.set(p.id, { el, foldBtn });
   }
 
@@ -54,6 +60,12 @@ export function DockPanels(host, panels, { key = 'dashi.panels', onchange } = {}
     render();
   }
 
+  // Floating panels stack in the order they were last touched.
+  let top = 10;
+  function raise(el) { if (el.classList.contains('floating')) el.style.zIndex = String(++top); }
+  const ids = () => panels.map((p) => p.id);
+  const column = (side) => ids().filter((id) => state[id].dock === side && !state[id].hidden).sort((a, b) => state[a].order - state[b].order);
+
   function render() {
     for (const side of ['left', 'right']) {
       const ids = panels.map((p) => p.id).filter((id) => state[id].dock === side && !state[id].hidden).sort((a, b) => state[a].order - state[b].order);
@@ -72,7 +84,7 @@ export function DockPanels(host, panels, { key = 'dashi.panels', onchange } = {}
         el.style.top = `${Math.max(0, Math.min(s.y, r.height - 40))}px`;
         if (el.parentNode !== host) host.append(el);
       } else {
-        el.style.left = el.style.top = '';
+        el.style.left = el.style.top = el.style.zIndex = '';
       }
     }
   }
@@ -133,5 +145,48 @@ export function DockPanels(host, panels, { key = 'dashi.panels', onchange } = {}
     panels,
     toggle(id, show = state[id].hidden) { set(id, { hidden: !show, folded: show ? false : state[id].folded }); },
     reset() { state = defaults(); save(); render(); },
+    /** Dock a panel at the left or right (at the end of that column), or float it near the middle. */
+    place(id, where) {
+      if (where === 'float') {
+        const r = host.getBoundingClientRect();
+        const n = ids().filter((o) => state[o].dock === 'float').length;
+        return set(id, { dock: 'float', hidden: false, x: Math.round(r.width / 2 - 120 + n * 24), y: 60 + n * 24 });
+      }
+      set(id, { dock: where, hidden: false, order: column(where).filter((o) => o !== id).length + 0.5 });
+      column(where).forEach((o, i) => { state[o].order = i; });
+      save();
+    },
+    /** Move a docked panel up (-1) or down (+1) in its column. */
+    move(id, by) {
+      const col = column(state[id].dock);
+      const i = col.indexOf(id);
+      const j = i + by;
+      if (i < 0 || j < 0 || j >= col.length) return;
+      [col[i], col[j]] = [col[j], col[i]];
+      col.forEach((o, k) => { state[o].order = k; });
+      save();
+      render();
+    },
+    /** Bring every floating panel back to the side it started on. */
+    gather() {
+      const home = defaults();
+      for (const id of ids()) if (state[id].dock === 'float') state[id] = { ...state[id], dock: home[id].dock, order: 100 + home[id].order };
+      for (const side of ['left', 'right']) column(side).forEach((o, i) => { state[o].order = i; });
+      save();
+      render();
+    },
+    /** Every panel docked where it started, in its first order and unfolded; hidden ones stay hidden. */
+    tidy() {
+      const home = defaults();
+      for (const id of ids()) state[id] = { ...home[id], hidden: state[id].hidden };
+      save();
+      render();
+    },
+    foldAll(folded) {
+      for (const p of panels) if (!p.compact) state[p.id].folded = folded;
+      save();
+      render();
+    },
+    sideOf: (id) => state[id].dock,
   };
 }

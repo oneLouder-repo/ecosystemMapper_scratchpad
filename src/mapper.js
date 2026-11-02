@@ -13,6 +13,7 @@ import { Toolbar } from './ui/Toolbar.js';
 import { TopBar } from './ui/TopBar.js';
 import { ItemDetails } from './ui/Inspector.js';
 import { DockPanels } from './ui/DockPanels.js';
+import { Tooltips } from './ui/Tooltip.js';
 import { SelectionBar } from './ui/SelectionBar.js';
 import { LayersPanel } from './ui/LayersPanel.js';
 import { LabelEditor } from './ui/LabelEditor.js';
@@ -241,6 +242,7 @@ Toolbar(toolMenu, ctx);
 TopBar(document.querySelector('#topbar'), ctx);
 LayersPanel(layersEl, ctx);
 SelectionBar(main, ctx);
+Tooltips('#topbar, .dock-panel, .selection-bar, .panels-menu');
 
 ctx.tools.use('select');
 mapView.sync();

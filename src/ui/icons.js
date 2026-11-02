@@ -53,6 +53,12 @@ export const ICONS = {
   rss: 'M5 5 A14 14 0 0 1 19 19 M5 10 A9 9 0 0 1 14 19 M6 18 A1 1 0 1 0 6.01 18 Z',
   settings: 'M12 9 A3 3 0 1 0 12.01 9 Z M12 2 V5 M12 19 V22 M2 12 H5 M19 12 H22 M4.9 4.9 L7 7 M17 17 L19.1 19.1 M4.9 19.1 L7 17 M17 7 L19.1 4.9',
   swap: 'M4 8 H18 L14 4 M20 16 H6 L10 20',
+  // Where a panel sits: docked left, floating, docked right.
+  dockLeft: 'M3 4 H21 V20 H3 Z M9 4 V20 M5 7 H7 M5 10 H7',
+  dockRight: 'M3 4 H21 V20 H3 Z M15 4 V20 M17 7 H19 M17 10 H19',
+  float: 'M3 4 H21 V20 H3 Z M8 8 H16 V15 H8 Z',
+  tag: 'M3 12 V4 H11 L20 13 L13 20 Z M7.5 8.5 A1 1 0 1 0 7.51 8.5 Z',
+  ticket: 'M3 7 H21 V10 A2 2 0 0 0 21 14 V17 H3 V14 A2 2 0 0 0 3 10 Z M14 7 V17',
 };
 
 export function icon(nameOrPath, size = 20) {
