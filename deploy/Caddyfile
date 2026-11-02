@@ -1,0 +1,14 @@
+# HTTPS for the platform and every org's address, with no DNS set-up beyond
+# the wildcard record: Caddy asks Dashi before getting a certificate.
+{
+  on_demand_tls {
+    ask http://dashi:8080/tls-ask
+  }
+}
+
+https:// {
+  tls {
+    on_demand
+  }
+  reverse_proxy dashi:8080
+}

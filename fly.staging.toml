@@ -1,0 +1,36 @@
+# A staging copy on Fly.io for testers: test sign-in, the example orgs, a "test server"
+# banner, and an access code in front of everything. See DEPLOY.md.
+# First time:  fly launch --no-deploy --copy-config --config fly.staging.toml --name <your-app>-staging
+#              fly volumes create dashi_staging_data --region yyz --size 3 --config fly.staging.toml
+#              fly secrets set --config fly.staging.toml BASE_DOMAIN=staging.yourdomain.ca STAGING_ACCESS_CODE='a code for testers' SUPER_ADMIN_EMAIL=you@yourdomain.ca SUPER_ADMIN_PASSWORD='a long passphrase'
+#              fly deploy --config fly.staging.toml
+app = "dashi-staging"
+primary_region = "yyz"
+
+[env]
+  NODE_ENV = "production"
+  TRUST_PROXY = "true"
+  STAGING = "true"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+
+[mounts]
+  source = "dashi_staging_data"
+  destination = "/data"
+  snapshot_retention = 5
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

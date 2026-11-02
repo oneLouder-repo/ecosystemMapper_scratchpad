@@ -1,0 +1,19 @@
+{
+  "name": "ecosystem-mapper",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "description": "Dashi: planning, ecosystem mapping, data dashboards, podcasts and public sites for small nonprofits.",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server.js",
+    "dev": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning --watch-path=server server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.js\"",
+    "audit": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server/audit-cli.js",
+    "backup": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning -e \"import('./server/config.js').then(async ({config})=>{const {openDb}=await import('./server/db.js');const {backupNow}=await import('./server/backup.js');console.log(backupNow(openDb(config.dataDir)))})\"",
+    "import": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server/import-cli.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "license": "MIT"
+}

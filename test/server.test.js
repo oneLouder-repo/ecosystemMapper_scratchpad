@@ -1,0 +1,584 @@
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { request } from 'node:http';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+// A throwaway server with its own data folder and the example orgs.
+const dataDir = mkdtempSync(join(tmpdir(), 'toolbox-test-'));
+Object.assign(process.env, { DATA_DIR: dataDir, DEV_LOGIN: 'true', SEED_EXAMPLES: 'true', BASE_DOMAIN: 'localhost', NODE_ENV: 'test' });
+let srv;
+// DNS for the custom-domain tests: what each name resolves to.
+const dns = { txt: {}, cname: {}, a: { localhost: ['203.0.113.7'] } };
+const resolver = {
+  resolveTxt: async (n) => dns.txt[n] ?? [],
+  resolveCname: async (n) => dns.cname[n] ?? [],
+  resolve4: async (n) => dns.a[n] ?? [],
+  resolve6: async () => [],
+};
+before(async () => { srv = await (await import('../server/index.js')).start({ port: 0, quiet: true, resolver }); });
+after(() => { srv.server.closeAllConnections?.(); srv.server.close(); srv.db.close(); rmSync(dataDir, { recursive: true, force: true }); });
+
+/** A request to the test server, as if to `host`. */
+function call(host, method, path, { body, cookie, headers = {}, raw = false } = {}) {
+  return new Promise((resolve, reject) => {
+    const data = body == null ? null : Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body));
+    const req = request({ host: '127.0.0.1', port: srv.port, method, path, headers: {
+      host, ...(cookie && { cookie }), ...(data && !Buffer.isBuffer(body) && { 'content-type': 'application/json' }),
+      ...(method !== 'GET' && { 'x-toolbox': '1' }), ...headers,
+    } }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        let json = null;
+        try { json = JSON.parse(text); } catch { /* not JSON */ }
+        resolve({ status: res.statusCode, headers: res.headers, json, text, raw: Buffer.concat(chunks) });
+      });
+    });
+    req.on('error', reject);
+    if (data) req.write(data);
+    req.end();
+  });
+}
+const EX = 'example.localhost';
+const RB = 'riverbend.localhost';
+async function signIn(email, host = EX) {
+  const opts = await call(host, 'GET', '/api/auth/options');
+  const user = opts.json.dev.find((u) => u.email === email);
+  const res = await call(host, 'POST', '/api/auth/dev', { body: { userId: user.id } });
+  return res.headers['set-cookie'][0].split(';')[0];
+}
+
+test('each org lives at its own subdomain; unknown ones say so', async () => {
+  const ex = await call(EX, 'GET', '/api/session');
+  assert.equal(ex.json.org.id, 'org-example');
+  assert.equal((await call(RB, 'GET', '/api/session')).json.org.id, 'org-riverbend');
+  assert.equal((await call('localhost', 'GET', '/api/session')).json.org, null, 'the root domain is the platform itself');
+  assert.equal((await call('nope.localhost', 'GET', '/api/session')).json.org, null);
+  assert.equal((await call('elsewhere.example.com', 'GET', '/')).status, 404);
+});
+
+test('visitors get only what is published', async () => {
+  const { json: s } = await call(EX, 'GET', '/api/session');
+  assert.equal(s.user, null);
+  assert.equal(s.canEdit, false);
+  assert.ok(!s.docs.maps && !s.docs['map/map-ecosystem'], 'no maps');
+  assert.ok(!Object.values(s.docs.pages.pages).some((p) => p.status === 'draft'), 'no drafts');
+  assert.ok(!Object.values(s.docs.podcasts.episodes).some((e) => e.status === 'scheduled'), 'no future episodes');
+  assert.ok(Object.values(s.docs.dashboards.dashboards).every((d) => d.visibility === 'public'));
+  assert.ok(Object.keys(s.docs.org.staff).length < 12, 'only people the public content names');
+  assert.ok(Object.values(s.docs.org.staff).every((p) => !('email' in p) && !('roleId' in p)));
+  assert.ok(!s.docs.org.sites['site-board'], 'private sites stay private');
+  assert.ok(Object.values(s.docs.strategy.nodes).every((n) => !n.assigneeIds && !n.assets && n.notes === ''), 'strategy items carry titles and status only');
+  assert.equal((await call(EX, 'GET', '/api/docs/maps')).status, 404);
+});
+
+test('saving needs a signed-in member, the x-toolbox header, and the right role', async () => {
+  const anon = await call(EX, 'PUT', '/api/docs/strategy', { body: { nodes: {} } });
+  assert.equal(anon.status, 403);
+  const amara = await signIn('amara@example.org');
+  const noHeader = await call(EX, 'PUT', '/api/docs/test-doc', { body: { a: 1 }, cookie: amara, headers: { 'x-toolbox': '' } });
+  assert.equal(noHeader.status, 403, 'other sites can’t post on your behalf');
+  assert.equal((await call(EX, 'PUT', '/api/docs/test-doc', { body: { a: 1 }, cookie: amara })).status, 200);
+  assert.deepEqual((await call(EX, 'GET', '/api/docs/test-doc', { cookie: amara })).json, { a: 1 });
+  assert.equal((await call(RB, 'GET', '/api/session', { cookie: amara })).json.member, false, 'not a member of another org');
+  assert.equal((await call(RB, 'PUT', '/api/docs/test-doc', { body: { a: 1 }, cookie: amara })).status, 403);
+
+  const ben = await signIn('ben@example.org');
+  const org = (await call(EX, 'GET', '/api/docs/org', { cookie: ben })).json;
+  const others = structuredClone(org);
+  others.name = 'Ben’s org now';
+  assert.equal((await call(EX, 'PUT', '/api/docs/org', { body: others, cookie: ben })).status, 403, 'only admins change the org’s settings');
+  const someoneElse = structuredClone(org);
+  someoneElse.staff['s-ed'].title = 'Intern';
+  assert.equal((await call(EX, 'PUT', '/api/docs/org', { body: someoneElse, cookie: ben })).status, 403, 'nor anyone else’s profile');
+  const mine = structuredClone(org);
+  Object.assign(mine.staff['s-part'], { title: 'Partnerships Lead', roleId: 'admin' });
+  assert.equal((await call(EX, 'PUT', '/api/docs/org', { body: mine, cookie: ben })).status, 200, 'staff change their own profile (My page)');
+  const after = (await call(EX, 'GET', '/api/docs/org', { cookie: ben })).json.staff['s-part'];
+  assert.equal(after.title, 'Partnerships Lead');
+  assert.equal(after.roleId, 'staff', 'but not their own role');
+  assert.equal((await call(EX, 'PUT', '/api/docs/../x', { body: {}, cookie: ben })).status, 404);
+});
+
+test('the staff list decides who can sign in, and as what', async () => {
+  const amara = await signIn('amara@example.org');
+  const org = (await call(EX, 'GET', '/api/docs/org', { cookie: amara })).json;
+  org.staff['s-new'] = { id: 's-new', name: 'New Person', roleId: 'viewer', email: 'New@Person.example', teamIds: [] };
+  org.staff['s-comms'].email = 'maya@riverbend.example'; // Maya now also works here.
+  assert.equal((await call(EX, 'PUT', '/api/docs/org', { body: org, cookie: amara })).status, 200);
+  const viewer = await signIn('new@person.example');
+  const s = (await call(EX, 'GET', '/api/session', { cookie: viewer })).json;
+  assert.equal(s.member, true);
+  assert.equal(s.canEdit, false, 'viewers read only');
+  assert.equal((await call(EX, 'PUT', '/api/docs/strategy', { body: { nodes: {} }, cookie: viewer })).status, 403);
+  const maya = await signIn('maya@riverbend.example', RB);
+  const orgs = (await call(RB, 'GET', '/api/session', { cookie: maya })).json.orgs.map((o) => o.id).sort();
+  assert.deepEqual(orgs, ['org-example', 'org-riverbend'], 'one person, two orgs');
+});
+
+test('switching org hands the sign-in over with a one-time token', async () => {
+  const maya = await signIn('maya@riverbend.example', RB);
+  const sw = await call(RB, 'GET', '/auth/switch?org=org-example&next=/podcasts.html', { cookie: maya });
+  assert.equal(sw.status, 302);
+  const to = new URL(sw.headers.location);
+  assert.equal(to.hostname, EX);
+  const first = await call(EX, 'GET', `${to.pathname}${to.search}`);
+  assert.equal(first.status, 302);
+  assert.equal(first.headers.location, '/podcasts.html');
+  const cookie = first.headers['set-cookie'][0].split(';')[0];
+  assert.equal((await call(EX, 'GET', '/api/session', { cookie })).json.user.email, 'maya@riverbend.example');
+  assert.equal((await call(EX, 'GET', `${to.pathname}${to.search}`)).status, 400, 'a token works once');
+  const amara = await signIn('amara@example.org');
+  assert.equal((await call(EX, 'GET', '/auth/switch?org=org-riverbend', { cookie: amara })).status, 403, 'only to your own orgs');
+});
+
+test('audio uploads: members upload; the public hears only published episodes; range requests work', async () => {
+  const amara = await signIn('amara@example.org');
+  const audio = Buffer.alloc(5000, 7);
+  const up = await call(EX, 'POST', '/api/media', { body: audio, cookie: amara, headers: { 'content-type': 'audio/mpeg', 'x-filename': 'ep.mp3' } });
+  assert.equal(up.status, 201);
+  const id = up.json.id;
+  assert.equal((await call(EX, 'POST', '/api/media', { body: audio, headers: { 'content-type': 'audio/mpeg' } })).status, 403);
+  assert.equal((await call(EX, 'POST', '/api/media', { body: audio, cookie: amara, headers: { 'content-type': 'text/html', 'x-filename': 'x.html' } })).status, 415);
+  assert.equal((await call(EX, 'GET', `/media/${id}`)).status, 404, 'not public until an episode is out');
+  const part = await call(EX, 'GET', `/media/${id}`, { cookie: amara, headers: { range: 'bytes=100-199' } });
+  assert.equal(part.status, 206);
+  assert.equal(part.raw.length, 100);
+  assert.equal(part.headers['content-range'], 'bytes 100-199/5000');
+
+  const pods = (await call(EX, 'GET', '/api/docs/podcasts', { cookie: amara })).json;
+  pods.episodes['ep-up'] = { ...pods.episodes['ep-sv-4'], id: 'ep-up', number: 9, publishedAt: '2026-01-01', status: 'published', audio: { mediaId: id, duration: 1, mimetype: 'audio/mpeg' } };
+  await call(EX, 'PUT', '/api/docs/podcasts', { body: pods, cookie: amara });
+  assert.equal((await call(EX, 'GET', `/media/${id}`)).status, 200, 'public once published');
+  assert.equal((await call(RB, 'GET', `/media/${id}`)).status, 404, 'and only at its own org');
+});
+
+test('only the app’s own files are served', async () => {
+  for (const path of ['/server/app.js', '/package.json', '/data/toolbox.db', '/test/server.test.js', '/.env', '/src/../server/config.js']) {
+    assert.equal((await call(EX, 'GET', path)).status, 404, path);
+  }
+  assert.equal((await call(EX, 'GET', '/src/plugins.js')).status, 200);
+  assert.match((await call(EX, 'GET', '/')).text, /src\/pages\/site\.js/, 'visitors land on the public site');
+  const amara = await signIn('amara@example.org');
+  assert.match((await call(EX, 'GET', '/', { cookie: amara })).text, /src\/pages\/dashboard\.js/, 'members land on the dashboard');
+});
+
+test('the platform admin makes and suspends orgs; everyone else can’t', async () => {
+  const amara = await signIn('amara@example.org');
+  assert.equal((await call('localhost', 'POST', '/api/admin/orgs', { body: { name: 'X', slug: 'x' }, cookie: amara })).status, 403);
+  const admin = await signIn('admin@localhost', 'localhost');
+  const made = await call('localhost', 'POST', '/api/admin/orgs', { body: { name: 'Northside Arts', slug: 'northside', adminEmail: 'jo@northside.example', adminName: 'Jo' }, cookie: admin });
+  assert.equal(made.status, 201);
+  assert.equal((await call('localhost', 'POST', '/api/admin/orgs', { body: { name: 'Again', slug: 'northside' }, cookie: admin })).status, 409);
+  assert.equal((await call('localhost', 'POST', '/api/admin/orgs', { body: { name: 'Bad', slug: 'www' }, cookie: admin })).status, 400);
+  const jo = await signIn('jo@northside.example', 'northside.localhost');
+  assert.equal((await call('northside.localhost', 'GET', '/api/session', { cookie: jo })).json.canAdmin, true);
+  await call('localhost', 'PATCH', `/api/admin/orgs/${made.json.id}`, { body: { status: 'suspended' }, cookie: admin });
+  assert.equal((await call('northside.localhost', 'GET', '/api/session', { cookie: jo })).json.org, null, 'a suspended org is closed');
+});
+
+test('passwords are hashed and checked', async () => {
+  const admin = await signIn('admin@localhost', 'localhost');
+  const user = (await call('localhost', 'GET', '/api/admin/users', { cookie: admin })).json.find((u) => u.email === 'ben@example.org');
+  assert.equal((await call('localhost', 'POST', `/api/admin/users/${user.id}/password`, { body: { password: 'short' }, cookie: admin })).status, 400);
+  await call('localhost', 'POST', `/api/admin/users/${user.id}/password`, { body: { password: 'correct horse battery' }, cookie: admin });
+  const row = srv.db.prepare('SELECT password_hash FROM users WHERE id = ?').get(user.id);
+  assert.match(row.password_hash, /^scrypt\$/);
+  assert.equal((await call(EX, 'POST', '/api/auth/password', { body: { email: 'ben@example.org', password: 'wrong' } })).status, 401);
+  assert.equal((await call(EX, 'POST', '/api/auth/password', { body: { email: 'BEN@example.org', password: 'correct horse battery' } })).status, 200);
+});
+
+test('the platform admin switches plugins on for an org, or pauses them', async () => {
+  const admin = await signIn('admin@localhost', 'localhost');
+  const amara = await signIn('amara@example.org');
+  const plugins = (id, body, cookie = admin) => call('localhost', 'POST', `/api/admin/orgs/${id}/plugins`, { body, cookie });
+  assert.equal((await plugins('org-riverbend', { plugin: 'podcasts', on: true }, amara)).status, 403);
+  // Riverbend switches podcasts off; switching it on from the console turns it on in their settings too.
+  const maya = await signIn('maya@riverbend.example', RB);
+  const rbOrg = (await call(RB, 'GET', '/api/docs/org', { cookie: maya })).json;
+  assert.equal((await call(RB, 'PUT', '/api/docs/org', { cookie: maya, body: { ...rbOrg, plugins: { ...rbOrg.plugins, podcasts: false } } })).status, 200);
+  await plugins('org-riverbend', { plugin: 'podcasts', on: true });
+  const orgs = (await call('localhost', 'GET', '/api/admin/orgs', { cookie: admin })).json;
+  assert.equal(orgs.find((o) => o.id === 'org-riverbend').chosen.podcasts, true);
+  // Pausing keeps the content but hides it, from members and the public.
+  await plugins('org-example', { plugin: 'pages', on: false });
+  const member = (await call(EX, 'GET', '/api/session', { cookie: amara })).json;
+  assert.equal(member.docs.org.platform.paused.pages, true);
+  assert.ok(Object.keys(member.docs.pages.pages).length > 0, 'the pages are still there');
+  assert.equal(Object.keys((await call(EX, 'GET', '/api/session')).json.docs.pages.pages).length, 0, 'but not on the public site');
+  // An org can't unpause itself by writing its own org doc.
+  const doc = { ...member.docs.org, platform: { paused: {} } };
+  assert.equal((await call(EX, 'PUT', '/api/docs/org', { body: doc, cookie: amara })).status, 200);
+  assert.equal((await call(EX, 'GET', '/api/session', { cookie: amara })).json.docs.org.platform.paused.pages, true);
+  await plugins('org-example', { plugin: 'pages', on: true });
+  assert.ok(Object.keys((await call(EX, 'GET', '/api/session')).json.docs.pages.pages).length > 0);
+});
+
+test('only the platform admin edits the help library', async () => {
+  const admin = await signIn('admin@localhost', 'localhost');
+  const amara = await signIn('amara@example.org');
+  assert.equal((await call(EX, 'GET', '/api/help')).json, null, 'the built-in library until someone edits it');
+  assert.equal((await call(EX, 'GET', '/api/session', { cookie: amara })).json.canEditHelp, false);
+  const lib = { version: 1, sections: [{ id: 'podcasting', title: 'Podcasting', icon: 'mic', pages: [{ id: 'start', title: 'Start', body: 'Hello' }] }] };
+  assert.equal((await call(EX, 'PUT', '/api/help', { body: lib, cookie: amara })).status, 403);
+  assert.equal((await call('localhost', 'PUT', '/api/help', { body: { nope: 1 }, cookie: admin })).status, 400);
+  assert.equal((await call('localhost', 'PUT', '/api/help', { body: lib, cookie: admin })).status, 200);
+  assert.deepEqual((await call(RB, 'GET', '/api/help')).json, lib, 'one library for every org');
+});
+
+test('large uploads arrive in chunks, resume after a gap, and are checked before they become media', async () => {
+  const amara = await signIn('amara@example.org');
+  const CHUNK = 8 * 1048576;
+  const size = CHUNK * 2 + 12345;
+  const file = Buffer.alloc(size, 7);
+  Buffer.from('ID3\x04\x00\x00\x00\x00\x00\x00', 'latin1').copy(file);
+  assert.equal((await call(EX, 'POST', '/api/uploads', { body: { filename: 'ep.mp3', size } })).status, 403, 'members only');
+  assert.equal((await call(EX, 'POST', '/api/uploads', { body: { filename: 'x.exe', size, type: 'application/x-msdownload' }, cookie: amara })).status, 415);
+  assert.equal((await call(EX, 'POST', '/api/uploads', { body: { filename: 'big.mp3', size: 10 * 1024 * 1048576 }, cookie: amara })).status, 413);
+  const start = await call(EX, 'POST', '/api/uploads', { body: { filename: 'long episode.mp3', size, type: 'audio/mpeg' }, cookie: amara });
+  assert.equal(start.status, 201);
+  const { id, chunkSize } = start.json;
+  assert.equal(chunkSize, CHUNK);
+  const put = (offset, buf) => call(EX, 'PUT', `/api/uploads/${id}?offset=${offset}`, { body: buf, cookie: amara, headers: { 'content-type': 'application/octet-stream' } });
+  assert.equal((await put(0, file.subarray(0, CHUNK))).json.received, CHUNK);
+  // A repeated chunk (the browser didn't hear back) is refused with where to carry on.
+  const again = await put(0, file.subarray(0, CHUNK));
+  assert.equal(again.status, 409);
+  assert.equal(again.json.received, CHUNK);
+  assert.equal((await call(EX, 'POST', `/api/uploads/${id}/complete`, { cookie: amara })).status, 409, 'not all here yet');
+  assert.equal((await call(EX, 'GET', `/api/uploads/${id}`, { cookie: amara })).json.received, CHUNK);
+  assert.equal((await put(CHUNK, file.subarray(CHUNK, CHUNK * 3))).status, 413, 'a chunk can’t be bigger than a chunk');
+  assert.equal((await call(EX, 'GET', `/api/uploads/${id}`, { cookie: amara })).json.received, CHUNK, 'a refused chunk leaves nothing behind');
+  await put(CHUNK, file.subarray(CHUNK, CHUNK * 2));
+  await put(CHUNK * 2, file.subarray(CHUNK * 2));
+  const done = await call(EX, 'POST', `/api/uploads/${id}/complete`, { cookie: amara });
+  assert.equal(done.status, 201);
+  assert.equal(done.json.size, size);
+  assert.equal(done.json.mimetype, 'audio/mpeg');
+  const back = await call(EX, 'GET', `/media/${done.json.id}`, { cookie: amara });
+  assert.ok(back.raw.equals(file), 'the file comes back byte for byte');
+  assert.equal((await call(RB, 'GET', `/api/uploads/${id}`, { cookie: amara })).status, 403, 'another org can’t see it');
+
+  // Something that isn't audio is refused at the end, and removed.
+  const fake = await call(EX, 'POST', '/api/uploads', { body: { filename: 'fake.mp3', size: 10 }, cookie: amara });
+  await call(EX, 'PUT', `/api/uploads/${fake.json.id}?offset=0`, { body: Buffer.from('<html>hi</'), cookie: amara, headers: { 'content-type': 'application/octet-stream' } });
+  assert.equal((await call(EX, 'POST', `/api/uploads/${fake.json.id}/complete`, { cookie: amara })).status, 415);
+  assert.equal((await call(EX, 'GET', `/api/uploads/${fake.json.id}`, { cookie: amara })).status, 404);
+});
+
+test('a featured show downloads as a zip that plays offline; other shows stay with members', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { writeFileSync } = await import('node:fs');
+  const { json: s } = await call(EX, 'GET', '/api/session');
+  const shows = Object.values(s.docs.podcasts.podcasts);
+  const featured = shows.find((p) => p.featured);
+  const other = shows.find((p) => !p.featured);
+  const head = await call(EX, 'HEAD', `/podcasts/${featured.id}.zip`);
+  assert.equal(head.status, 200);
+  const res = await call(EX, 'GET', `/podcasts/${featured.id}.zip`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers['content-type'], 'application/zip');
+  assert.equal(Number(res.headers['content-length']), res.raw.length, 'the size is known up front');
+  assert.match(res.headers['content-disposition'], /attachment; filename=".+\.zip"/);
+  const file = join(dataDir, 'show.zip');
+  writeFileSync(file, res.raw);
+  const listing = execFileSync('unzip', ['-l', file]).toString();
+  assert.match(listing, /index\.html/);
+  assert.match(listing, /player\.js/);
+  assert.match(listing, /show\.json/);
+  assert.match(listing, /audio\/S\d\dE\d\d .+\.mp3/);
+  execFileSync('unzip', ['-tq', file]);
+  const index = execFileSync('unzip', ['-p', file, '*/index.html']).toString();
+  assert.match(index, new RegExp(featured.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(index, /window\.SHOW = /);
+  assert.equal((await call(EX, 'GET', `/podcasts/${other.id}.zip`)).status, 404, 'not featured: not for visitors');
+  const amara = await signIn('amara@example.org');
+  assert.equal((await call(EX, 'HEAD', `/podcasts/${other.id}.zip`, { cookie: amara })).status, 200, 'members can take any show');
+  assert.equal((await call(RB, 'GET', `/podcasts/${featured.id}.zip`)).status, 404, 'only at its own org');
+});
+
+test('sessions are stored hashed, pages carry security headers, sign-in guessing is slowed per account', async () => {
+  const cookie = await signIn('amara@example.org');
+  const raw = decodeURIComponent(cookie.split('=')[1]);
+  assert.equal(srv.db.prepare('SELECT 1 FROM sessions WHERE id = ?').get(raw), undefined, 'the cookie value is not in the database');
+  const { digest } = await import('../server/app.js');
+  assert.ok(srv.db.prepare('SELECT 1 FROM sessions WHERE id = ?').get(digest(raw)), 'its hash is');
+  assert.equal((await call(EX, 'GET', '/api/session', { cookie })).json.member, true);
+
+  const home = await call(EX, 'GET', '/');
+  assert.match(home.headers['content-security-policy'], /script-src 'self'/);
+  assert.match(home.headers['content-security-policy'], /object-src 'none'/);
+
+  // Ten wrong passwords for one account, from different addresses; the eleventh is refused.
+  for (let i = 0; i < 10; i++) {
+    const r = await call(EX, 'POST', '/api/auth/password', { body: { email: 'target@example.org', password: `guess${i}` } });
+    assert.equal(r.status, 401);
+  }
+  assert.equal((await call(EX, 'POST', '/api/auth/password', { body: { email: 'TARGET@example.org', password: 'x' } })).status, 429);
+});
+
+test('the security audit is for the platform admin, proves sessions are hashed, and spots secrets in documents', async () => {
+  assert.equal((await call(EX, 'GET', '/api/admin/audit', { cookie: await signIn('amara@example.org') })).status, 403);
+  const admin = await signIn('admin@localhost', 'localhost');
+  srv.app.writeDoc('org-riverbend', 'notes', { text: 'wifi password: hunter2hunter2' });
+  const { json: audit } = await call('localhost', 'GET', '/api/admin/audit', { cookie: admin });
+  const check = (title) => audit.checks.find((c) => c.title === title);
+  assert.equal(check('Sign-in tokens are hashed').status, 'pass');
+  assert.match(check('Sign-in tokens are hashed').detail, /your own session/);
+  assert.equal(check('Passwords are hashed').status, 'pass');
+  assert.equal(check('No secrets in documents').status, 'warn');
+  assert.match(check('No secrets in documents').detail, /Riverbend.*notes/);
+  assert.ok(!JSON.stringify(audit).includes('hunter2'), 'never repeats the secret');
+  assert.equal(check('Staff details stay private').status, 'pass');
+
+  const before = (await call('localhost', 'GET', '/api/admin/backups', { cookie: admin })).json.length;
+  assert.equal((await call('localhost', 'POST', '/api/admin/backups', { cookie: admin })).status, 201);
+  assert.equal((await call('localhost', 'GET', '/api/admin/backups', { cookie: admin })).json.length, before + 1);
+});
+
+test('hosts can check health, and Caddy can ask which addresses are ours', async () => {
+  const health = await call('anything', 'GET', '/healthz');
+  assert.equal(health.status, 200);
+  assert.equal((await call('dashi', 'GET', '/tls-ask?domain=riverbend.localhost')).status, 200);
+  assert.equal((await call('dashi', 'GET', '/tls-ask?domain=localhost')).status, 200);
+  assert.equal((await call('dashi', 'GET', '/tls-ask?domain=nobody.localhost')).status, 404);
+  assert.equal((await call('dashi', 'GET', '/tls-ask?domain=evil.com')).status, 404);
+});
+
+test('plans set what an org can add; the platform admin changes them', async () => {
+  const admin = await signIn('admin@localhost', 'localhost');
+  const { json: org } = await call('localhost', 'POST', '/api/admin/orgs', { cookie: admin, body: { name: 'Tiny Group', slug: 'tiny', plan: 'free', adminEmail: 'lead@tiny.example' } });
+  const lead = await signIn('lead@tiny.example', 'tiny.localhost');
+  const { json: session } = await call('tiny.localhost', 'GET', '/api/session', { cookie: lead });
+  assert.equal(session.docs.org.platform.tier, 'free');
+  assert.equal(session.docs.org.platform.paused.strategy, true, 'Free has no strategy plugin');
+  assert.equal(session.limits.uploadMb, 10);
+
+  // Free includes no strategic frameworks.
+  const strategy = session.docs.strategy;
+  strategy.nodes['fw-1'] = { id: 'fw-1', type: 'framework', parentId: null, order: 9, title: 'A framework' };
+  const refused = await call('tiny.localhost', 'PUT', '/api/docs/strategy', { cookie: lead, body: strategy });
+  assert.equal(refused.status, 403);
+  assert.match(refused.json.error, /Free plan doesn’t include strategic frameworks/);
+
+  // Five people on Free: a sixth with an email is refused.
+  const orgDoc = session.docs.org;
+  for (let i = 0; i < 5; i++) orgDoc.staff[`s-${i}`] = { id: `s-${i}`, name: `P${i}`, email: `p${i}@tiny.example`, roleId: 'staff', teamIds: [] };
+  assert.equal((await call('tiny.localhost', 'PUT', '/api/docs/org', { cookie: lead, body: orgDoc })).status, 403);
+
+  // No social sign-in on Free.
+  assert.deepEqual((await call('tiny.localhost', 'GET', '/api/auth/options')).json.providers, []);
+
+  // The admin gives Free one framework for everyone; then it saves.
+  const { json: plans } = await call('localhost', 'GET', '/api/admin/plans', { cookie: admin });
+  assert.equal(plans.plans.basic.limits.plans, 2);
+  await call('localhost', 'PUT', '/api/admin/plans', { cookie: admin, body: { free: { limits: { frameworks: 5 } } } });
+  assert.equal((await call('tiny.localhost', 'PUT', '/api/docs/strategy', { cookie: lead, body: strategy })).status, 200);
+
+  // A Custom org's own limits, over the tier's.
+  await call('localhost', 'PATCH', `/api/admin/orgs/${org.id}`, { cookie: admin, body: { plan: 'basic', limits: { limits: { users: 40 } } } });
+  assert.equal((await call('tiny.localhost', 'PUT', '/api/docs/org', { cookie: lead, body: orgDoc })).status, 200);
+  const { json: mine } = await call('tiny.localhost', 'GET', '/api/plan', { cookie: lead });
+  assert.equal(mine.plan.limits.users, 40);
+  assert.equal(mine.usage.users, 6);
+  await call('localhost', 'PUT', '/api/admin/plans', { cookie: admin, body: {} });
+});
+
+test('anyone can sign up for a free org on the platform site, and asks for a bigger plan', async () => {
+  const { json: info } = await call('localhost', 'GET', '/api/platform');
+  assert.equal(info.plans.standard.label, 'Standard');
+  assert.ok(info.site.hero.title);
+  assert.equal((await call('example.localhost', 'POST', '/api/signup', { body: { orgName: 'X' } })).status, 404, 'only on the platform site');
+  assert.equal((await call('localhost', 'POST', '/api/signup', { body: { orgName: 'Bots', slug: 'bots', email: 'b@b.example', password: 'longenough1', website: 'spam' } })).status, 400);
+  const res = await call('localhost', 'POST', '/api/signup', { body: { orgName: 'Lakeside Arts Collective', slug: 'lakesidearts', name: 'Rosa', email: 'rosa@lakesidearts.example', password: 'a good long one', plan: 'standard' } });
+  assert.equal(res.status, 201);
+  assert.ok(res.headers['set-cookie'], 'signed in');
+  assert.match(res.json.open, /auth\/switch/);
+  const cookie = res.headers['set-cookie'][0].split(';')[0];
+  assert.equal((await call('localhost', 'GET', '/api/session', { cookie })).json.user.email, 'rosa@lakesidearts.example');
+  assert.equal((await call('localhost', 'POST', '/api/signup', { body: { orgName: 'Again', slug: 'again', email: 'rosa@lakesidearts.example', password: 'a good long one' } })).status, 409);
+  const admin = await signIn('admin@localhost', 'localhost');
+  const reqs = (await call('localhost', 'GET', '/api/admin/requests', { cookie: admin })).json;
+  const r = reqs.find((x) => x.email === 'rosa@lakesidearts.example');
+  assert.equal(r.kind, 'signup');
+  assert.equal(r.data.plan, 'standard');
+  assert.equal(r.org_plan, 'free', 'starts on Free until the admin moves it');
+});
+
+test('a Custom org adds its own domain, proves it with DNS, and is then served there', async () => {
+  const exAdmin = await signIn('amara@example.org');
+  const rbAdmin = await signIn('mira@riverbend.example', RB).catch(() => null);
+  if (rbAdmin) {
+    const r = await call(RB, 'POST', '/api/domains', { cookie: rbAdmin, body: { host: 'riverbend.org' } });
+    assert.equal(r.status, 403, 'Standard has no custom domain');
+  }
+  const add = await call(EX, 'POST', '/api/domains', { cookie: exAdmin, body: { host: 'https://www.example-stem.org/' } });
+  assert.equal(add.status, 201);
+  assert.equal(add.json.host, 'www.example-stem.org');
+  assert.equal(add.json.status, 'pending');
+  const txt = add.json.records.find((x) => x.type === 'TXT');
+  assert.equal(add.json.records.find((x) => x.type === 'CNAME').value, 'localhost');
+  assert.equal((await call('www.example-stem.org', 'GET', '/api/session')).status, 404, 'not served until it works');
+  assert.equal((await call('dashi', 'GET', '/tls-ask?domain=www.example-stem.org')).status, 404);
+
+  dns.txt[txt.name] = [[txt.value]];
+  let check = await call(EX, 'POST', '/api/domains/www.example-stem.org/check', { cookie: exAdmin });
+  assert.equal(check.json.status, 'verified');
+  dns.cname['www.example-stem.org'] = ['localhost.'];
+  check = await call(EX, 'POST', '/api/domains/www.example-stem.org/check', { cookie: exAdmin });
+  assert.equal(check.json.status, 'active');
+  assert.equal((await call('www.example-stem.org', 'GET', '/api/session')).json.org.id, 'org-example');
+  assert.equal((await call('dashi', 'GET', '/tls-ask?domain=www.example-stem.org')).status, 200);
+
+  // A bare domain gets A records to the platform's address.
+  const apex = await call(EX, 'POST', '/api/domains', { cookie: exAdmin, body: { host: 'example-stem.org' } });
+  assert.deepEqual(apex.json.records.filter((x) => x.type === 'A').map((x) => x.value), ['203.0.113.7']);
+  assert.equal((await call(EX, 'POST', '/api/domains', { cookie: exAdmin, body: { host: 'not a domain' } })).status, 400);
+  assert.equal((await call(EX, 'POST', '/api/domains', { cookie: exAdmin, body: { host: 'www.example-stem.org' } })).status, 409);
+  await call(EX, 'DELETE', '/api/domains/www.example-stem.org', { cookie: exAdmin });
+  assert.equal((await call('www.example-stem.org', 'GET', '/api/session')).status, 404);
+});
+
+test('library documents: real PDFs and Word files are kept, fakes are refused, and Word downloads', async () => {
+  const amara = await signIn('amara@example.org');
+  async function upload(filename, bytes, cookie = amara) {
+    const start = await call(EX, 'POST', '/api/uploads', { body: { filename, size: bytes.length, kind: 'document' }, cookie });
+    if (start.status !== 201) return start;
+    await call(EX, 'PUT', `/api/uploads/${start.json.id}?offset=0`, { body: bytes, cookie, headers: { 'content-type': 'application/octet-stream' } });
+    return call(EX, 'POST', `/api/uploads/${start.json.id}/complete`, { cookie });
+  }
+  assert.equal((await call(EX, 'POST', '/api/uploads', { body: { filename: 'a.pdf', size: 10, kind: 'document' } })).status, 403, 'members only');
+  const pdf = await upload('report.pdf', Buffer.from('%PDF-1.4\n%âãÏÓ\n1 0 obj<<>>endobj\n%%EOF\n'));
+  assert.equal(pdf.status, 201);
+  assert.equal(pdf.json.mimetype, 'application/pdf');
+  const shown = await call(EX, 'GET', `/media/${pdf.json.id}`, { cookie: amara });
+  assert.match(shown.headers['content-disposition'] ?? 'inline', /^inline/, 'PDFs open in the browser');
+  assert.match((await call(EX, 'GET', `/media/${pdf.json.id}?download`, { cookie: amara })).headers['content-disposition'], /^attachment/);
+
+  assert.equal((await upload('fake.pdf', Buffer.from('<html><script>x</script></html>'))).status, 415, 'a web page called .pdf is refused');
+  assert.equal((await upload('fake.docx', Buffer.from('%PDF-1.4 not a zip'))).status, 415);
+
+  const { docx } = await import('../src/core/office.js');
+  const { parseMarkdown } = await import('../src/core/markdown.js');
+  const word = Buffer.from(await docx(parseMarkdown('# Hi\n\nThere.'), { title: 'Hi' }));
+  const doc = await upload('notes.docx', word);
+  assert.equal(doc.status, 201);
+  assert.match(doc.json.mimetype, /wordprocessingml/);
+  assert.match((await call(EX, 'GET', `/media/${doc.json.id}`, { cookie: amara })).headers['content-disposition'], /^attachment/, 'Word files download rather than open');
+});
+
+test('the test platform: six orgs on four plans, with libraries, files and a pending custom domain', async () => {
+  const admin = await signIn('admin@localhost', 'localhost');
+  const orgs = (await call('localhost', 'GET', '/api/admin/orgs', { cookie: admin })).json;
+  const list = Array.isArray(orgs) ? orgs : orgs.orgs;
+  for (const slug of ['example', 'riverbend', 'northshore', 'coastal', 'prairie', 'lakeside']) {
+    assert.ok(list.some((o) => o.slug === slug), `${slug} exists`);
+  }
+  assert.deepEqual(new Set(list.filter((o) => ['northshore', 'prairie', 'lakeside', 'riverbend'].includes(o.slug)).map((o) => o.plan)), new Set(['custom', 'basic', 'free', 'standard']));
+
+  const NS = 'northshore.localhost';
+  const opts = (await call(NS, 'GET', '/api/auth/options')).json;
+  const members = opts.dev.filter((u) => u.orgs.some((o) => o.startsWith('Northshore Housing Coalition')));
+  assert.equal(members.length, 40, 'Northshore has its 40 people');
+  const nsAdmin = members.find((u) => u.orgs.includes('Northshore Housing Coalition (admin)'));
+  const cookie = (await call(NS, 'POST', '/api/auth/dev', { body: { userId: nsAdmin.id } })).headers['set-cookie'][0].split(';')[0];
+  const lib = (await call(NS, 'GET', '/api/docs/library', { cookie })).json;
+  const items = Object.values(lib.items);
+  assert.ok(items.some((i) => i.kind === 'file') && items.some((i) => i.kind === 'doc') && items.some((i) => i.kind === 'ref'));
+  assert.equal(Object.keys(lib.bibs).length, 2);
+  const file = items.find((i) => i.kind === 'file' && i.file?.type === 'application/pdf');
+  const got = await call(NS, 'GET', `/media/${file.file.mediaId}`, { cookie });
+  assert.equal(got.status, 200);
+  assert.equal(got.raw.subarray(0, 5).toString(), '%PDF-', 'the mock PDF is a real PDF');
+
+  const domains = await call(NS, 'GET', '/api/domains', { cookie });
+  assert.equal(domains.status, 200);
+  const d = (domains.json.domains ?? domains.json).find((x) => x.host === 'www.northshorehousing.example');
+  assert.equal(d?.status, 'pending');
+});
+
+test('a save that started from an older version is refused, not written over someone else’s', async () => {
+  const amara = await signIn('amara@example.org');
+  const ben = await signIn('ben@example.org');
+  const start = await call(EX, 'GET', '/api/docs/strategy', { cookie: amara });
+  const v = start.headers['x-doc-version'];
+  assert.ok(v, 'members get the version with the document');
+  assert.equal((await call(EX, 'GET', '/api/session', { cookie: amara })).json.versions.strategy, Number(v));
+  const first = await call(EX, 'PUT', '/api/docs/strategy', { body: start.json, cookie: ben, headers: { 'x-doc-version': v } });
+  assert.equal(first.status, 200);
+  assert.equal(first.json.version, Number(v) + 1);
+  const stale = await call(EX, 'PUT', '/api/docs/strategy', { body: start.json, cookie: amara, headers: { 'x-doc-version': v } });
+  assert.equal(stale.status, 409);
+  assert.equal(stale.json.version, Number(v) + 1);
+  assert.equal((await call(EX, 'PUT', '/api/docs/strategy', { body: start.json, cookie: amara, headers: { 'x-doc-version': String(first.json.version) } })).status, 200);
+});
+
+test('support tickets: people see their own, the platform admin sees all and answers, internal notes stay internal', async () => {
+  const { outbox } = await import('../server/mail.js');
+  const ben = await signIn('ben@example.org');
+  const admin = await signIn('admin@localhost', 'localhost');
+  assert.equal((await call(EX, 'POST', '/api/tickets', { body: { kind: 'problem', title: 'x', body: 'y' } })).status, 401, 'sign in first');
+  const made = await call(EX, 'POST', '/api/tickets', { cookie: ben, body: { kind: 'problem', title: 'Map won’t save', body: 'I pressed save and nothing.', context: { page: '/mapper.html', version: '0.1.0-alpha.1', secret: 'nope' } } });
+  assert.equal(made.status, 201);
+  assert.equal(made.json.status, 'new');
+  assert.equal(made.json.org.name, 'Example STEM Outreach Network');
+  assert.deepEqual(made.json.context, { page: '/mapper.html', version: '0.1.0-alpha.1' }, 'only known technical details are kept');
+  assert.match(outbox.at(-1).subject, /\[Dashi #\d+\] Map won’t save/, 'support hears about it');
+  const id = made.json.id;
+
+  const amara = await signIn('amara@example.org');
+  assert.equal((await call(EX, 'GET', `/api/tickets/${id}`, { cookie: amara })).status, 404, 'other people can’t see it, even their org’s admin');
+  assert.equal((await call(EX, 'GET', '/api/tickets', { cookie: amara })).json.tickets.length, 0);
+
+  const all = await call('localhost', 'GET', '/api/tickets?all=1&status=active', { cookie: admin });
+  assert.ok(all.json.tickets.some((t) => t.id === id));
+  assert.equal(all.json.counts.new >= 1, true);
+  assert.equal((await call('localhost', 'POST', `/api/tickets/${id}/messages`, { cookie: admin, body: { body: 'Looking at the logs', internal: true } })).status, 201);
+  const reply = await call('localhost', 'POST', `/api/tickets/${id}/messages`, { cookie: admin, body: { body: 'Fixed in alpha.2, can you try again?' } });
+  assert.equal(reply.json.status, 'waiting', 'an answer waits on the reporter');
+  assert.equal(outbox.at(-1).to, 'ben@example.org', 'the reporter is emailed the answer');
+
+  const seen = await call(EX, 'GET', `/api/tickets/${id}`, { cookie: ben });
+  assert.deepEqual(seen.json.messages.map((x) => x.body), ['Fixed in alpha.2, can you try again?'], 'internal notes are the admin’s alone');
+  assert.equal((await call(EX, 'POST', `/api/tickets/${id}/messages`, { cookie: ben, body: { body: 'Works now, thanks' } })).json.status, 'open');
+  assert.equal((await call(EX, 'PATCH', `/api/tickets/${id}`, { cookie: ben, body: { priority: 'urgent' } })).status, 400, 'only the admin sets priority');
+  assert.equal((await call(EX, 'PATCH', `/api/tickets/${id}`, { cookie: ben, body: { status: 'closed' } })).json.status, 'closed');
+  assert.equal((await call('localhost', 'PATCH', `/api/tickets/${id}`, { cookie: admin, body: { status: 'resolved', priority: 'high' } })).json.priority, 'high');
+});
+
+test('a forgotten password gets an emailed one-time link; an admin can invite someone on the staff list', async () => {
+  const { outbox } = await import('../server/mail.js');
+  const n0 = outbox.length;
+  assert.equal((await call(EX, 'POST', '/api/auth/reset/request', { body: { email: 'nobody@nowhere.example' } })).status, 200, 'the same answer for unknown emails');
+  assert.equal(outbox.length, n0, 'but nothing is sent');
+  await call(EX, 'POST', '/api/auth/reset/request', { body: { email: 'Ben@Example.org' } });
+  const link = outbox.at(-1).text.match(/https?:\/\/\S+reset\.html\?token=(\S+)/);
+  assert.ok(link, 'the email has a link');
+  const tokenValue = decodeURIComponent(link[1]);
+  assert.equal((await call(EX, 'POST', '/api/auth/reset', { body: { token: tokenValue, password: 'short' } })).status, 400);
+  const ok = await call(EX, 'POST', '/api/auth/reset', { body: { token: tokenValue, password: 'a new long passphrase' } });
+  assert.equal(ok.status, 200);
+  assert.ok(ok.headers['set-cookie'], 'and signs them in');
+  assert.equal((await call(EX, 'POST', '/api/auth/reset', { body: { token: tokenValue, password: 'a new long passphrase' } })).status, 400, 'once');
+  assert.equal((await call(EX, 'POST', '/api/auth/password', { body: { email: 'ben@example.org', password: 'a new long passphrase' } })).status, 200);
+
+  const amara = await signIn('amara@example.org');
+  const ben = await signIn('ben@example.org');
+  assert.equal((await call(EX, 'POST', '/api/invite', { cookie: ben, body: { staffId: 's-ed' } })).status, 403);
+  assert.equal((await call(EX, 'POST', '/api/invite', { cookie: amara, body: { staffId: 's-part' } })).status, 200);
+  assert.match(outbox.at(-1).subject, /invited to Example STEM Outreach Network/);
+  assert.match(outbox.at(-1).text, /example\.localhost.*reset\.html\?token=.*invite=1/, 'the link is on the org’s own address');
+  const status = await call(EX, 'GET', '/api/people/status', { cookie: amara });
+  assert.equal(status.json['s-part'].hasPassword, true);
+});
+
+test('the session says which version is running', async () => {
+  const { VERSION } = await import('../src/version.js');
+  const pkg = JSON.parse((await import('node:fs')).readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(VERSION, pkg.version, 'src/version.js matches package.json');
+  assert.equal((await call(EX, 'GET', '/api/session')).json.version, pkg.version);
+  assert.equal((await call('anything', 'GET', '/version')).json.version, pkg.version);
+});

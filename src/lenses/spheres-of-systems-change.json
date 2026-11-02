@@ -1,0 +1,18 @@
+{
+  "id": "spheres-of-systems-change",
+  "name": "Spheres of Systems Change (NPC)",
+  "description": "NPC's eight spheres of systems change, from your inner world at the centre out to culture and society, grouped as micro, meso and macro. Influence runs both ways between neighbouring spheres.",
+  "layout": "rings",
+  "center": { "x": 0, "y": 0 },
+  "labelSize": "small",
+  "regions": [
+    { "id": "internal", "label": "Internal", "hint": "Mindsets, assumptions, beliefs", "group": "Micro", "depth": [0.917, 1], "radius": 120, "tint": "#fbeedd" },
+    { "id": "behavioural", "label": "Behavioural", "hint": "How your actions align with the change", "group": "Micro", "depth": [0.833, 0.917], "radius": 210, "tint": "#fdf3e7" },
+    { "id": "relational", "label": "Relational", "hint": "Relationships through which change happens", "group": "Micro", "depth": [0.75, 0.833], "radius": 300, "tint": "#fbeedd" },
+    { "id": "organisational", "label": "Organisational", "hint": "Organisations and community groups", "group": "Micro", "depth": [0.667, 0.75], "radius": 390, "tint": "#fdf3e7" },
+    { "id": "collective", "label": "Collective", "hint": "Partnerships, alliances, movements", "group": "Meso", "depth": [0.5, 0.667], "radius": 480, "tint": "#e6f2ea" },
+    { "id": "infrastructural", "label": "Infrastructural", "hint": "Umbrella bodies, regulators, public institutions", "group": "Meso", "depth": [0.333, 0.5], "radius": 570, "tint": "#eef6f0" },
+    { "id": "political", "label": "Political", "hint": "Policy at national, regional, local level", "group": "Macro", "depth": [0.167, 0.333], "radius": 660, "tint": "#e1e9fb" },
+    { "id": "cultural", "label": "Cultural / societal", "hint": "Shared beliefs, values, behaviours", "group": "Macro", "depth": [0, 0.167], "radius": 750, "tint": "#e8eefc" }
+  ]
+}
