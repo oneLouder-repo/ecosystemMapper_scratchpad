@@ -35,6 +35,8 @@ import { domainRoutes } from './domains.js';
 import { runAudit } from './audit.js';
 import { backupNow, listBackups } from './backup.js';
 import { PROVIDERS, authorizeUrl, finish } from './oauth.js';
+import { supportRoutes } from './support.js';
+import { sendMail, letter } from './mail.js';
 import { zipStream, zipSize } from '../src/core/zip.js';
 import { showArchive } from '../src/platform/showArchive.js';
 import { blankOrg, migrateOrg } from '../src/platform/org.js';
@@ -221,6 +223,7 @@ export function createApp(db, options = {}) {
   function startSession(res, userId) {
     const id = token();
     q('INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)').run(digest(id), userId, Date.now() + config.sessionDays * 864e5, now());
+    q('UPDATE users SET last_sign_in = ? WHERE id = ?').run(now(), userId);
     res.setHeader('set-cookie', cookie(COOKIE, id, { maxAge: config.sessionDays * 86400, secure: config.https }));
   }
 
@@ -273,6 +276,30 @@ export function createApp(db, options = {}) {
   }
 
   const uploads = uploadRoutes({ q, newId, limitsOf: (org) => orgPlan(org).limits });
+  const support = supportRoutes({ q, newId, now, bump: (key, max) => bump(key, max) });
+
+  /**
+   * A one-time link to set a password: for a forgotten one (an hour) or an
+   * invitation to an org (a week). The database keeps only its hash.
+   */
+  function passwordLink(user, purpose, host = config.baseDomain) {
+    const t = token();
+    const hours = purpose === 'invite' ? 24 * 7 : 1;
+    q('DELETE FROM password_tokens WHERE user_id = ? AND purpose = ?').run(user.id, purpose);
+    q('INSERT INTO password_tokens (token, user_id, purpose, expires_at, created_at) VALUES (?, ?, ?, ?, ?)').run(digest(t), user.id, purpose, Date.now() + hours * 3600_000, now());
+    return urlFor(host, `/reset.html?${new URLSearchParams({ token: t, ...(purpose === 'invite' && { invite: '1' }) })}`);
+  }
+  /** Email someone an invitation to an org: who added them, and a link to set their password. */
+  function invite(user, org, by) {
+    const link = passwordLink(user, 'invite', hostOf(org));
+    return sendMail({ to: user.email, subject: `You’re invited to ${org.name} on Dashi`, ...letter({
+      greeting: `Hi ${user.name || ''},`.replace(' ,', ','),
+      lines: [`${by?.name || 'Your organisation’s admin'} added you to ${org.name} on Dashi, where the team keeps its plans, maps, data and documents.`,
+        'Set a password to sign in. The link works for a week.'],
+      link, linkLabel: 'Set your password',
+      footer: `You can also sign in at ${urlFor(hostOf(org), '/login.html')}${config.providers.google ? ' with Google, if your Google account uses this email' : ''}.`,
+    }) });
+  }
   const domains = domainRoutes({ q, planOf: orgPlan, announce: (...x) => announce(...x), resolver: options.resolver });
   setInterval(() => domains.sweep().catch(() => {}), 3600_000).unref();
   uploads.sweep();
@@ -298,7 +325,7 @@ export function createApp(db, options = {}) {
   setInterval(() => { for (const [k, a] of attempts) if (a.until < Date.now()) attempts.delete(k); }, 15 * 60_000).unref();
   /* Expired sessions, handoffs and sign-in states, cleared hourly. */
   function clearExpired() {
-    for (const t of ['sessions', 'handoffs', 'oauth_states']) q(`DELETE FROM ${t} WHERE expires_at < ?`).run(Date.now());
+    for (const t of ['sessions', 'handoffs', 'oauth_states', 'password_tokens']) q(`DELETE FROM ${t} WHERE expires_at < ?`).run(Date.now());
   }
   clearExpired();
   setInterval(clearExpired, 3600_000).unref();
@@ -325,9 +352,62 @@ export function createApp(db, options = {}) {
         platformUrl: a.isSuper ? '/auth/root' : null,
         sessionTag: a.tag,
         versions: a.org && a.member ? docVersions(a.org.id) : {},
+        version: config.version,
+        staging: config.staging,
+        mail: !!config.mail.apiKey,
         limits: { uploadMb: a.org ? Math.min(config.maxUploadMb, orgPlan(a.org).limits.uploadMb ?? config.maxUploadMb) : config.maxUploadMb },
         docs,
       });
+    }
+
+    if (path.startsWith('/api/tickets') && (await support.handle(req, res, a, path)) !== false) return;
+
+    // Forgot your password: email a link. The answer is the same whether or not the email has an account.
+    if (path === '/api/auth/reset/request' && method === 'POST') {
+      const { email } = await readJson(req, 10_000);
+      throttle(req, String(email ?? ''));
+      const user = userByEmail(String(email ?? '').trim());
+      if (user) {
+        const link = passwordLink(user, 'reset', a.t.host && knownHost(a.t.host) ? a.t.host : config.baseDomain);
+        await sendMail({ to: user.email, subject: 'Set a new Dashi password', ...letter({
+          greeting: `Hi ${user.name || ''},`.replace(' ,', ','),
+          lines: ['Someone (we hope you) asked to set a new password for Dashi. The link works for an hour, once.', 'If it wasn’t you, ignore this email; your password stays as it is.'],
+          link, linkLabel: 'Set a new password',
+        }) });
+      }
+      return json(res, 200, { ok: true, mail: !!config.mail.apiKey });
+    }
+    // Set a password from an emailed link (a reset or an invitation), then sign in.
+    if (path === '/api/auth/reset' && method === 'POST') {
+      const body = await readJson(req, 10_000);
+      throttle(req);
+      const row = q('SELECT * FROM password_tokens WHERE token = ?').get(digest(String(body?.token ?? '')));
+      if (!row || row.expires_at < Date.now()) throw new HttpError(400, 'That link has expired or was already used. Ask for a new one.');
+      if (String(body?.password ?? '').length < 10) throw new HttpError(400, 'Choose a password of at least 10 characters');
+      q('UPDATE users SET password_hash = ? WHERE id = ?').run(await hashPassword(String(body.password)), row.user_id);
+      q('DELETE FROM password_tokens WHERE user_id = ?').run(row.user_id);
+      q('DELETE FROM sessions WHERE user_id = ?').run(row.user_id); // Signed out everywhere else.
+      startSession(res, row.user_id);
+      return json(res, 200, { ok: true });
+    }
+    // An org admin (re)sends someone on the staff list an invitation.
+    if (path === '/api/invite' && method === 'POST') {
+      needOrg();
+      if (!a.canAdmin) throw new HttpError(403, 'Only the organisation’s admin can invite people');
+      bump(`invite:${a.user.id}`, 30);
+      const { staffId } = await readJson(req, 10_000);
+      const s = readDoc(a.org.id, 'org')?.staff?.[staffId];
+      if (!s?.email) throw new HttpError(400, 'Add their email to the staff list first');
+      const user = userByEmail(s.email);
+      if (!user) throw new HttpError(400, 'Save the staff list first');
+      const sent = await invite(user, a.org, a.user);
+      return json(res, sent.ok ? 200 : 502, sent.ok ? { ok: true, mail: !!config.mail.apiKey } : { error: `The email didn’t go: ${sent.error}` });
+    }
+    if (path === '/api/people/status' && method === 'GET') {
+      needOrg();
+      if (!a.canAdmin) throw new HttpError(403, 'Admins only');
+      const rows = q('SELECT m.staff_id, u.last_sign_in, u.password_hash IS NOT NULL AS has_password FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.org_id = ?').all(a.org.id);
+      return json(res, 200, Object.fromEntries(rows.map((r) => [r.staff_id, { lastSignIn: r.last_sign_in, hasPassword: !!r.has_password }])));
     }
 
     let m;
@@ -361,7 +441,16 @@ export function createApp(db, options = {}) {
         if (name === 'org') {
           doc.id = a.org.id;
           migrateOrg(doc);
+          const before = new Set(q('SELECT user_id FROM memberships WHERE org_id = ?').all(a.org.id).map((r) => r.user_id));
           syncStaff(a.org.id, doc);
+          // Someone new on the staff list gets an invitation (an admin's change, not someone editing their own profile).
+          if (a.canAdmin) {
+            for (const r of q('SELECT user_id FROM memberships WHERE org_id = ?').all(a.org.id)) {
+              if (before.has(r.user_id)) continue;
+              const u = userById(r.user_id);
+              if (u && !u.is_super) invite(u, a.org, a.user);
+            }
+          }
           if (doc.name && doc.name !== a.org.name) q('UPDATE orgs SET name = ? WHERE id = ?').run(String(doc.name).slice(0, 200), a.org.id);
         }
         const version = writeDoc(a.org.id, name, doc, a.user.id);
@@ -826,6 +915,7 @@ export function createApp(db, options = {}) {
       return send(res, 400, 'Bad address');
     }
     try {
+      if (config.stagingCode && (await stagingGate(req, res, path))) return;
       const a = access(req);
       if (a.t.unknown) return page(res, 404, 'Unknown address', `This platform doesn’t serve ${a.t.host}.`);
       if (path.startsWith('/api/')) return await api(req, res, a, path, url);
@@ -838,6 +928,36 @@ export function createApp(db, options = {}) {
       if (res.headersSent) return res.end();
       return path.startsWith('/api/') ? json(res, status, { error: status === 500 ? 'Something went wrong' : err.message }) : page(res, status, 'Something went wrong', status === 500 ? 'Try again in a moment.' : err.message);
     }
+  }
+
+  /**
+   * A test server's access code (STAGING_ACCESS_CODE): until someone types it,
+   * every address shows a small form. The cookie it sets holds only a hash.
+   */
+  const ACCESS = 'dashi_access';
+  async function stagingGate(req, res, path) {
+    const want = digest(`access:${config.stagingCode}`);
+    if (parseCookies(req.headers.cookie)[ACCESS] === want) return false;
+    if (path === '/staging-access' && req.method === 'POST') {
+      const chunks = [];
+      for await (const c of req) { chunks.push(c); if (chunks.length > 4) break; }
+      const code = new URLSearchParams(Buffer.concat(chunks).toString('utf8').slice(0, 1000)).get('code') ?? '';
+      bump(`access:${clientIp(req)}`, 20);
+      const ok = code.length === config.stagingCode.length && timingSafeEqual(Buffer.from(code), Buffer.from(config.stagingCode));
+      if (ok) {
+        res.setHeader('set-cookie', cookie(ACCESS, want, { maxAge: 30 * 86400, secure: config.https }));
+        redirect(res, '/');
+        return true;
+      }
+    }
+    if (path.startsWith('/api/')) { json(res, 401, { error: 'This is a test server. Enter its access code first.' }); return true; }
+    res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Dashi test server</title>
+<body style="font:16px/1.5 system-ui,sans-serif;max-width:420px;margin:15vh auto;padding:0 16px;color:#222">
+<h1 style="font-size:24px">Dashi test server</h1><p>This server is for people testing Dashi. Type the access code you were given.</p>
+<form method="post" action="/staging-access"><input name="code" type="password" autocomplete="off" aria-label="Access code" autofocus style="font:inherit;padding:8px;width:100%;box-sizing:border-box;border:1px solid #bbb;border-radius:8px">
+<button style="margin-top:12px;font:inherit;padding:8px 16px;border:0;border-radius:8px;background:#1f6f5c;color:#fff">Continue</button></form></body></html>`);
+    return true;
   }
 
   return { handle, createOrg, deleteOrg, ensureUser, syncStaff, writeDoc, readDocs, hostOf, knownHost };

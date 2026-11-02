@@ -6,13 +6,14 @@ import { Wordmark } from '../ui/Wordmark.js';
 import { SideNav } from '../ui/SideNav.js';
 import { salesPage } from './sales.js';
 import { PLAN_IDS, PLAN_PLUGINS, LIMITS, FEATURES, amount } from '../platform/plans.js';
+import { statusBadge, when, KIND_LABEL, TicketThread } from '../help/support.js';
 
 /**
  * The platform's own site (the root domain): the organisations you can
  * open and, for the platform admin, the console to add organisations,
  * set their plan, suspend or remove them, and manage people's sign-in.
  * The console uses the same sidebar as the plugins, one section at a time:
- * #orgs (default), #add, #people, #plans, #requests, #site (the sales site's words), #security (the audit and backups).
+ * #orgs (default), #add, #people, #plans, #requests, #support (tickets; #support/<id> one), #site (the sales site's words), #security (the audit and backups).
  */
 const app = document.querySelector('#app');
 const call = async (method, url, body) => {
@@ -56,7 +57,8 @@ async function render() {
 
   if (!user.isSuper) return app.replaceChildren(head, h('div', { class: 'page-main' }, h('div', { class: 'page' }, yours)));
 
-  const [orgs, users, requests] = await Promise.all([call('GET', '/api/admin/orgs'), call('GET', '/api/admin/users'), call('GET', '/api/admin/requests')]);
+  const [orgs, users, requests, queue] = await Promise.all([call('GET', '/api/admin/orgs'), call('GET', '/api/admin/users'), call('GET', '/api/admin/requests'), call('GET', '/api/tickets?all=1&status=active')]);
+  const waitingOnUs = queue.tickets.filter((t) => t.status === 'new' || (t.status === 'open' && !t.lastFromAdmin)).length;
   const openRequests = requests.filter((r) => r.status === 'open').length;
   const f = {
     name: h('input', { class: 'input input-sm', placeholder: 'Organisation name', required: true }),
@@ -81,7 +83,8 @@ async function render() {
   }));
   const act = async (fn) => { try { await fn(); await reload(); } catch (err) { alert(err.message); } };
 
-  const route = ['orgs', 'add', 'people', 'plans', 'requests', 'site', 'security'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'orgs';
+  const hash = decodeURIComponent(location.hash.slice(1));
+  const route = hash.startsWith('support') ? 'support' : ['orgs', 'add', 'people', 'plans', 'requests', 'site', 'security'].includes(hash) ? hash : 'orgs';
   const active = orgs.filter((o) => o.status === 'active').length;
   const stat = (label, value, hint) => h('div', { class: 'stat' }, h('div', { class: 'stat-title' }, label), h('div', { class: 'stat-value' }, value), hint && h('div', { class: 'stat-desc' }, hint));
   const side = SideNav({ label: 'Platform admin', sections: [
@@ -91,6 +94,7 @@ async function render() {
       { label: 'People who can sign in', sub: `${users.length} people`, icon: 'person', href: '#people', on: route === 'people' },
       { label: 'Plans', sub: 'What each tier includes', icon: 'star', href: '#plans', on: route === 'plans' },
       { label: 'Requests', sub: 'Sign-ups, plan changes, messages', icon: 'news', href: '#requests', on: route === 'requests', badge: openRequests ? String(openRequests) : null, badgeClass: 'badge-primary' },
+      { label: 'Support', sub: `${queue.tickets.length} open ticket${queue.tickets.length === 1 ? '' : 's'}`, icon: 'ticket', href: '#support', on: route === 'support', badge: waitingOnUs ? String(waitingOnUs) : null, badgeClass: 'badge-primary' },
       { label: 'Sales site', sub: 'The words on Dashi’s own site', icon: 'globe', href: '#site', on: route === 'site' },
       { label: 'Security audit', sub: 'Checks and backups', icon: 'lock', href: '#security', on: route === 'security' },
     ] },
@@ -110,6 +114,7 @@ async function render() {
   sections.plans = () => Plans();
   sections.requests = () => Requests(requests, act);
   sections.site = () => SalesSite();
+  sections.support = () => Support(hash.split('/')[1] ?? null);
   window.onhashchange = () => render();
 
   const addOrg = h('section', { class: 'card card-border bg-base-100 platform-card' }, h('div', { class: 'card-body' },
@@ -343,6 +348,63 @@ function SalesSite() {
         h('a', { class: 'btn btn-sm', href: '/pricing.html', target: '_blank' }, 'View the site ↗'), status));
   });
   return h('div', {}, h('h2', {}, 'Sales site'), h('p', { class: 'muted small' }, 'The words on Dashi’s own public site: the home page visitors see at this address, Plans and pricing, About, and Contact.'), box);
+}
+
+/* ----------------------------------------------------------- support */
+/**
+ * Support tickets from everyone on the platform: the queue (new and open
+ * first, then by priority), and one ticket's conversation, where you reply,
+ * add internal notes, and set its status and priority.
+ */
+let supportFilter = 'active';
+function Support(id) {
+  const box = h('div', {}, h('p', { class: 'muted' }, 'Loading…'));
+  (id ? SupportTicket(box, id) : SupportQueue(box)).catch((err) => box.replaceChildren(h('p', { class: 'text-error' }, err.message)));
+  return box;
+}
+
+async function SupportQueue(box) {
+  const { tickets, counts } = await call('GET', `/api/tickets?all=1${supportFilter === 'all' ? '' : `&status=${supportFilter}`}`);
+  const filters = [['active', 'Needs attention'], ['new', 'New'], ['waiting', 'Waiting on them'], ['resolved', 'Resolved'], ['closed', 'Closed'], ['all', 'All']];
+  const count = (f) => (f === 'active' ? (counts.new ?? 0) + (counts.open ?? 0) + (counts.waiting ?? 0) : f === 'all' ? Object.values(counts).reduce((a, b) => a + b, 0) : counts[f] ?? 0);
+  box.replaceChildren(
+    h('h2', {}, 'Support'),
+    h('p', { class: 'muted small' }, 'Problems, questions and ideas from people using Dashi. Each person sees only their own; you see them all. New ones are emailed to the support address too.'),
+    h('div', { class: 'join' }, filters.map(([f, label]) => h('button', { class: `btn btn-xs join-item${supportFilter === f ? ' btn-active' : ''}`, onclick: () => { supportFilter = f; SupportQueue(box); } }, `${label} (${count(f)})`))),
+    tickets.length
+      ? h('ul', { class: 'ticket-list' }, tickets.map((t) => h('li', {},
+          h('a', { href: `#support/${t.id}`, class: 'ticket-row' },
+            h('span', { class: 'ticket-n' }, `#${t.n}`),
+            h('span', { class: 'ticket-title' }, t.title,
+              h('small', { class: 'muted' }, ` ${KIND_LABEL[t.kind]} · ${t.name ?? t.email ?? ''}${t.org ? ` · ${t.org.name}` : ''} · ${when(t.updatedAt)}${t.priority !== 'normal' ? ` · ${t.priority} priority` : ''}${t.status === 'open' && !t.lastFromAdmin && t.replies ? ' · they replied' : ''}`)),
+            statusBadge(t.status, { admin: true })))))
+      : h('p', { class: 'empty' }, 'Nothing here.'));
+}
+
+async function SupportTicket(box, id) {
+  const { ticket: t, messages } = await call('GET', `/api/tickets/${encodeURIComponent(id)}`);
+  const reply = h('textarea', { class: 'textarea w-full', rows: 4, placeholder: 'Reply to them (they get it by email too), or write an internal note', 'aria-label': 'Reply' });
+  const internal = h('input', { type: 'checkbox', class: 'checkbox checkbox-sm' });
+  const again = () => SupportTicket(box, id);
+  const set = async (patch) => { await call('PATCH', `/api/tickets/${t.id}`, patch); await again(); };
+  box.replaceChildren(
+    h('nav', { class: 'crumbs' }, h('a', { href: '#support' }, 'Support'), ` / #${t.n}`),
+    h('div', { class: 'ticket-head' }, h('h2', {}, t.title), statusBadge(t.status, { admin: true })),
+    h('p', { class: 'muted small' }, `${KIND_LABEL[t.kind]} · ${t.name ?? ''} ${t.email ? `<${t.email}>` : ''}${t.org ? ` · ${t.org.name}` : ''} · opened ${when(t.createdAt)}`),
+    h('div', { class: 'inline-form' },
+      h('label', { class: 'small' }, 'Status ', h('select', { class: 'select select-xs', onchange: (e) => set({ status: e.target.value }) }, options(['new', 'open', 'waiting', 'resolved', 'closed'].map((x) => ({ id: x, label: x })), t.status))),
+      h('label', { class: 'small' }, 'Priority ', h('select', { class: 'select select-xs', onchange: (e) => set({ priority: e.target.value }) }, options(['low', 'normal', 'high', 'urgent'].map((x) => ({ id: x, label: x })), t.priority))),
+      t.context?.page && h('span', { class: 'muted small' }, `on ${t.context.page} · ${t.context.version ?? ''}`)),
+    TicketThread(t, messages, { admin: true }),
+    h('form', { class: 'ticket-reply', onsubmit: async (e) => {
+      e.preventDefault();
+      try { await call('POST', `/api/tickets/${t.id}/messages`, { body: reply.value, internal: internal.checked }); await again(); } catch (err) { alert(err.message); }
+    } }, reply,
+      h('div', { class: 'row-actions' },
+        h('label', { class: 'check small' }, internal, ' Internal note (only platform admins see it)'),
+        h('span', { class: 'spacer' }),
+        h('button', { class: 'btn btn-sm btn-primary', type: 'submit' }, 'Send'),
+        h('button', { class: 'btn btn-sm', type: 'button', onclick: () => set({ status: 'resolved' }) }, 'Mark resolved'))));
 }
 
 async function reload() {

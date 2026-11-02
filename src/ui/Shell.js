@@ -3,6 +3,8 @@ import { icon } from './icons.js';
 import { Wordmark } from './Wordmark.js';
 import { enabledPlugins, toneFor } from '../plugins.js';
 import { ROLES, initials } from '../platform/org.js';
+import { FeedbackButton, version } from './Support.js';
+import { session } from '../platform/storage.js';
 import { orgList, openOrg, createOrg, currentUser, signInAs, can, signOut, signedInUser, platformUrl } from '../platform/session.js';
 
 /**
@@ -26,7 +28,7 @@ export function Shell(el, { current, org }) {
     h('details', { class: 'dropdown shell-org' },
       h('summary', { class: 'shell-brand', title: 'Switch organisation' },
         Logo(org, 26),
-        h('span', { class: 'shell-org-text' }, h('strong', { class: 'shell-dashi' }, Wordmark(13, { text: false }), 'Dashi'), h('span', {}, org.name)),
+        h('span', { class: 'shell-org-text' }, h('strong', { class: 'shell-dashi' }, Wordmark(13, { text: false }), 'Dashi', StageBadge()), h('span', {}, org.name)),
         h('span', { class: 'caret-down', 'aria-hidden': 'true' }, '▾')),
       h('ul', { class: 'menu dropdown-content shell-menu' },
         h('li', { class: 'menu-title' }, 'Organisations'),
@@ -59,6 +61,8 @@ export function Shell(el, { current, org }) {
   // Pages draw the header again on every change; the listeners below go on once.
   if (wired) return;
   wired = true;
+  FeedbackButton();
+  if (session()?.staging) StagingBanner();
   // A small note in the bottom-left corner when a change is saved, or when it couldn't be.
   window.addEventListener('toolbox:saved', () => toast('Saved', 'ok'));
   window.addEventListener('toolbox:save-failed', (e) => toast(`Not saved: ${e.detail.why}`, 'error'));
@@ -69,6 +73,20 @@ export function Shell(el, { current, org }) {
   });
 }
 let wired = false;
+
+/** "alpha" beside the wordmark, with the exact version on hover. */
+function StageBadge() {
+  const v = version();
+  const stage = /alpha|beta/.exec(v)?.[0];
+  return stage && h('span', { class: 'stage-badge', title: `Dashi ${v}: still being built. Tell us what you find with Feedback (bottom right).` }, stage);
+}
+
+/** A test server says so on every page. */
+function StagingBanner() {
+  document.body.prepend(h('div', { class: 'staging-banner', role: 'note' },
+    h('strong', {}, 'Test server.'), ' Data here is for testing and may be reset. Please don’t put anything private in it. ',
+    h('a', { href: 'help.html#alpha' }, 'Testing guide')));
+}
 
 /** Someone else saved the same document: say so until the page is reloaded. */
 function conflictBanner({ why }) {

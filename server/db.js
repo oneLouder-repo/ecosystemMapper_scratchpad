@@ -16,6 +16,7 @@
  *   sessions     signed-in browsers; handoffs: one-time tokens to carry a
  *                sign-in to another of the platform's hosts
  */
+import { SUPPORT_SCHEMA } from './support.js';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
@@ -70,6 +71,14 @@ const SCHEMA = [
   `CREATE TABLE requests (
      id TEXT PRIMARY KEY, kind TEXT NOT NULL, org_id TEXT REFERENCES orgs(id) ON DELETE SET NULL, email TEXT, name TEXT,
      data TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL)`,
+  // Support tickets and their conversations (server/support.js).
+  ...SUPPORT_SCHEMA,
+  // One-time links to set a password: forgotten passwords and invitations. Only a hash of each token is kept.
+  `CREATE TABLE password_tokens (
+     token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     purpose TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at TEXT NOT NULL)`,
+  // When each person last signed in, so an admin can see who hasn't yet.
+  `ALTER TABLE users ADD COLUMN last_sign_in TEXT`,
 ];
 
 export function openDb(dataDir) {

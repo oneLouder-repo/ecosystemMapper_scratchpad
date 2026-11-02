@@ -10,6 +10,8 @@ import { PLUGINS } from '../plugins.js';
 import { loadLenses } from '../lenses/index.js';
 import { crosswalk } from '../lenses/crosswalk.js';
 import { lensAlignment, dataModelDiagram } from './diagrams.js';
+import { SupportPage } from './support.js';
+import { openFeedback } from '../ui/Support.js';
 
 /**
  * Help: a library of sections, each with pages, written in light markdown.
@@ -17,6 +19,7 @@ import { lensAlignment, dataModelDiagram } from './diagrams.js';
  *   #                     every section
  *   #<section>            a section and its pages
  *   #<section>/<page>     a page
+ *   #support              your support tickets; #support/<id> one, with its replies
  *
  * The platform admin can edit the library here (Edit help): add, rename,
  * reorder and remove sections and pages, with a live preview. Diagrams go
@@ -64,13 +67,19 @@ const go = (hash) => { if (location.hash.slice(1) !== hash) location.hash = hash
 const changed = () => { state.dirty = true; render(); };
 
 function render() {
+  if (location.hash.startsWith('#support')) {
+    app.replaceChildren(h('div', { class: 'page help-page' },
+      PluginHeader('help', { blurb: 'Guides to each part of Dashi, by section.', actions: SupportActions() }),
+      h('div', { class: 'help-layout' }, Nav(null, null), h('article', { class: 'help-body' }, SupportPage(decodeURIComponent(location.hash.slice('#support/'.length)) || null)))));
+    return;
+  }
   const { section, page } = route();
   const scroll = window.scrollY;
   const focused = app.contains(document.activeElement) ? document.activeElement.name : null;
   app.replaceChildren(h('div', { class: `page help-page${state.editing ? ' editing' : ''}` },
     PluginHeader('help', {
       blurb: 'Guides to each part of Dashi, by section.',
-      actions: can.editHelp() && (state.editing ? EditBar() : h('button', { class: 'btn btn-sm', onclick: () => { state.editing = true; render(); } }, icon('doc', 14), 'Edit help')),
+      actions: [SupportActions(), can.editHelp() && (state.editing ? EditBar() : h('button', { class: 'btn btn-sm', onclick: () => { state.editing = true; render(); } }, icon('doc', 14), 'Edit help'))],
     }),
     h('div', { class: 'help-layout' },
       Nav(section, page),
@@ -114,8 +123,10 @@ function Nav(current, currentPage) {
     h('button', { class: 'btn btn-ghost btn-xs', disabled: i === list.length - 1, 'aria-label': `Move ${label} down`, onclick: () => move(list, i, 1) }, '↓'),
     h('button', { class: 'btn btn-ghost btn-xs', 'aria-label': `Delete ${label}`, onclick: onDelete }, '✕'));
 
+  const onSupport = location.hash.startsWith('#support');
   return h('nav', { class: 'help-toc', 'aria-label': 'Help sections' },
-    h('a', { href: '#', class: `help-nav-home${!current ? ' on' : ''}` }, 'All sections'),
+    h('a', { href: '#', class: `help-nav-home${!current && !onSupport ? ' on' : ''}` }, 'All sections'),
+    h('a', { href: '#support', class: `help-nav-home${onSupport ? ' on' : ''}` }, icon('ticket', 15), ' Support: my tickets'),
     h('ul', { class: 'help-nav' }, doc.sections.map((s, i) => h('li', {},
       h('div', { class: 'help-nav-row' },
         h('a', { href: `#${s.id}`, class: `help-nav-section${s === current && !currentPage ? ' on' : ''}` }, icon(s.icon || 'help', 16), s.title),
@@ -137,8 +148,20 @@ function Nav(current, currentPage) {
     state.editing && h('button', { class: 'btn btn-sm help-add', onclick: addSection }, icon('plus', 14), 'Add section'));
 }
 
+function SupportActions() {
+  return h('button', { class: 'btn btn-sm btn-primary', onclick: () => openFeedback() }, icon('ticket', 14), 'Ask or report something');
+}
+
 function Home() {
   return h('div', {},
+    h('section', { class: 'card help-support-card' },
+      h('div', {},
+        h('h3', {}, icon('ticket', 20), ' Can’t find it here?'),
+        h('p', {}, 'Ask a question, report a problem or suggest an idea. It goes straight to the Dashi team, and you can follow the replies under ', h('a', { href: '#support' }, 'Support'), '.')),
+      h('div', { class: 'row-actions' },
+        h('button', { class: 'btn btn-sm btn-primary', onclick: () => openFeedback({ kind: 'question' }) }, 'Ask a question'),
+        h('button', { class: 'btn btn-sm', onclick: () => openFeedback({ kind: 'problem' }) }, 'Report a problem'),
+        h('button', { class: 'btn btn-sm', onclick: () => openFeedback({ kind: 'idea' }) }, 'Suggest an idea'))),
     h('div', { class: 'cards help-sections' }, doc.sections.map((s) => h('a', { class: 'card', href: `#${s.id}` },
       h('h3', {}, icon(s.icon || 'help', 22), s.title),
       h('p', {}, s.blurb ?? ''),

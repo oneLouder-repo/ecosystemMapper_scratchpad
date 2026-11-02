@@ -5,7 +5,8 @@ import { SideNav } from '../ui/SideNav.js';
 import { readImage } from '../ui/images.js';
 import { Store } from '../core/Store.js';
 import { applyCollectionOp, col } from '../core/collections.js';
-import { autosaveDoc, isHosted } from '../platform/storage.js';
+import { autosaveDoc, isHosted, session } from '../platform/storage.js';
+import { toast } from '../ui/Shell.js';
 import { loadOrg } from '../platform/docs.js';
 import { ROLES, staffList, teamList, membersOf } from '../platform/org.js';
 import { orgList, openOrg, createOrg, deleteOrg, renameOrg, platformUrl } from '../platform/session.js';
@@ -90,7 +91,33 @@ function Profile(org) {
       imagePicker({ name: 'logo', current: org.logo, preview: Logo(org, 72), onPick: (url) => set('logo', url), onClear: () => set('logo', null) })));
 }
 
+/** Hosted: who has signed in, from the server (fetched once per page). */
+let signInStatus = null;
+async function loadSignInStatus() {
+  if (!isHosted() || !session()?.canAdmin || signInStatus) return;
+  try { const res = await fetch('/api/people/status'); if (res.ok) { signInStatus = await res.json(); render(); } } catch { /* shown without it */ }
+}
+async function sendInvite(s, button) {
+  button.disabled = true;
+  try {
+    const res = await fetch('/api/invite', { method: 'POST', headers: { 'content-type': 'application/json', 'x-toolbox': '1' }, body: JSON.stringify({ staffId: s.id }) });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(out.error ?? `The server said ${res.status}`);
+    toast(out.mail ? `Invitation sent to ${s.email}` : `Invitation made for ${s.email}. This server can’t send email yet, so the link is in the server’s log.`);
+  } catch (err) { toast(err.message, 'error'); }
+  button.disabled = false;
+}
+const signInCell = (s) => {
+  if (!isHosted() || !session()?.canAdmin || !s.email) return null;
+  const st = signInStatus?.[s.id];
+  const seen = st?.lastSignIn ? `Last signed in ${new Date(st.lastSignIn).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'Hasn’t signed in yet';
+  return h('div', { class: 'invite-cell' },
+    h('small', { class: 'muted' }, signInStatus ? seen : ''),
+    h('button', { class: 'btn btn-xs', title: `Email ${s.email} a link to set a password and sign in (good for a week)`, onclick: (e) => sendInvite(s, e.currentTarget) }, st?.lastSignIn ? 'Send sign-in link' : 'Invite'));
+};
+
 function People(org) {
+  loadSignInStatus();
   const newStaff = {
     name: h('input', { class: 'input input-sm', placeholder: 'Name', required: true }),
     email: h('input', { class: 'input input-sm', type: 'email', placeholder: 'Email (to sign in)' }),
@@ -105,7 +132,7 @@ function People(org) {
   return h('div', {},
     h('h2', {}, 'Staff and roles'),
     h('table', { class: 'table table-sm list' },
-      h('thead', {}, h('tr', {}, ['', 'Name', 'Title', 'Role', 'Teams', ''].map((t) => h('th', {}, t)))),
+      h('thead', {}, h('tr', {}, ['', 'Name', 'Title', 'Role', 'Teams', isHosted() && session()?.canAdmin ? 'Sign-in' : '', ''].map((t) => h('th', {}, t)))),
       h('tbody', {}, staffList(org).map((s) =>
         h('tr', {},
           h('td', {}, Avatar(s, 30)),
@@ -116,13 +143,14 @@ function People(org) {
           h('td', {}, h('select', { class: 'select select-sm', 'aria-label': `Role for ${s.name}`, onchange: (e) => store.apply(col.update('staff', s.id, { roleId: e.target.value })) },
             options(ROLES.map((r) => ({ id: r.id, label: r.label })), s.roleId))),
           h('td', {}, teamChips(s)),
+          h('td', {}, signInCell(s)),
           h('td', {}, h('button', { class: 'btn btn-xs btn-ghost btn-error', onclick: () => confirm(`Remove ${s.name}?`) && store.apply(col.remove('staff', s.id)) }, 'Remove')))))),
     h('form', { class: 'inline-form', onsubmit: (e) => {
       e.preventDefault();
       if (!newStaff.name.value.trim()) return;
       store.apply(col.add('staff', { name: newStaff.name.value.trim(), title: newStaff.title.value.trim(), roleId: 'staff', teamIds: [], interests: [], avatar: null, email: newStaff.email.value.trim().toLowerCase() }));
     } }, newStaff.name, newStaff.email, newStaff.title, h('button', { class: 'btn btn-sm btn-primary', type: 'submit' }, 'Add person')),
-    h('p', { class: 'note' }, ROLES.map((r) => `${r.label}: ${r.can}.`).join(' '), ' People change their own picture and details in My profile. ', isHosted() ? 'Each person signs in with the email here (with Google, or a password from the platform admin); their role decides what they can change.' : 'On the hosted platform, each person signs in with the email here.'),
+    h('p', { class: 'note' }, ROLES.map((r) => `${r.label}: ${r.can}.`).join(' '), ' People change their own picture and details in My profile. ', isHosted() ? 'Each person signs in with the email here. Someone new gets an emailed invitation to set a password when you add them; Invite sends it again. Their role decides what they can change.' : 'On the hosted platform, each person signs in with the email here.'),
     h('h2', {}, 'Teams'),
     h('div', { class: 'cards' }, teamList(org).map((t) =>
       h('div', { class: 'card' },

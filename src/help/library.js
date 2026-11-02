@@ -9,11 +9,103 @@
  *   [[diagram:data-model]]   the documents of an org and how they connect
  *   [[diagram:plugins]]      a card for each plugin
  */
-export const HELP_VERSION = 1;
+export const HELP_VERSION = 2;
+
+/**
+ * Sections added since a version: a saved (edited) library that is older
+ * gets them too, at the top, so new guides reach every server.
+ */
+export const HELP_ADDED = { alpha: 2 };
 
 export const HELP_SEED = {
   version: HELP_VERSION,
   sections: [
+    {
+      id: 'alpha',
+      title: 'Testing Dashi (alpha)',
+      icon: 'ticket',
+      blurb: 'You’re one of the first people using Dashi. What to try, how to tell us what you find, and what to expect.',
+      pages: [
+        {
+          id: 'welcome',
+          title: 'Welcome, and thank you',
+          body: `Dashi is in **alpha**: the main parts work, some are rough, and things will change. You're here to use it for real work and tell us where it helps, where it gets in the way, and where it breaks.
+
+# What alpha means
+- **It works, but isn't finished.** Expect a few bugs and some rough edges.
+- **Your work is kept.** The database is backed up every day. If something goes wrong we can bring back yesterday's copy.
+- **It changes often.** New versions arrive every week or two. The version is under the Dashi name (top left): hover on **alpha** to see it.
+
+# The two things that help most
+1. **Use it for something real**: this month's plan, an actual reading list, a map of your real partners.
+2. **Tell us**, even about small things. Use **Feedback** (the round button, bottom right of every page). It takes a minute.`,
+        },
+        {
+          id: 'what-to-try',
+          title: 'What to try',
+          body: `Pick what fits your role. Half an hour is plenty for a first go.
+
+# Everyone
+- [ ] Sign in, open **My profile** (the menu under your picture), and add your title and picture.
+- [ ] Open the **Dashboard**. Does it tell you what you need to know?
+- [ ] Find something in **Help** without asking anyone.
+
+# If you map ecosystems
+- [ ] Make a map, add ten actors, connect them, and try two different lenses.
+- [ ] Use **Panels** (top right of the Mapper) to dock, float and tidy the tool panels.
+- [ ] **To library** keeps the map as a file in the Library; open it again from there.
+
+# If you plan
+- [ ] In **Strategy & Work**, add an objective, a goal, a workplan and a few tasks with dates and people.
+- [ ] Attach assets to a task: an actor, a whole map, a document.
+- [ ] Make the plan document in the **Plan designer** and look at its web view.
+
+# If you read and write briefs
+- [ ] In **Library**, use **Add a reading** to add five sources with annotations and tags.
+- [ ] Open **Tags** and see your vocabulary; rename or merge one.
+- [ ] In a bibliography's **Weekly brief**, pick a layout (STEEPLE, Micro / Meso / Macro, or a lexicon facet) and draft the brief.
+
+# If you run the org
+- [ ] Add a person in **Organisation → People** and send them an invitation.
+- [ ] Publish a dashboard or page to your public site, and look at it signed out.`,
+        },
+        {
+          id: 'reporting',
+          title: 'How to report a problem or idea',
+          body: `Press **Feedback** at the bottom right of any page, or **Ask or report something** in Help.
+
+# A good report
+- **What you were doing**: "I was adding a connector between two actors…"
+- **What you expected**, and **what happened instead**.
+- **Whether it stops you working.** Tick the box and we'll look first.
+
+# What's sent with it
+With **Include technical details** ticked, the report carries the page you were on, Dashi's version, your browser and screen size, and the last few error messages on that page. It never includes the contents of your documents. Open **What's sent** in the form to see exactly what goes.
+
+# Following up
+Your reports are under **Help → Support**. Replies arrive there and by email. Reply in the same place if we ask for more, and close it when it's sorted. Only you and the Dashi team can see your tickets.`,
+        },
+        {
+          id: 'known-limits',
+          title: 'Known limits in this version',
+          body: `Things we know about, so you don't need to report them (but do tell us if one gets in your way):
+
+- **Editing the same thing at the same time.** If two people change the same plan or map at once, the second save is refused and you're asked to reload. Nothing is overwritten, but the second person's last change needs redoing. Live co-editing comes later.
+- **Phones.** Dashi works on a phone for reading and small edits. The Mapper, Studio and spreadsheets want a bigger screen.
+- **Payments.** Plans can't be paid for yet; testers are on the house.
+- **Email.** Invitations and password links need the server's email to be set up. If one doesn't arrive, ask your admin to set your password instead.`,
+        },
+        {
+          id: 'your-data',
+          title: 'Your data during the alpha',
+          body: `- Your organisation's documents are kept on Dashi's server in Toronto, Canada, and backed up daily.
+- Only people on your organisation's staff list can sign in to it. Visitors see only what you publish.
+- The Dashi team can see your organisation's data to fix problems, and won't use it for anything else.
+- On a **test server** (it says so in a yellow bar at the top), data may be reset. Don't put anything private there.
+- Want your data out, or deleted? Ask through **Feedback** and we'll do it.`,
+        },
+      ],
+    },
     {
       id: 'ecosystem-mapping',
       title: 'Ecosystem mapping',

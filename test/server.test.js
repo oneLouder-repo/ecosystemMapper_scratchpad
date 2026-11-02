@@ -515,3 +515,69 @@ test('a save that started from an older version is refused, not written over som
   assert.equal(stale.json.version, Number(v) + 1);
   assert.equal((await call(EX, 'PUT', '/api/docs/strategy', { body: start.json, cookie: amara, headers: { 'x-doc-version': String(first.json.version) } })).status, 200);
 });
+
+test('support tickets: people see their own, the platform admin sees all and answers, internal notes stay internal', async () => {
+  const { outbox } = await import('../server/mail.js');
+  const ben = await signIn('ben@example.org');
+  const admin = await signIn('admin@localhost', 'localhost');
+  assert.equal((await call(EX, 'POST', '/api/tickets', { body: { kind: 'problem', title: 'x', body: 'y' } })).status, 401, 'sign in first');
+  const made = await call(EX, 'POST', '/api/tickets', { cookie: ben, body: { kind: 'problem', title: 'Map won’t save', body: 'I pressed save and nothing.', context: { page: '/mapper.html', version: '0.1.0-alpha.1', secret: 'nope' } } });
+  assert.equal(made.status, 201);
+  assert.equal(made.json.status, 'new');
+  assert.equal(made.json.org.name, 'Example STEM Outreach Network');
+  assert.deepEqual(made.json.context, { page: '/mapper.html', version: '0.1.0-alpha.1' }, 'only known technical details are kept');
+  assert.match(outbox.at(-1).subject, /\[Dashi #\d+\] Map won’t save/, 'support hears about it');
+  const id = made.json.id;
+
+  const amara = await signIn('amara@example.org');
+  assert.equal((await call(EX, 'GET', `/api/tickets/${id}`, { cookie: amara })).status, 404, 'other people can’t see it, even their org’s admin');
+  assert.equal((await call(EX, 'GET', '/api/tickets', { cookie: amara })).json.tickets.length, 0);
+
+  const all = await call('localhost', 'GET', '/api/tickets?all=1&status=active', { cookie: admin });
+  assert.ok(all.json.tickets.some((t) => t.id === id));
+  assert.equal(all.json.counts.new >= 1, true);
+  assert.equal((await call('localhost', 'POST', `/api/tickets/${id}/messages`, { cookie: admin, body: { body: 'Looking at the logs', internal: true } })).status, 201);
+  const reply = await call('localhost', 'POST', `/api/tickets/${id}/messages`, { cookie: admin, body: { body: 'Fixed in alpha.2, can you try again?' } });
+  assert.equal(reply.json.status, 'waiting', 'an answer waits on the reporter');
+  assert.equal(outbox.at(-1).to, 'ben@example.org', 'the reporter is emailed the answer');
+
+  const seen = await call(EX, 'GET', `/api/tickets/${id}`, { cookie: ben });
+  assert.deepEqual(seen.json.messages.map((x) => x.body), ['Fixed in alpha.2, can you try again?'], 'internal notes are the admin’s alone');
+  assert.equal((await call(EX, 'POST', `/api/tickets/${id}/messages`, { cookie: ben, body: { body: 'Works now, thanks' } })).json.status, 'open');
+  assert.equal((await call(EX, 'PATCH', `/api/tickets/${id}`, { cookie: ben, body: { priority: 'urgent' } })).status, 400, 'only the admin sets priority');
+  assert.equal((await call(EX, 'PATCH', `/api/tickets/${id}`, { cookie: ben, body: { status: 'closed' } })).json.status, 'closed');
+  assert.equal((await call('localhost', 'PATCH', `/api/tickets/${id}`, { cookie: admin, body: { status: 'resolved', priority: 'high' } })).json.priority, 'high');
+});
+
+test('a forgotten password gets an emailed one-time link; an admin can invite someone on the staff list', async () => {
+  const { outbox } = await import('../server/mail.js');
+  const n0 = outbox.length;
+  assert.equal((await call(EX, 'POST', '/api/auth/reset/request', { body: { email: 'nobody@nowhere.example' } })).status, 200, 'the same answer for unknown emails');
+  assert.equal(outbox.length, n0, 'but nothing is sent');
+  await call(EX, 'POST', '/api/auth/reset/request', { body: { email: 'Ben@Example.org' } });
+  const link = outbox.at(-1).text.match(/https?:\/\/\S+reset\.html\?token=(\S+)/);
+  assert.ok(link, 'the email has a link');
+  const tokenValue = decodeURIComponent(link[1]);
+  assert.equal((await call(EX, 'POST', '/api/auth/reset', { body: { token: tokenValue, password: 'short' } })).status, 400);
+  const ok = await call(EX, 'POST', '/api/auth/reset', { body: { token: tokenValue, password: 'a new long passphrase' } });
+  assert.equal(ok.status, 200);
+  assert.ok(ok.headers['set-cookie'], 'and signs them in');
+  assert.equal((await call(EX, 'POST', '/api/auth/reset', { body: { token: tokenValue, password: 'a new long passphrase' } })).status, 400, 'once');
+  assert.equal((await call(EX, 'POST', '/api/auth/password', { body: { email: 'ben@example.org', password: 'a new long passphrase' } })).status, 200);
+
+  const amara = await signIn('amara@example.org');
+  const ben = await signIn('ben@example.org');
+  assert.equal((await call(EX, 'POST', '/api/invite', { cookie: ben, body: { staffId: 's-ed' } })).status, 403);
+  assert.equal((await call(EX, 'POST', '/api/invite', { cookie: amara, body: { staffId: 's-part' } })).status, 200);
+  assert.match(outbox.at(-1).subject, /invited to Example STEM Outreach Network/);
+  assert.match(outbox.at(-1).text, /example\.localhost.*reset\.html\?token=.*invite=1/, 'the link is on the org’s own address');
+  const status = await call(EX, 'GET', '/api/people/status', { cookie: amara });
+  assert.equal(status.json['s-part'].hasPassword, true);
+});
+
+test('the session says which version is running', async () => {
+  const { VERSION } = await import('../src/version.js');
+  const pkg = JSON.parse((await import('node:fs')).readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(VERSION, pkg.version, 'src/version.js matches package.json');
+  assert.equal((await call(EX, 'GET', '/api/session')).json.version, pkg.version);
+});

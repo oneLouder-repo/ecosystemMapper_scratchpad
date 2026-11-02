@@ -140,3 +140,12 @@ test('page markdown: blocks, inline marks, embeds, and no unsafe links', () => {
   assert.ok(parseInline('[x](javascript:alert)').every((n) => n.t === 'text'));
   assert.equal(plainText('## Hi\n\n**Bold** move'), 'Hi Bold move');
 });
+
+test('a help library saved before the testing guide existed gets it, once', async () => {
+  const { withNewSections } = await import('../src/platform/help.js');
+  const old = { version: 1, sections: [{ id: 'mine', title: 'Ours', pages: [] }] };
+  const next = withNewSections(old);
+  assert.deepEqual(next.sections.map((s) => s.id), ['alpha', 'mine'], 'new sections go on top');
+  assert.ok(next.sections[0].pages.some((p) => p.id === 'reporting'));
+  assert.equal(withNewSections({ version: 2, sections: [] }).sections.length, 0, 'one the admin deleted after that stays deleted');
+});

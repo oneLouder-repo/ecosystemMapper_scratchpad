@@ -4,7 +4,8 @@
  * on localhost, so `npm start` runs with no setup.
  */
 import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { enabledProviders } from './oauth.js';
 
 const env = process.env;
@@ -13,6 +14,8 @@ const production = env.NODE_ENV === 'production';
 
 export const config = {
   root,
+  /** Dashi's version, from package.json: shown in the app and sent with support tickets. */
+  version: JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version,
   production,
   port: Number(env.PORT) || 5173,
   /**
@@ -25,9 +28,9 @@ export const config = {
   https: env.HTTPS ? env.HTTPS === 'true' : production,
   dataDir: resolve(root, env.DATA_DIR || 'data'),
   /** Sign in as anyone from the sign-in page. Never on in production unless asked for. */
-  devLogin: env.DEV_LOGIN ? env.DEV_LOGIN === 'true' : !production,
+  devLogin: env.DEV_LOGIN ? env.DEV_LOGIN === 'true' : !production || env.STAGING === 'true',
   /** Create the example orgs on first start. */
-  seedExamples: env.SEED_EXAMPLES ? env.SEED_EXAMPLES === 'true' : !production,
+  seedExamples: env.SEED_EXAMPLES ? env.SEED_EXAMPLES === 'true' : !production || env.STAGING === 'true',
   superAdmin: {
     email: (env.SUPER_ADMIN_EMAIL || 'admin@localhost').toLowerCase(),
     name: env.SUPER_ADMIN_NAME || 'Platform admin',
@@ -47,6 +50,22 @@ export const config = {
   maxJsonMb: 15,
   /** The largest single upload (podcast audio), sent in 8 MB chunks. */
   maxUploadMb: Number(env.MAX_UPLOAD_MB) || 700,
+  /** Email (server/mail.js). Without a key, messages go to the server log. */
+  mail: {
+    provider: (env.MAIL_PROVIDER || (env.MAIL_API_KEY ? 'postmark' : '')).toLowerCase(),
+    apiKey: env.MAIL_API_KEY || '',
+    from: env.MAIL_FROM || `Dashi <hello@${(env.BASE_DOMAIN || 'localhost').toLowerCase()}>`,
+  },
+  /** Where new support tickets are announced; the platform admin's email if not set. */
+  supportEmail: (env.SUPPORT_EMAIL || env.SUPER_ADMIN_EMAIL || 'admin@localhost').toLowerCase(),
+  quietMail: env.NODE_ENV === 'test',
+  /**
+   * A test server for people trying Dashi out: a banner on every page, test
+   * sign-in allowed even in production mode, and (with STAGING_ACCESS_CODE)
+   * a code to type before anything loads, so the public can't wander in.
+   */
+  staging: env.STAGING === 'true',
+  stagingCode: env.STAGING_ACCESS_CODE || '',
   /** How much media each org can keep. */
   orgStorageMb: Number(env.ORG_STORAGE_MB) || 20480,
 };
